@@ -1,0 +1,8 @@
+{
+  "name": "Anggaran 3",
+  "description": "",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
