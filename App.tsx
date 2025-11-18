@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { GoogleGenAI, Type, Chat, LiveSession, LiveServerMessage, Modality, Blob as GenAIBlob, FunctionDeclaration } from '@google/genai';
 import type { AppState, Budget, Transaction, FundTransaction, GlobalTransaction, ScannedItem, SavingsGoal, SavingTransaction, Achievement, Asset } from './types';
@@ -27,6 +28,29 @@ const fileToBase64 = (file: File | Blob): Promise<string> => {
         reader.onload = () => resolve((reader.result as string).split(',')[1]);
         reader.onerror = error => reject(error);
     });
+};
+
+// Helper to safely retrieve API Key from various environments (Vercel/Vite vs Standard)
+const getApiKey = (): string => {
+    let key = '';
+    try {
+        // Try standard process.env (Node/Webpack/Create-React-App)
+        if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+            key = process.env.API_KEY;
+        }
+    } catch (e) {}
+
+    if (!key) {
+        try {
+            // Try Vite environment variable
+            // @ts-ignore
+            if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_KEY) {
+                // @ts-ignore
+                key = import.meta.env.VITE_API_KEY;
+            }
+        } catch (e) {}
+    }
+    return key;
 };
 
 // --- AUDIO UTILITY FUNCTIONS for Gemini Live API ---
@@ -1025,7 +1049,8 @@ const App: React.FC = () => {
         setScannedItems([]);
         try {
             const base64Data = await fileToBase64(file);
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+            const apiKey = getApiKey();
+            const ai = new GoogleGenAI({ apiKey });
 
             const imagePart = {
                 inlineData: { mimeType: file.type, data: base64Data },
@@ -1084,7 +1109,8 @@ const App: React.FC = () => {
         setSmartInputResult([]);
 
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+            const apiKey = getApiKey();
+            const ai = new GoogleGenAI({ apiKey });
             const budgetCategories = [...state.budgets.filter(b => !b.isArchived).map(b => b.name), 'Uang Harian'];
             
             const schema = {
@@ -1160,7 +1186,8 @@ Sisa Dana yang Tidak Terikat Anggaran: ${formatCurrency(remainingUnallocated)}
 Berdasarkan data ini, berikan saya analisis singkat dan beberapa saran praktis dalam Bahasa Indonesia untuk mengelola keuangan saya dengan lebih baik. Fokus pada area di mana saya bisa berhemat atau melakukan optimalisasi. Berikan jawaban dalam format poin-poin (bullet points) menggunakan markdown.
             `;
 
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+            const apiKey = getApiKey();
+            const ai = new GoogleGenAI({ apiKey });
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: prompt,
@@ -1224,7 +1251,8 @@ ${lastWeekBudgetDetails || "Tidak ada pengeluaran signifikan dari pos anggaran."
 - Pengeluaran Harian/Umum: ${formatCurrency(lastWeekGeneralExpense + lastWeekTotalDailySpent)}
             `;
 
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+            const apiKey = getApiKey();
+            const ai = new GoogleGenAI({ apiKey });
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: prompt,
@@ -1266,7 +1294,8 @@ ${lastWeekBudgetDetails || "Tidak ada pengeluaran signifikan dari pos anggaran."
         setIsAiChatLoading(true);
 
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+            const apiKey = getApiKey();
+            const ai = new GoogleGenAI({ apiKey });
             const contextPrompt = getFinancialContextForAI();
             
             const chat = ai.chats.create({
@@ -1317,7 +1346,8 @@ ${lastWeekBudgetDetails || "Tidak ada pengeluaran signifikan dari pos anggaran."
         setAiSearchResults(null);
 
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+            const apiKey = getApiKey();
+            const ai = new GoogleGenAI({ apiKey });
 
             const transactionsForPrompt = allTransactions.map(t => ({
                 timestamp: t.timestamp,
@@ -2453,7 +2483,8 @@ const VoiceAssistantModalContent: React.FC<{
             setTranscript([{ speaker: 'system', text: 'Menghubungkan ke Asisten AI...', isFinal: true }]);
 
             try {
-                const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+                const apiKey = getApiKey();
+                const ai = new GoogleGenAI({ apiKey });
                 const budgetCategories = [...budgets.map(b => b.name), 'Uang Harian'];
 
                 const recordTransactionTool: FunctionDeclaration = {
