@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import type { AppState, GlobalTransaction } from '../types';
 import { SparklesIcon, CalendarDaysIcon, ListBulletIcon, ChevronLeftIcon, ChevronRightIcon, BudgetIcon, TrashIcon, LockClosedIcon } from './Icons';
@@ -271,11 +272,12 @@ const Reports: React.FC<ReportsProps> = ({
                                         />
                                         <button 
                                             type="button" 
+                                            onClick={handleAiSearchClick}
                                             className="bg-primary-navy text-white font-bold p-3 rounded-lg hover:bg-primary-navy-dark transition-colors disabled:bg-gray-400 flex items-center justify-center" 
-                                            disabled={true}
-                                            title="Pencarian Cerdas (AI) - Fitur Terkunci"
+                                            disabled={isSearchingWithAI || !searchQuery.trim()}
+                                            title="Pencarian Cerdas (AI)"
                                         >
-                                            <LockClosedIcon className="w-6 h-6" />
+                                            <SparklesIcon className="w-6 h-6" />
                                         </button>
                                     </div>
                                     {aiSearchError && <p className="text-sm text-danger-red mt-1">{aiSearchError}</p>}

@@ -1623,11 +1623,11 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
                     onNavigate={(page) => { setCurrentPage(page); setActiveModal(null); }}
                     onShowInfo={() => setActiveModal('info')}
                     onManageFunds={() => setActiveModal('funds')}
-                    onScanReceipt={() => {}}
-                    onSmartInput={() => {}}
-                    onVoiceInput={() => {}}
-                    onAskAI={() => {}}
-                    onGetAIAdvice={() => {}}
+                    onScanReceipt={() => scanFileInputRef.current?.click()}
+                    onSmartInput={() => setActiveModal('smartInput')}
+                    onVoiceInput={() => setActiveModal('voiceAssistant')}
+                    onAskAI={handleOpenAIChat}
+                    onGetAIAdvice={handleGetAIAdvice}
                     onOpenSettings={() => setActiveModal('settings')}
                 />
             </Modal>
@@ -2882,11 +2882,11 @@ const MainMenu: React.FC<{
         { icon: FireIcon, label: 'Pencapaian Terbaik', action: () => props.onNavigate('personalBest'), disabled: false },
         { icon: ListBulletIcon, label: 'Info Bulanan', action: props.onShowInfo, disabled: false },
         { icon: DocumentTextIcon, label: 'Kelola Dana', action: props.onManageFunds, disabled: false },
-        { icon: CameraIcon, label: 'Scan Struk', action: () => {}, disabled: true },
-        { icon: SparklesIcon, label: 'Input Cerdas', action: () => {}, disabled: true },
-        { icon: LightbulbIcon, label: 'Saran AI', action: () => {}, disabled: true },
-        { icon: ChatBubbleLeftRightIcon, label: 'Tanya AI', action: () => {}, disabled: true },
-        { icon: SpeakerWaveIcon, label: 'Asisten Suara', action: () => {}, disabled: true },
+        { icon: CameraIcon, label: 'Scan Struk', action: props.onScanReceipt, disabled: false },
+        { icon: SparklesIcon, label: 'Input Cerdas', action: props.onSmartInput, disabled: false },
+        { icon: LightbulbIcon, label: 'Saran AI', action: props.onGetAIAdvice, disabled: false },
+        { icon: ChatBubbleLeftRightIcon, label: 'Tanya AI', action: props.onAskAI, disabled: false },
+        { icon: SpeakerWaveIcon, label: 'Asisten Suara', action: props.onVoiceInput, disabled: false },
         { icon: Cog6ToothIcon, label: 'Pengaturan', action: props.onOpenSettings, disabled: false },
     ];
     return (

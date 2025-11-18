@@ -111,15 +111,20 @@ const AIInsightCard: React.FC<{
                     <LightbulbIcon className="w-6 h-6 text-warning-yellow" />
                     <h2 className="text-xl font-bold text-primary-navy">Wawasan AI</h2>
                 </div>
-                <button disabled={true} className="text-primary-navy disabled:text-gray-400 disabled:cursor-not-allowed">
-                    <ArrowPathIcon className="w-6 h-6" isSpinning={false} />
+                <button onClick={onRefresh} disabled={isLoading} className="text-primary-navy disabled:text-gray-400 disabled:cursor-not-allowed">
+                    <ArrowPathIcon className="w-6 h-6" isSpinning={isLoading} />
                 </button>
             </div>
-            <div className="text-center py-4 text-secondary-gray">
-                <LockClosedIcon className="w-12 h-12 mx-auto text-gray-300" />
-                <p className="mt-2 font-semibold">Fitur Terkunci</p>
-                <p className="text-sm">Tingkatkan ke versi premium untuk membuka wawasan AI.</p>
-            </div>
+            {isLoading ? (
+                <div className="text-center py-4 text-secondary-gray">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-navy mx-auto"></div>
+                    <p className="mt-2">AI sedang menganalisis...</p>
+                </div>
+            ) : (
+                <div className="text-secondary-gray text-sm max-w-none">
+                    {formatMarkdown(insight)}
+                </div>
+            )}
         </section>
     );
 };

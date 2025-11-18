@@ -37,33 +37,6 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     return null;
 };
 
-const LockedAIAnalysisCard: React.FC<{ title: string }> = ({ title }) => (
-    <div className="mt-6 bg-gray-50 border-l-4 border-gray-300 p-4 rounded-r-lg">
-        <div className="flex items-center space-x-2 mb-2 opacity-50">
-            <LightbulbIcon className="w-6 h-6 text-gray-400" />
-            <h3 className="text-lg font-bold text-gray-400">{title}</h3>
-        </div>
-        <div className="text-center py-2 text-secondary-gray">
-            <LockClosedIcon className="w-8 h-8 mx-auto text-gray-300" />
-            <p className="mt-1 text-sm font-semibold">Fitur AI Terkunci</p>
-        </div>
-    </div>
-);
-
-const LockedAIForecastCard: React.FC = () => (
-    <section className="bg-white rounded-xl p-6 shadow-md border-t-4 border-gray-300">
-        <div className="flex items-center space-x-3 mb-2 opacity-50">
-            <SparklesIcon className="w-7 h-7 text-gray-400" />
-            <h2 className="text-xl font-bold text-gray-400">Prediksi & Peringatan Dini</h2>
-        </div>
-        <div className="text-center py-4 text-secondary-gray">
-            <LockClosedIcon className="w-12 h-12 mx-auto text-gray-300" />
-            <p className="mt-2 font-semibold">Fitur Terkunci</p>
-        </div>
-    </section>
-);
-
-
 const TransactionDetailModal: React.FC<{
     data: { category: string; transactions: GlobalTransaction[] };
     onClose: () => void;
@@ -225,10 +198,6 @@ const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack }) => {
             </header>
 
             {selectedMonth !== 'all' && (
-                 <LockedAIForecastCard />
-            )}
-
-            {selectedMonth !== 'all' && (
                 <section className="bg-white rounded-xl p-6 shadow-md">
                     <h2 className="text-xl font-bold text-primary-navy text-center mb-4">{`Tren Pengeluaran Harian (${titleText})`}</h2>
                     <div className="w-full h-80">
@@ -249,7 +218,6 @@ const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack }) => {
                             </div>
                         )}
                     </div>
-                     <LockedAIAnalysisCard title="Analisis AI Tren Harian" />
                 </section>
             )}
 
@@ -269,7 +237,6 @@ const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack }) => {
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
-                     <LockedAIAnalysisCard title="Analisis AI Perbandingan Anggaran" />
                 </section>
             )}
 
@@ -324,7 +291,6 @@ const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack }) => {
                         )}
                     </tbody>
                 </table>
-                 <LockedAIAnalysisCard title="Analisis AI Alokasi Pengeluaran" />
             </section>
             
             {detailModalData && (
