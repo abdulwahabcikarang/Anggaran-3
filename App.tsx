@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { GoogleGenAI, Type, Chat, LiveSession, LiveServerMessage, Modality, Blob as GenAIBlob, FunctionDeclaration } from '@google/genai';
 import type { AppState, Budget, Transaction, FundTransaction, GlobalTransaction, ScannedItem, SavingsGoal, SavingTransaction, Achievement, Asset } from './types';
@@ -9,7 +10,7 @@ import Achievements from './components/Achievements';
 import PersonalBest from './components/PersonalBest';
 import NetWorth from './components/NetWorth';
 import { allAchievements } from './data/achievements';
-import { HomeIcon, ChartBarIcon, DocumentTextIcon, ListBulletIcon, Squares2x2Icon, PlusCircleIcon, ArrowDownTrayIcon, ArrowUpTrayIcon, CameraIcon, LightbulbIcon, SparklesIcon, SpeakerWaveIcon, ChatBubbleLeftRightIcon, PaperAirplaneIcon, TrashIcon, BuildingLibraryIcon, BudgetIcon, availableIcons, availableColors, TrophyIcon, Cog6ToothIcon, InformationCircleIcon, ExclamationTriangleIcon, ArchiveBoxIcon, ArrowUturnLeftIcon, ServerStackIcon, FireIcon, CircleStackIcon, LockClosedIcon } from './components/Icons';
+import { HomeIcon, ChartBarIcon, DocumentTextIcon, ListBulletIcon, Squares2x2Icon, PlusCircleIcon, ArrowDownTrayIcon, ArrowUpTrayIcon, CameraIcon, LightbulbIcon, SparklesIcon, SpeakerWaveIcon, ChatBubbleLeftRightIcon, PaperAirplaneIcon, TrashIcon, BuildingLibraryIcon, BudgetIcon, availableIcons, availableColors, TrophyIcon, Cog6ToothIcon, InformationCircleIcon, ExclamationTriangleIcon, ArchiveBoxIcon, ArrowUturnLeftIcon, ServerStackIcon, FireIcon, CircleStackIcon, LockClosedIcon, CalendarDaysIcon } from './components/Icons';
 
 // --- UTILITY FUNCTIONS ---
 const formatCurrency = (amount: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount);
@@ -385,7 +386,7 @@ const App: React.FC = () => {
         setInternalBackups(listInternalBackups());
     }, [listInternalBackups]);
 
-    // Save state to localStorage whenever it changes
+    // Save state from localStorage whenever it changes
     useEffect(() => {
         localStorage.setItem(`budgetAppState_v${APP_VERSION}`, JSON.stringify(state));
     }, [state]);
@@ -1034,6 +1035,79 @@ const App: React.FC = () => {
                     .filter(key => key.startsWith(BACKUP_PREFIX))
                     .forEach(key => localStorage.removeItem(key));
                 window.location.reload();
+            }
+        );
+    };
+    
+    const handleManualCloseBook = () => {
+        openConfirm(
+            <>
+                <strong>Akhiri Bulan & Tutup Buku?</strong>
+                <br/><br/>
+                Tindakan ini akan:
+                <ul className="text-left list-disc pl-6 text-sm mt-2 mb-2">
+                    <li>Mengarsipkan semua transaksi bulan ini ke Laporan.</li>
+                    <li>Mereset Pemasukan, Pengeluaran, dan Sisa Dana menjadi 0.</li>
+                    <li>Mengosongkan penggunaan semua Pos Anggaran Tetap.</li>
+                    <li>Mengarsipkan Pos Anggaran Sementara.</li>
+                </ul>
+                Data tidak hilang, hanya dipindahkan ke arsip. Mulai lembaran baru?
+            </>,
+            () => {
+                updateState(prev => {
+                    // 1. Collect all data to archive
+                    const currentMonth = new Date().toISOString().slice(0, 7);
+                    const archivedTransactions: GlobalTransaction[] = [];
+
+                    // Income/General Expenses
+                    archivedTransactions.push(...prev.fundHistory);
+
+                    // Daily Expenses
+                    prev.dailyExpenses.forEach(t => {
+                        archivedTransactions.push({
+                            ...t,
+                            type: 'remove',
+                            category: t.sourceCategory || 'Harian'
+                        });
+                    });
+
+                    // Budget History
+                    prev.budgets.forEach(b => {
+                        b.history.forEach(h => {
+                            archivedTransactions.push({
+                                ...h,
+                                type: 'remove',
+                                category: b.name,
+                                icon: b.icon,
+                                color: b.color
+                            });
+                        });
+                    });
+
+                    // 2. Modify Budgets (Reset Fixed, Archive Temporary)
+                    const newBudgets = prev.budgets.map(b => {
+                        if (b.isTemporary) {
+                            return { ...b, isArchived: true, history: [] }; // Archive it
+                        } else {
+                            return { ...b, history: [] }; // Reset usage, keep active
+                        }
+                    });
+
+                    // 3. Create new Archive entry
+                    const newArchive = {
+                        month: currentMonth, // Or strictly Date.now() timestamp if preferred, but month string works for grouping
+                        transactions: archivedTransactions
+                    };
+
+                    return {
+                        ...prev,
+                        archives: [...prev.archives, newArchive],
+                        fundHistory: [],
+                        dailyExpenses: [],
+                        budgets: newBudgets
+                    };
+                });
+                setActiveModal(null);
             }
         );
     };
@@ -1705,6 +1779,7 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
                     onManageBackups={() => setActiveModal('backupRestore')}
                     onResetMonthly={handleResetMonthlyData}
                     onResetAll={handleResetAllData}
+                    onManualCloseBook={handleManualCloseBook}
                 />
             </Modal>
             
@@ -2238,12 +2313,20 @@ const SettingsModalContent: React.FC<{
     onManageBackups: () => void;
     onResetMonthly: () => void;
     onResetAll: () => void;
-}> = ({ onExport, onImport, onManageArchived, onManualBackup, onManageBackups, onResetMonthly, onResetAll }) => {
+    onManualCloseBook: () => void;
+}> = ({ onExport, onImport, onManageArchived, onManualBackup, onManageBackups, onResetMonthly, onResetAll, onManualCloseBook }) => {
     return (
         <div className="space-y-6">
              <div className="bg-gray-50 rounded-lg border p-4">
                 <h4 className="font-bold text-dark-text mb-3">Manajemen Anggaran</h4>
                 <div className="flex flex-col gap-3">
+                     <button
+                        onClick={onManualCloseBook}
+                        className="w-full flex items-center justify-center gap-3 bg-primary-navy text-white font-bold py-3 px-4 rounded-lg hover:bg-primary-navy-dark transition-colors shadow-md"
+                    >
+                        <CalendarDaysIcon className="w-6 h-6"/>
+                        <span>Akhiri Bulan / Tutup Buku</span>
+                    </button>
                     <button
                         onClick={onManageArchived}
                         className="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-300 text-dark-text font-bold py-3 px-4 rounded-lg hover:bg-gray-100 transition-colors"
