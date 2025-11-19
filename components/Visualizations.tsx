@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
     PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, 
@@ -9,6 +10,7 @@ import { LightbulbIcon, SparklesIcon, LockClosedIcon } from './Icons';
 interface VisualizationsProps {
     state: AppState;
     onBack: () => void;
+    onAnalyzeChart: (prompt: string) => Promise<string>;
 }
 
 const formatCurrency = (amount: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
@@ -36,6 +38,46 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     }
     return null;
 };
+
+const ChartExplanationSection: React.FC<{
+    onAnalyze: () => void;
+    explanation: string;
+    isLoading: boolean;
+}> = ({ onAnalyze, explanation, isLoading }) => {
+    return (
+        <div className="mt-4">
+             {!explanation && !isLoading && (
+                <button 
+                    onClick={onAnalyze}
+                    className="w-full flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-primary-navy font-bold py-2 px-4 rounded-lg transition-colors border border-gray-300"
+                >
+                    <SparklesIcon className="w-5 h-5 text-warning-yellow" />
+                    <span>Jelasin Grafik Ini</span>
+                </button>
+             )}
+             
+             {isLoading && (
+                 <div className="text-center py-3 bg-gray-50 rounded-lg animate-pulse">
+                     <span className="text-sm text-secondary-gray">AI sedang menganalisis grafik...</span>
+                 </div>
+             )}
+
+             {explanation && (
+                 <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 relative mt-2">
+                     <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-4 h-4 bg-blue-50 border-t border-l border-blue-200 rotate-45"></div>
+                     <div className="flex items-start gap-3">
+                        <div className="bg-primary-navy rounded-full p-1 flex-shrink-0 mt-0.5">
+                             <SparklesIcon className="w-4 h-4 text-white" />
+                        </div>
+                        <div className="text-sm text-dark-text leading-relaxed whitespace-pre-line prose prose-sm max-w-none">
+                            {explanation}
+                        </div>
+                     </div>
+                 </div>
+             )}
+        </div>
+    );
+}
 
 const TransactionDetailModal: React.FC<{
     data: { category: string; transactions: GlobalTransaction[] };
@@ -74,9 +116,20 @@ const TransactionDetailModal: React.FC<{
     );
 };
 
-const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack }) => {
+const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack, onAnalyzeChart }) => {
     const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
     const [detailModalData, setDetailModalData] = useState<{ category: string; transactions: GlobalTransaction[] } | null>(null);
+
+    // AI Analysis States
+    const [trendExplanation, setTrendExplanation] = useState('');
+    const [isTrendLoading, setIsTrendLoading] = useState(false);
+    
+    const [budgetExplanation, setBudgetExplanation] = useState('');
+    const [isBudgetLoading, setIsBudgetLoading] = useState(false);
+
+    const [allocationExplanation, setAllocationExplanation] = useState('');
+    const [isAllocationLoading, setIsAllocationLoading] = useState(false);
+
 
     const allExpenses = useMemo((): GlobalTransaction[] => {
         let expenses: GlobalTransaction[] = [];
@@ -171,6 +224,41 @@ const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack }) => {
                     ? 'Semua Waktu' 
                     : new Date(selectedMonth + '-02').toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
 
+    // Reset analysis when month changes
+    useEffect(() => {
+        setTrendExplanation('');
+        setBudgetExplanation('');
+        setAllocationExplanation('');
+    }, [selectedMonth]);
+
+
+    const analyzeTrend = async () => {
+        setIsTrendLoading(true);
+        const dataStr = JSON.stringify(trendData.filter(d => d.total > 0));
+        const prompt = `Jelasin grafik Tren Pengeluaran Harian ini dengan pas (tidak kepanjangan, tidak kedekitan). Analisis pola pengeluaran, soroti tanggal dengan lonjakan tinggi, dan berikan kesimpulan tentang kebiasaan belanja. Buat ringkas namun tetap menjelaskan detail penting. Gunakan bahasa teman perempuan yang friendly (panggil 'Kak' atau 'Kamu', jangan 'bro'). Data: ${dataStr}`;
+        const result = await onAnalyzeChart(prompt);
+        setTrendExplanation(result);
+        setIsTrendLoading(false);
+    };
+
+    const analyzeBudget = async () => {
+        setIsBudgetLoading(true);
+        const dataStr = JSON.stringify(budgetComparisonData);
+        const prompt = `Jelasin grafik Perbandingan Anggaran ini dengan proporsional (tidak terlalu panjang). Fokus analisis pada perbandingan dana vs terpakai. Sebutkan kategori yang boros dan yang hemat secara spesifik. Berikan detail yang perlu saja agar informatif tapi tidak lelah dibaca. Gunakan bahasa teman perempuan yang friendly (panggil 'Kak' atau 'Kamu', jangan 'bro'). Data: ${dataStr}`;
+        const result = await onAnalyzeChart(prompt);
+        setBudgetExplanation(result);
+        setIsBudgetLoading(false);
+    };
+
+    const analyzeAllocation = async () => {
+        setIsAllocationLoading(true);
+        const dataStr = JSON.stringify(pieChartData);
+        const prompt = `Jelasin grafik Alokasi Pengeluaran ini dengan seimbang. Identifikasi kategori dominan dan analisis apakah proporsinya sehat. Berikan penjelasan yang padat berisi (insightful) tanpa terlalu panjang lebar. Gunakan bahasa teman perempuan yang friendly (panggil 'Kak' atau 'Kamu', jangan 'bro'). Data: ${dataStr}`;
+        const result = await onAnalyzeChart(prompt);
+        setAllocationExplanation(result);
+        setIsAllocationLoading(false);
+    };
+
     return (
         <main className="p-4 pb-24 animate-fade-in max-w-4xl mx-auto space-y-6">
             <style>{`
@@ -218,6 +306,13 @@ const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack }) => {
                             </div>
                         )}
                     </div>
+                     {trendData.length > 0 && trendData.some(d => d.total > 0) && (
+                        <ChartExplanationSection 
+                            onAnalyze={analyzeTrend} 
+                            explanation={trendExplanation} 
+                            isLoading={isTrendLoading} 
+                        />
+                    )}
                 </section>
             )}
 
@@ -237,6 +332,11 @@ const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack }) => {
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
+                    <ChartExplanationSection 
+                        onAnalyze={analyzeBudget} 
+                        explanation={budgetExplanation} 
+                        isLoading={isBudgetLoading} 
+                    />
                 </section>
             )}
 
@@ -291,6 +391,13 @@ const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack }) => {
                         )}
                     </tbody>
                 </table>
+                 {pieChartData.length > 0 && (
+                    <ChartExplanationSection 
+                        onAnalyze={analyzeAllocation} 
+                        explanation={allocationExplanation} 
+                        isLoading={isAllocationLoading} 
+                    />
+                )}
             </section>
             
             {detailModalData && (

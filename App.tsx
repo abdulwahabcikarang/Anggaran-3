@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { GoogleGenAI, Type, Chat, LiveSession, LiveServerMessage, Modality, Blob as GenAIBlob, FunctionDeclaration } from '@google/genai';
 import type { AppState, Budget, Transaction, FundTransaction, GlobalTransaction, ScannedItem, SavingsGoal, SavingTransaction, Achievement, Asset } from './types';
@@ -1206,26 +1205,45 @@ Berdasarkan data ini, berikan saya analisis singkat dan beberapa saran praktis d
     const handleFetchDashboardInsight = useCallback(async () => {
         setIsFetchingDashboardInsight(true);
         try {
-            const sevenDaysAgo = new Date();
-            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-            sevenDaysAgo.setHours(0, 0, 0, 0);
+            const today = new Date();
+            // Start of the current month
+            const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+            startOfMonth.setHours(0, 0, 0, 0);
 
-            // Filter transactions from the last 7 days
-            const lastWeekFundHistory = state.fundHistory.filter(t => new Date(t.timestamp) >= sevenDaysAgo);
-            const lastWeekDailyExpenses = state.dailyExpenses.filter(t => new Date(t.timestamp) >= sevenDaysAgo);
-            const lastWeekBudgets = state.budgets.map(b => ({
+            // Filter transactions from start of month to today (inclusive)
+            const currentMonthFundHistory = state.fundHistory.filter(t => new Date(t.timestamp) >= startOfMonth);
+            const currentMonthDailyExpenses = state.dailyExpenses.filter(t => new Date(t.timestamp) >= startOfMonth);
+            
+            // Filter budgets logic to include only this month's history if possible, but budgets history usually persists unless cleared.
+            // Assuming budget.history is all-time, we filter for this month.
+            const currentMonthBudgets = state.budgets.map(b => ({
                 ...b,
-                history: b.history.filter(h => new Date(h.timestamp) >= sevenDaysAgo),
+                history: b.history.filter(h => new Date(h.timestamp) >= startOfMonth),
             }));
 
-            // Recalculate summaries for the last 7 days
-            const lastWeekIncome = lastWeekFundHistory.filter(t => t.type === 'add').reduce((sum, t) => sum + t.amount, 0);
-            const lastWeekGeneralExpense = lastWeekFundHistory.filter(t => t.type === 'remove').reduce((sum, t) => sum + t.amount, 0);
-            const lastWeekUsedFromPosts = lastWeekBudgets.reduce((sum, b) => sum + b.history.reduce((s, h) => s + h.amount, 0), 0);
-            const lastWeekTotalDailySpent = lastWeekDailyExpenses.reduce((sum, e) => sum + e.amount, 0);
-            const lastWeekTotalUsed = lastWeekGeneralExpense + lastWeekUsedFromPosts + lastWeekTotalDailySpent;
+            // Filter categories to ignore
+            const ignoredCategories = ['kontrakan', 'wifi', 'bpjs'];
 
-            const lastWeekBudgetDetails = lastWeekBudgets.map(b => {
+            // Recalculate summaries
+            const currentMonthIncome = currentMonthFundHistory.filter(t => t.type === 'add').reduce((sum, t) => sum + t.amount, 0);
+            
+            const currentMonthGeneralExpense = currentMonthFundHistory
+                .filter(t => t.type === 'remove' && !ignoredCategories.some(ign => t.desc.toLowerCase().includes(ign)))
+                .reduce((sum, t) => sum + t.amount, 0);
+
+            const currentMonthUsedFromPosts = currentMonthBudgets.reduce((sum, b) => {
+                if (ignoredCategories.some(ign => b.name.toLowerCase().includes(ign))) return sum;
+                return sum + b.history.reduce((s, h) => s + h.amount, 0);
+            }, 0);
+
+            const currentMonthTotalDailySpent = currentMonthDailyExpenses
+                .filter(t => !ignoredCategories.some(ign => t.desc.toLowerCase().includes(ign)))
+                .reduce((sum, e) => sum + e.amount, 0);
+                
+            const currentMonthTotalUsed = currentMonthGeneralExpense + currentMonthUsedFromPosts + currentMonthTotalDailySpent;
+
+            const budgetDetails = currentMonthBudgets.map(b => {
+                if (ignoredCategories.some(ign => b.name.toLowerCase().includes(ign))) return null;
                 const used = b.history.reduce((sum, h) => sum + h.amount, 0);
                 if (used > 0) {
                     return `* ${b.name}: Terpakai ${formatCurrency(used)}`;
@@ -1235,20 +1253,17 @@ Berdasarkan data ini, berikan saya analisis singkat dan beberapa saran praktis d
 
 
             const prompt = `
-Sebagai asisten keuangan AI, berikan analisis singkat dan peringatan proaktif berdasarkan data keuangan 7 hari terakhir ini (dalam IDR). 
-Fokus pada:
-1. Pemasukan atau pengeluaran terbesar yang signifikan.
-2. Peringatan jika total pengeluaran mendekati atau melebihi pemasukan.
-3. Sorot tren boros jika ada.
+Kamu adalah asisten keuangan pribadi yang ramah dan hangat. User kamu adalah perempuan, jadi gunakan bahasa yang santai, sopan, dan akrab (seperti sesama teman perempuan). 
+PENTING: JANGAN gunakan kata "bro", "bang", "gan", atau sapaan laki-laki lainnya. Gunakan "Kak" atau "kamu".
 
-Berikan jawaban singkat, tajam, dan langsung ke intinya dalam Bahasa Indonesia tanpa sapaan.
+Data Keuangan (Awal Bulan s/d Hari Ini) - sudah difilter (tanpa pengeluaran tetap rutin):
+- Pemasukan: ${formatCurrency(currentMonthIncome)}
+- Total Keluar (Non-Tetap): ${formatCurrency(currentMonthTotalUsed)}
+- Rincian Pos:
+${budgetDetails || "Belum ada pengeluaran pos signifikan."}
+- Jajan/Lainnya: ${formatCurrency(currentMonthGeneralExpense + currentMonthTotalDailySpent)}
 
-Data Keuangan 7 Hari Terakhir:
-- Pemasukan: ${formatCurrency(lastWeekIncome)}
-- Pengeluaran Total: ${formatCurrency(lastWeekTotalUsed)}
-- Pengeluaran dari Pos Anggaran:
-${lastWeekBudgetDetails || "Tidak ada pengeluaran signifikan dari pos anggaran."}
-- Pengeluaran Harian/Umum: ${formatCurrency(lastWeekGeneralExpense + lastWeekTotalDailySpent)}
+Berikan wawasan yang informatif dan membantu (sekitar 1 paragraf). Review pengeluaran sejauh ini, berikan pujian jika hemat atau peringatan halus jika boros, dan berikan prediksi serta saran untuk sisa bulan ini.
             `;
 
             const apiKey = getApiKey();
@@ -1257,10 +1272,10 @@ ${lastWeekBudgetDetails || "Tidak ada pengeluaran signifikan dari pos anggaran."
                 model: 'gemini-2.5-flash',
                 contents: prompt,
             });
-            setAiDashboardInsight(response.text || "Tidak ada saran untuk saat ini.");
+            setAiDashboardInsight(response.text || "Belum ada data yang cukup untuk prediksi.");
         } catch (error) {
             console.error("Error fetching dashboard insight:", error);
-            setAiDashboardInsight("Gagal mengambil wawasan. Periksa koneksi atau coba lagi.");
+            setAiDashboardInsight("Lagi ga bisa nerawang nih, cek koneksi dulu ya.");
         } finally {
             setIsFetchingDashboardInsight(false);
         }
@@ -1270,10 +1285,25 @@ ${lastWeekBudgetDetails || "Tidak ada pengeluaran signifikan dari pos anggaran."
         if(monthlyIncome > 0) { // Only fetch if there's data
             handleFetchDashboardInsight();
         } else {
-            setAiDashboardInsight("Tambahkan pemasukan bulan ini untuk mendapatkan wawasan dari AI.");
+            setAiDashboardInsight("Tambahkan pemasukan bulan ini dulu biar aku bisa kasih ramalan keuangan!");
         }
     }, [monthlyIncome, handleFetchDashboardInsight]); // Re-fetch only when income changes as a trigger
 
+    // --- AI CHART ANALYSIS HANDLER ---
+    const handleAnalyzeChartData = async (prompt: string): Promise<string> => {
+        try {
+            const apiKey = getApiKey();
+            const ai = new GoogleGenAI({ apiKey });
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+            });
+            return response.text;
+        } catch (error) {
+            console.error("Chart analysis error:", error);
+            return "Waduh, gagal baca grafik nih. Coba lagi nanti ya!";
+        }
+    };
 
     // --- AI CHAT LOGIC ---
 
@@ -1471,7 +1501,11 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
                             onClearAiSearch={handleClearAiSearch}
                        />;
             case 'visualizations':
-                 return <Visualizations state={state} onBack={() => setCurrentPage('dashboard')} />;
+                 return <Visualizations 
+                            state={state} 
+                            onBack={() => setCurrentPage('dashboard')} 
+                            onAnalyzeChart={handleAnalyzeChartData}
+                        />;
             case 'savings':
                  return <Savings 
                             state={state} 
@@ -2981,7 +3015,7 @@ const AddSavingsGoalModalContent: React.FC<{ onSubmit: (name: string, isInfinite
                     <input type="text" id="goal-amount" value={amount} onChange={e => setAmount(formatNumberInput(e.target.value))} required={!isInfinite} placeholder="Contoh: 15.000.000" inputMode="numeric" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-navy focus:border-primary-navy"/>
                 </div>
             )}
-            <button type="submit" className="w-full bg-primary-navy text-white font-bold py-3 rounded-lg hover:bg-primary-navy-dark transition-colors">Buat Celengan</button>
+            <button type="submit" className="w-full bg-primary-navy text-white font-bold py-3 rounded-lg hover:bg-primary-navy-dark transition-colors">Buat Celengan Baru</button>
         </form>
     );
 };
