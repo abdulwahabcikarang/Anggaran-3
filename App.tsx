@@ -10,7 +10,7 @@ import Achievements from './components/Achievements';
 import PersonalBest from './components/PersonalBest';
 import NetWorth from './components/NetWorth';
 import { allAchievements } from './data/achievements';
-import { HomeIcon, ChartBarIcon, DocumentTextIcon, ListBulletIcon, Squares2x2Icon, PlusCircleIcon, ArrowDownTrayIcon, ArrowUpTrayIcon, CameraIcon, LightbulbIcon, SparklesIcon, SpeakerWaveIcon, ChatBubbleLeftRightIcon, PaperAirplaneIcon, TrashIcon, BuildingLibraryIcon, BudgetIcon, availableIcons, availableColors, TrophyIcon, Cog6ToothIcon, InformationCircleIcon, ExclamationTriangleIcon, ArchiveBoxIcon, ArrowUturnLeftIcon, ServerStackIcon, FireIcon, CircleStackIcon, LockClosedIcon, CalendarDaysIcon } from './components/Icons';
+import { HomeIcon, ChartBarIcon, DocumentTextIcon, ListBulletIcon, Squares2x2Icon, PlusCircleIcon, ArrowDownTrayIcon, ArrowUpTrayIcon, CameraIcon, LightbulbIcon, SparklesIcon, SpeakerWaveIcon, ChatBubbleLeftRightIcon, PaperAirplaneIcon, TrashIcon, BuildingLibraryIcon, BudgetIcon, availableIcons, availableColors, TrophyIcon, Cog6ToothIcon, InformationCircleIcon, ExclamationTriangleIcon, ArchiveBoxIcon, ArrowUturnLeftIcon, ServerStackIcon, FireIcon, CircleStackIcon, LockClosedIcon, CalendarDaysIcon, ChevronRightIcon } from './components/Icons';
 
 // --- UTILITY FUNCTIONS ---
 const formatCurrency = (amount: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount);
@@ -2305,6 +2305,57 @@ const EditAssetModalContent: React.FC<{ currentAsset: number; onSubmit: (newAmou
     );
 };
 
+const SettingsGroup: React.FC<{
+    title: React.ReactNode;
+    variant?: 'default' | 'blue' | 'red';
+    children: React.ReactNode;
+    footer?: React.ReactNode;
+}> = ({ title, variant = 'default', children, footer }) => {
+    const [isOpen, setIsOpen] = useState(false);
+
+    const variantStyles = {
+        default: {
+            container: 'bg-gray-50 border-gray-200',
+            header: 'text-dark-text',
+            content: 'border-gray-200'
+        },
+        blue: {
+            container: 'bg-blue-50 border-blue-200',
+            header: 'text-primary-navy',
+            content: 'border-blue-200'
+        },
+        red: {
+            container: 'bg-red-50 border-danger-red',
+            header: 'text-danger-red',
+            content: 'border-red-200'
+        }
+    };
+
+    const styles = variantStyles[variant];
+
+    return (
+        <div className={`rounded-lg border overflow-hidden transition-all duration-300 ${styles.container}`}>
+            <button 
+                onClick={() => setIsOpen(!isOpen)}
+                className={`w-full flex items-center justify-between p-4 text-left font-bold ${styles.header} hover:opacity-80 transition-opacity`}
+            >
+                <div className="flex items-center gap-2">{title}</div>
+                <ChevronRightIcon className={`w-5 h-5 transition-transform duration-300 ${isOpen ? 'rotate-90' : ''}`} />
+            </button>
+            <div 
+                className={`transition-all duration-300 ease-in-out overflow-hidden ${isOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}
+            >
+                <div className={`p-4 pt-0 border-t ${styles.content} mt-2`}>
+                    <div className="pt-3 flex flex-col gap-3">
+                        {children}
+                    </div>
+                    {footer && <div className="mt-3 pt-2 border-t border-gray-200/50">{footer}</div>}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const SettingsModalContent: React.FC<{
     onExport: () => void;
     onImport: () => void;
@@ -2316,85 +2367,80 @@ const SettingsModalContent: React.FC<{
     onManualCloseBook: () => void;
 }> = ({ onExport, onImport, onManageArchived, onManualBackup, onManageBackups, onResetMonthly, onResetAll, onManualCloseBook }) => {
     return (
-        <div className="space-y-6">
-             <div className="bg-gray-50 rounded-lg border p-4">
-                <h4 className="font-bold text-dark-text mb-3">Manajemen Anggaran</h4>
-                <div className="flex flex-col gap-3">
-                     <button
-                        onClick={onManualCloseBook}
-                        className="w-full flex items-center justify-center gap-3 bg-primary-navy text-white font-bold py-3 px-4 rounded-lg hover:bg-primary-navy-dark transition-colors shadow-md"
-                    >
-                        <CalendarDaysIcon className="w-6 h-6"/>
-                        <span>Akhiri Bulan / Tutup Buku</span>
-                    </button>
-                    <button
-                        onClick={onManageArchived}
-                        className="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-300 text-dark-text font-bold py-3 px-4 rounded-lg hover:bg-gray-100 transition-colors"
-                    >
-                        <ArchiveBoxIcon className="w-6 h-6"/>
-                        <span>Kelola Pos Anggaran Diarsipkan</span>
-                    </button>
-                </div>
-            </div>
-            
-            <div className="bg-blue-50 rounded-lg border border-blue-300 p-4">
-                <h4 className="font-bold text-dark-text mb-3">Cadangan & Pemulihan</h4>
-                <div className="flex flex-col gap-3">
-                     <button
-                        onClick={onManualBackup}
-                        className="w-full flex items-center justify-center gap-3 bg-white border-2 border-primary-navy text-primary-navy font-bold py-3 px-4 rounded-lg hover:bg-blue-100 transition-colors"
-                    >
+        <div className="space-y-4">
+            <SettingsGroup title="Manajemen Anggaran" variant="default">
+                <button
+                    onClick={onManualCloseBook}
+                    className="w-full flex items-center justify-center gap-3 bg-primary-navy text-white font-bold py-3 px-4 rounded-lg hover:bg-primary-navy-dark transition-colors shadow-md"
+                >
+                    <CalendarDaysIcon className="w-6 h-6"/>
+                    <span>Akhiri Bulan / Tutup Buku</span>
+                </button>
+                <button
+                    onClick={onManageArchived}
+                    className="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-300 text-dark-text font-bold py-3 px-4 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                    <ArchiveBoxIcon className="w-6 h-6"/>
+                    <span>Kelola Pos Anggaran Diarsipkan</span>
+                </button>
+            </SettingsGroup>
+
+            <SettingsGroup 
+                title="Cadangan & Pemulihan" 
+                variant="blue"
+                footer={<p className="text-xs text-secondary-gray text-center">Cadangan otomatis mingguan untuk memulihkan data jika terjadi kesalahan.</p>}
+            >
+                <button
+                    onClick={onManualBackup}
+                    className="w-full flex items-center justify-center gap-3 bg-white border-2 border-primary-navy text-primary-navy font-bold py-3 px-4 rounded-lg hover:bg-blue-100 transition-colors"
+                >
+                    <ArrowDownTrayIcon className="w-6 h-6"/>
+                    <span>Cadangkan Manual Sekarang</span>
+                </button>
+                <button
+                    onClick={onManageBackups}
+                    className="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-300 text-dark-text font-bold py-3 px-4 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                    <ServerStackIcon className="w-6 h-6"/>
+                    <span>Kelola Cadangan Internal</span>
+                </button>
+            </SettingsGroup>
+
+            <SettingsGroup title="Manajemen Data" variant="default">
+                <button
+                    onClick={onImport}
+                    className="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-300 text-dark-text font-bold py-3 px-4 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                    <ArrowUpTrayIcon className="w-6 h-6"/>
+                    <span>Impor Data dari File</span>
+                </button>
+                <button
+                    onClick={onExport}
+                    className="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-300 text-dark-text font-bold py-3 px-4 rounded-lg hover:bg-gray-100 transition-colors"
+                >
                         <ArrowDownTrayIcon className="w-6 h-6"/>
-                        <span>Cadangkan Manual Sekarang</span>
-                    </button>
-                     <button
-                        onClick={onManageBackups}
-                        className="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-300 text-dark-text font-bold py-3 px-4 rounded-lg hover:bg-gray-100 transition-colors"
-                    >
-                        <ServerStackIcon className="w-6 h-6"/>
-                        <span>Kelola Cadangan Internal</span>
-                    </button>
-                </div>
-                <p className="text-xs text-secondary-gray mt-3 text-center">Cadangan otomatis mingguan untuk memulihkan data jika terjadi kesalahan.</p>
-            </div>
+                    <span>Ekspor Data ke File</span>
+                </button>
+            </SettingsGroup>
 
+            <SettingsGroup 
+                title={
+                    <div className="flex items-center gap-2">
+                        <ExclamationTriangleIcon className="w-6 h-6"/>
+                        <span>Zona Berbahaya</span>
+                    </div>
+                } 
+                variant="red"
+            >
+                <button onClick={onResetMonthly} className="w-full bg-white border-2 border-danger-red text-danger-red font-bold py-3 px-4 rounded-lg hover:bg-red-100 transition-colors">
+                    Reset Data Bulan Ini
+                </button>
+                <button onClick={onResetAll} className="w-full bg-danger-red text-white font-bold py-3 px-4 rounded-lg hover:bg-danger-red-dark transition-colors">
+                    Reset Semua Data Aplikasi
+                </button>
+            </SettingsGroup>
 
-            <div className="bg-gray-50 rounded-lg border p-4">
-                <h4 className="font-bold text-dark-text mb-3">Manajemen Data</h4>
-                <div className="flex flex-col gap-3">
-                    <button
-                        onClick={onImport}
-                        className="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-300 text-dark-text font-bold py-3 px-4 rounded-lg hover:bg-gray-100 transition-colors"
-                    >
-                        <ArrowUpTrayIcon className="w-6 h-6"/>
-                        <span>Impor Data dari File</span>
-                    </button>
-                    <button
-                        onClick={onExport}
-                        className="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-300 text-dark-text font-bold py-3 px-4 rounded-lg hover:bg-gray-100 transition-colors"
-                    >
-                         <ArrowDownTrayIcon className="w-6 h-6"/>
-                        <span>Ekspor Data ke File</span>
-                    </button>
-                </div>
-            </div>
-
-            <div className="bg-red-50 rounded-lg border border-danger-red p-4">
-                <div className="flex items-center gap-2 mb-3">
-                    <ExclamationTriangleIcon className="w-6 h-6 text-danger-red"/>
-                    <h4 className="font-bold text-danger-red">Zona Berbahaya</h4>
-                </div>
-                <div className="flex flex-col gap-3">
-                    <button onClick={onResetMonthly} className="w-full bg-white border-2 border-danger-red text-danger-red font-bold py-3 px-4 rounded-lg hover:bg-red-100 transition-colors">
-                        Reset Data Bulan Ini
-                    </button>
-                    <button onClick={onResetAll} className="w-full bg-danger-red text-white font-bold py-3 px-4 rounded-lg hover:bg-danger-red-dark transition-colors">
-                        Reset Semua Data Aplikasi
-                    </button>
-                </div>
-            </div>
-
-            <div className="bg-gray-50 rounded-lg border p-4 text-center">
+            <div className="bg-gray-50 rounded-lg border p-4 text-center mt-4">
                 <h4 className="font-bold text-dark-text mb-2">Tentang Aplikasi</h4>
                 <div className="space-y-1 text-sm text-secondary-gray">
                     <p>Versi: {APP_VERSION}</p>

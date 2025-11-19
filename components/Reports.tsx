@@ -1,9 +1,8 @@
-
-
-
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import type { AppState, GlobalTransaction } from '../types';
-import { SparklesIcon, CalendarDaysIcon, ListBulletIcon, ChevronLeftIcon, ChevronRightIcon, BudgetIcon, TrashIcon, LockClosedIcon } from './Icons';
+import { SparklesIcon, CalendarDaysIcon, ListBulletIcon, ChevronLeftIcon, ChevronRightIcon, BudgetIcon, TrashIcon, LockClosedIcon, ArrowDownTrayIcon, DocumentTextIcon } from './Icons';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface ReportsProps {
     state: AppState;
@@ -128,6 +127,10 @@ const Reports: React.FC<ReportsProps> = ({
         return transactionsToDisplay.reduce((sum, t) => (t.type === 'remove' ? sum + t.amount : sum), 0);
     }, [transactionsToDisplay]);
 
+    const summaryIncome = useMemo(() => {
+        return transactionsToDisplay.reduce((sum, t) => (t.type === 'add' ? sum + t.amount : sum), 0);
+    }, [transactionsToDisplay]);
+
     const groupedTransactions = useMemo(() => {
         const groups: { [date: string]: { transactions: GlobalTransaction[], dailyTotal: number } } = {};
 
@@ -175,6 +178,71 @@ const Reports: React.FC<ReportsProps> = ({
         setSelectedDate(null);
     };
 
+    const handleDownloadPDF = () => {
+        const doc = new jsPDF();
+        const title = `Laporan Keuangan - ${displayMonthText}`;
+        const timestamp = new Date().toLocaleString('id-ID');
+
+        // --- HEADER ---
+        doc.setFontSize(18);
+        doc.setTextColor(44, 62, 80); // Primary Navy
+        doc.text("Anggaran 3", 14, 20);
+        
+        doc.setFontSize(14);
+        doc.setTextColor(100);
+        doc.text(title, 14, 30);
+        
+        doc.setFontSize(10);
+        doc.text(`Dibuat pada: ${timestamp}`, 14, 38);
+
+        // --- SUMMARY SECTION ---
+        const summaryData = [
+            ['Total Pemasukan', formatCurrency(summaryIncome)],
+            ['Total Pengeluaran', formatCurrency(summaryExpense)],
+            ['Selisih (Net)', formatCurrency(summaryIncome - summaryExpense)]
+        ];
+
+        autoTable(doc, {
+            startY: 45,
+            head: [['Ringkasan', 'Jumlah']],
+            body: summaryData,
+            theme: 'grid',
+            headStyles: { fillColor: [44, 62, 80], textColor: 255 },
+            columnStyles: { 
+                0: { fontStyle: 'bold', cellWidth: 100 },
+                1: { halign: 'right' }
+            },
+            margin: { left: 14, right: 14 }
+        });
+
+        // --- TRANSACTIONS TABLE ---
+        const tableBody = transactionsToDisplay.map(t => [
+            new Date(t.timestamp).toLocaleDateString('id-ID'),
+            t.desc,
+            t.category || '-',
+            t.type === 'add' ? formatCurrency(t.amount) : '-',
+            t.type === 'remove' ? formatCurrency(t.amount) : '-'
+        ]);
+
+        autoTable(doc, {
+            // @ts-ignore - jspdf-autotable types might be tricky with lastAutoTable
+            startY: doc.lastAutoTable.finalY + 15,
+            head: [['Tanggal', 'Keterangan', 'Kategori', 'Pemasukan', 'Pengeluaran']],
+            body: tableBody,
+            theme: 'striped',
+            headStyles: { fillColor: [26, 188, 156] }, // Accent Teal
+            styles: { fontSize: 9 },
+            columnStyles: {
+                0: { cellWidth: 25 },
+                3: { halign: 'right', textColor: [22, 160, 133] }, // Greenish
+                4: { halign: 'right', textColor: [231, 76, 60] }   // Reddish
+            },
+             margin: { left: 14, right: 14 }
+        });
+
+        doc.save(`Laporan_${selectedMonth}.pdf`);
+    };
+
     const TransactionItem: React.FC<{t: GlobalTransaction, onDelete: (ts: number) => void}> = ({t, onDelete}) => (
         <li key={t.timestamp} className="flex justify-between items-center py-3 px-3 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors duration-150">
             <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -207,8 +275,8 @@ const Reports: React.FC<ReportsProps> = ({
     );
 
     const displayMonthText = selectedMonth === 'all' 
-        ? 'Semua' 
-        : new Date(selectedMonth + '-02').toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
+        ? 'Semua Waktu' 
+        : new Date(selectedMonth + '-02').toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
 
     return (
         <main className="p-4 pb-24 animate-fade-in">
@@ -225,7 +293,12 @@ const Reports: React.FC<ReportsProps> = ({
                             </div>
                             <div className="flex-shrink-0 relative" ref={monthPickerRef}>
                                 <div className="flex items-center gap-2">
-                                    <span className="text-sm font-medium text-secondary-gray">{displayMonthText}</span>
+                                    <span className="text-sm font-medium text-secondary-gray">
+                                        {selectedMonth === 'all' 
+                                            ? 'Semua' 
+                                            : new Date(selectedMonth + '-02').toLocaleDateString('id-ID', { month: 'short', year: 'numeric' })
+                                        }
+                                    </span>
                                     <button
                                         onClick={() => setIsMonthPickerOpen(prev => !prev)}
                                         className="p-2 border border-gray-300 rounded-full bg-white hover:bg-gray-100"
@@ -361,6 +434,32 @@ const Reports: React.FC<ReportsProps> = ({
                        />
                    </div>
                 )}
+            </section>
+
+             {/* --- DOWNLOAD PDF SECTION --- */}
+             <section className="bg-white rounded-xl p-6 mt-6 shadow-md">
+                <div className="flex items-center gap-3 mb-4">
+                    <DocumentTextIcon className="w-6 h-6 text-primary-navy" />
+                    <h2 className="text-xl font-bold text-primary-navy">Unduh Laporan</h2>
+                </div>
+                
+                <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-light-bg p-4 rounded-lg border border-gray-200">
+                    <div>
+                        <p className="font-semibold text-dark-text">Laporan Bulanan PDF</p>
+                        <p className="text-sm text-secondary-gray">
+                            Periode: <span className="font-bold text-primary-navy">{displayMonthText}</span>
+                        </p>
+                         <p className="text-xs text-secondary-gray mt-1">Data yang diunduh sesuai dengan filter bulan di atas.</p>
+                    </div>
+                    <button 
+                        onClick={handleDownloadPDF}
+                        disabled={transactionsToDisplay.length === 0}
+                        className="flex items-center gap-2 bg-primary-navy text-white font-bold py-2 px-4 rounded-lg hover:bg-primary-navy-dark transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed whitespace-nowrap"
+                    >
+                        <ArrowDownTrayIcon className="w-5 h-5" />
+                        <span>Download PDF</span>
+                    </button>
+                </div>
             </section>
             
             <section className="bg-white rounded-xl p-6 mt-6 shadow-md">
