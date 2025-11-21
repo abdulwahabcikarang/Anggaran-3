@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 export interface Transaction {
@@ -54,6 +55,26 @@ export interface SavingsGoal {
   isCompleted: boolean;
 }
 
+export interface WishlistItem {
+    id: number;
+    name: string;
+    price: number;
+    cooldownDays: number;
+    createdAt: number;
+    image?: string; // Optional base64 image
+    status: 'waiting' | 'ready' | 'purchased' | 'cancelled';
+}
+
+export interface Subscription {
+    id: number;
+    name: string;
+    price: number;
+    cycle: 'monthly' | 'yearly';
+    firstBillDate: string; // YYYY-MM-DD
+    icon: string;
+    isActive: boolean;
+}
+
 export interface Achievement {
   id: string;
   name: string;
@@ -72,7 +93,9 @@ export interface Asset {
   id: number;
   name: string;
   quantity: number;
-  pricePerUnit: number;
+  pricePerUnit: number; // Harga beli (atau harga manual jika type='custom')
+  type: 'custom' | 'gold' | 'crypto'; // NEW: Tipe aset
+  symbol?: string; // NEW: Simbol ticker (misal: 'BTC', 'ANTAM')
 }
 
 export interface AppState {
@@ -82,7 +105,9 @@ export interface AppState {
   archives: Archive[];
   lastArchiveDate: string | null;
   savingsGoals: SavingsGoal[];
-  unlockedAchievements: { [id: string]: number }; // id: timestamp
+  wishlist: WishlistItem[]; 
+  subscriptions: Subscription[]; 
+  unlockedAchievements: { [id: string]: number }; 
   achievementData?: {
     monthlyStreak?: number;
     dailyStreak?: number;
@@ -90,7 +115,7 @@ export interface AppState {
     appOpenStreak?: number;
     morningTransactionStreak?: number;
     savingStreak?: number;
-    lastStreakCheck?: string; // YYYY-MM-DD
+    lastStreakCheck?: string; 
   };
   assets: Asset[];
 }

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { GoogleGenAI, Type, Chat, LiveSession, LiveServerMessage, Modality, Blob as GenAIBlob, FunctionDeclaration } from '@google/genai';
-import type { AppState, Budget, Transaction, FundTransaction, GlobalTransaction, ScannedItem, SavingsGoal, SavingTransaction, Achievement, Asset } from './types';
+import type { AppState, Budget, Transaction, FundTransaction, GlobalTransaction, ScannedItem, SavingsGoal, SavingTransaction, Achievement, Asset, WishlistItem, Subscription } from './types';
 import Dashboard from './components/Dashboard';
 import Reports from './components/Reports';
 import Visualizations from './components/Visualizations';
@@ -9,8 +9,11 @@ import Savings from './components/Savings';
 import Achievements from './components/Achievements';
 import PersonalBest from './components/PersonalBest';
 import NetWorth from './components/NetWorth';
+import Wishlist from './components/Wishlist';
+import Subscriptions from './components/Subscriptions';
 import { allAchievements } from './data/achievements';
-import { HomeIcon, ChartBarIcon, DocumentTextIcon, ListBulletIcon, Squares2x2Icon, PlusCircleIcon, ArrowDownTrayIcon, ArrowUpTrayIcon, CameraIcon, LightbulbIcon, SparklesIcon, SpeakerWaveIcon, ChatBubbleLeftRightIcon, PaperAirplaneIcon, TrashIcon, BuildingLibraryIcon, BudgetIcon, availableIcons, availableColors, TrophyIcon, Cog6ToothIcon, InformationCircleIcon, ExclamationTriangleIcon, ArchiveBoxIcon, ArrowUturnLeftIcon, ServerStackIcon, FireIcon, CircleStackIcon, LockClosedIcon, CalendarDaysIcon, ChevronRightIcon } from './components/Icons';
+import { HomeIcon, ChartBarIcon, DocumentTextIcon, ListBulletIcon, Squares2x2Icon, PlusCircleIcon, ArrowDownTrayIcon, ArrowUpTrayIcon, CameraIcon, LightbulbIcon, SparklesIcon, SpeakerWaveIcon, ChatBubbleLeftRightIcon, PaperAirplaneIcon, TrashIcon, BuildingLibraryIcon, BudgetIcon, availableIcons, availableColors, TrophyIcon, Cog6ToothIcon, InformationCircleIcon, ExclamationTriangleIcon, ArchiveBoxIcon, ArrowUturnLeftIcon, ServerStackIcon, FireIcon, CircleStackIcon, LockClosedIcon, CalendarDaysIcon, ChevronRightIcon, HeartIcon, ArrowPathIcon, BellIcon, CreditCardIcon } from './components/Icons';
+import { AISkeleton } from './components/UI';
 
 // --- UTILITY FUNCTIONS ---
 const formatCurrency = (amount: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount);
@@ -34,7 +37,6 @@ const fileToBase64 = (file: File | Blob): Promise<string> => {
 const getApiKey = (): string => {
     let key = '';
     try {
-        // Try standard process.env (Node/Webpack/Create-React-App)
         if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
             key = process.env.API_KEY;
         }
@@ -42,7 +44,6 @@ const getApiKey = (): string => {
 
     if (!key) {
         try {
-            // Try Vite environment variable
             // @ts-ignore
             if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_KEY) {
                 // @ts-ignore
@@ -113,9 +114,10 @@ interface ModalProps {
     title: string;
     size?: 'sm' | 'md' | 'lg' | 'xl';
     contentClassName?: string;
+    originCoords?: { x: number, y: number } | null;
 }
 
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children, title, size = 'md', contentClassName = 'p-6' }) => {
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children, title, size = 'md', contentClassName = 'p-6', originCoords }) => {
     if (!isOpen) return null;
 
     const sizeClasses = {
@@ -125,12 +127,25 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children, title, size = 
         xl: 'max-w-xl',
     };
 
+    // Calculate transform origin style for the Hero Effect
+    const transformOriginStyle = originCoords 
+        ? { transformOrigin: `${originCoords.x}px ${originCoords.y}px` } 
+        : {};
+
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={onClose}>
-            <div className={`bg-white rounded-xl shadow-2xl w-full ${sizeClasses[size]} animate-fade-in-up flex flex-col max-h-[90vh]`} onClick={e => e.stopPropagation()}>
-                <div className="flex justify-between items-center p-4 border-b flex-shrink-0">
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm transition-all duration-300" onClick={onClose}>
+            <div 
+                style={transformOriginStyle}
+                className={`
+                    bg-white/90 backdrop-blur-xl border border-white/20 
+                    rounded-2xl shadow-2xl w-full ${sizeClasses[size]} 
+                    animate-spring-up flex flex-col max-h-[90vh]
+                `} 
+                onClick={e => e.stopPropagation()}
+            >
+                <div className="flex justify-between items-center p-4 border-b border-gray-200/50 flex-shrink-0">
                     <h3 className="text-lg font-bold text-primary-navy">{title}</h3>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-2xl">&times;</button>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-2xl transition-colors">&times;</button>
                 </div>
                 <div className={`${contentClassName} overflow-y-auto`}>{children}</div>
             </div>
@@ -148,44 +163,16 @@ interface ConfirmModalProps {
 const ConfirmModal: React.FC<ConfirmModalProps> = ({ isOpen, onClose, onConfirm, message }) => {
     if(!isOpen) return null;
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm text-center p-6 animate-fade-in-up">
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+            <div className="bg-white/90 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl w-full max-w-sm text-center p-6 animate-spring-up">
                 <div className="text-dark-text mb-6">{message}</div>
                 <div className="flex justify-center gap-4">
-                    <button onClick={onClose} className="px-6 py-2 rounded-lg bg-gray-200 text-dark-text font-semibold hover:bg-gray-300">Batal</button>
-                    <button onClick={onConfirm} className="px-6 py-2 rounded-lg bg-danger-red text-white font-semibold hover:bg-danger-red-dark">OK</button>
+                    <button onClick={onClose} className="px-6 py-2 rounded-lg bg-gray-200 text-dark-text font-semibold hover:bg-gray-300 transition-colors">Batal</button>
+                    <button onClick={onConfirm} className="px-6 py-2 rounded-lg bg-danger-red text-white font-semibold hover:bg-danger-red-dark transition-colors">OK</button>
                 </div>
             </div>
         </div>
     );
-};
-
-// --- APP COMPONENT ---
-type Page = 'dashboard' | 'reports' | 'visualizations' | 'savings' | 'achievements' | 'personalBest' | 'netWorth';
-type ModalType = 'input' | 'funds' | 'addBudget' | 'history' | 'info' | 'menu' | 'editAsset' | 'confirm' | 'scanResult' | 'aiAdvice' | 'smartInput' | 'aiChat' | 'voiceAssistant' | 'voiceResult' | 'addSavingsGoal' | 'addSavings' | 'savingsDetail' | 'settings' | 'archivedBudgets' | 'backupRestore' | 'asset' | 'batchInput';
-
-const APP_VERSION = '3.12.0';
-const BACKUP_PREFIX = 'budgetAppBackup_';
-const MAX_BACKUPS = 4;
-
-const initialState: AppState = {
-    budgets: [],
-    dailyExpenses: [],
-    fundHistory: [],
-    archives: [],
-    lastArchiveDate: null,
-    savingsGoals: [],
-    unlockedAchievements: {},
-    achievementData: {
-        monthlyStreak: 0,
-        dailyStreak: 0,
-        noSpendStreak: 0,
-        appOpenStreak: 0,
-        morningTransactionStreak: 0,
-        savingStreak: 0,
-        lastStreakCheck: undefined,
-    },
-    assets: [],
 };
 
 const DailyBackupToast: React.FC<{
@@ -194,7 +181,7 @@ const DailyBackupToast: React.FC<{
 }> = ({ backup, onClose }) => {
     return (
         <div 
-            className="fixed top-5 left-1/2 -translate-x-1/2 z-[100] bg-white rounded-xl shadow-2xl p-4 flex items-center space-x-4 max-w-md w-[90%] animate-fade-in-down"
+            className="fixed top-5 left-1/2 -translate-x-1/2 z-[100] bg-white/90 backdrop-blur-md border border-white/40 rounded-xl shadow-2xl p-4 flex items-center space-x-4 max-w-md w-[90%] animate-fade-in-down"
         >
             <ArrowDownTrayIcon className="w-10 h-10 text-accent-teal flex-shrink-0" />
             <div>
@@ -217,6 +204,682 @@ const DailyBackupToast: React.FC<{
     );
 };
 
+const NotificationToast: React.FC<{
+    messages: string[];
+    onClose: () => void;
+}> = ({ messages, onClose }) => {
+    if (messages.length === 0) return null;
+    return (
+        <div className="fixed top-5 right-5 z-[110] flex flex-col gap-2 animate-fade-in-left">
+            {messages.map((msg, idx) => (
+                <div key={idx} className="bg-white/90 backdrop-blur-md border-l-4 border-warning-yellow rounded-lg shadow-xl p-4 flex items-start gap-3 max-w-sm">
+                    <BellIcon className="w-6 h-6 text-warning-yellow flex-shrink-0" />
+                    <div>
+                        <p className="text-sm font-semibold text-dark-text">{msg}</p>
+                    </div>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 ml-auto text-xs">&times;</button>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+// --- PLACEHOLDER & HELPER COMPONENTS FOR MODALS ---
+const InputModalContent: React.FC<{
+    mode: 'use-daily' | 'use-post' | 'edit-post';
+    budget?: Budget;
+    allBudgets: Budget[];
+    onSubmit: (data: { description: string, amount: number, targetId?: 'daily' | number, icon?: string, color?: string }) => void;
+    onArchive?: () => void;
+    prefillData: { desc: string, amount: string } | null;
+    onPrefillConsumed: () => void;
+}> = ({ mode, budget, allBudgets, onSubmit, onArchive, prefillData, onPrefillConsumed }) => {
+    const [desc, setDesc] = useState(prefillData?.desc || '');
+    const [amount, setAmount] = useState(prefillData?.amount || '');
+    const [targetId, setTargetId] = useState<'daily' | number>(mode === 'use-post' && budget ? budget.id : 'daily');
+    const [icon, setIcon] = useState(budget?.icon || availableIcons[0]);
+    const [color, setColor] = useState(budget?.color || availableColors[0]);
+
+    useEffect(() => {
+        if (prefillData) {
+            setDesc(prefillData.desc);
+            setAmount(prefillData.amount);
+            onPrefillConsumed();
+        }
+    }, [prefillData, onPrefillConsumed]);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const rawAmount = getRawNumber(amount.toString());
+        if (mode === 'edit-post') {
+            onSubmit({ description: desc, amount: rawAmount, icon, color });
+        } else {
+            onSubmit({ description: desc, amount: rawAmount, targetId });
+        }
+    };
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+            {mode === 'edit-post' ? (
+                <>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Nama Pos</label>
+                        <input value={desc} onChange={e => setDesc(e.target.value)} className="mt-1 w-full border p-2 rounded" required />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Total Anggaran</label>
+                        <input value={amount} onChange={e => setAmount(formatNumberInput(e.target.value))} className="mt-1 w-full border p-2 rounded" required />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                         <div>
+                            <label className="block text-sm font-medium text-gray-700">Ikon</label>
+                             <div className="h-24 overflow-y-scroll border rounded p-2 grid grid-cols-4 gap-1">
+                                {availableIcons.map(ic => <div key={ic} onClick={() => setIcon(ic)} className={`p-1 cursor-pointer ${icon === ic ? 'bg-blue-100 rounded' : ''}`}><BudgetIcon icon={ic} className="w-6 h-6"/></div>)}
+                             </div>
+                         </div>
+                         <div>
+                             <label className="block text-sm font-medium text-gray-700">Warna</label>
+                             <div className="h-24 overflow-y-scroll border rounded p-2 grid grid-cols-4 gap-1">
+                                {availableColors.map(c => <div key={c} onClick={() => setColor(c)} className={`w-6 h-6 rounded-full cursor-pointer border ${color === c ? 'ring-2 ring-black' : ''}`} style={{backgroundColor: c}}/>)}
+                             </div>
+                         </div>
+                    </div>
+                    {onArchive && (
+                        <button type="button" onClick={onArchive} className="w-full py-2 bg-gray-200 rounded text-gray-700 font-bold">Arsipkan Pos Ini</button>
+                    )}
+                </>
+            ) : (
+                <>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Untuk Keperluan Apa?</label>
+                        <input value={desc} onChange={e => setDesc(e.target.value)} className="mt-1 w-full border p-2 rounded" required placeholder="Contoh: Makan Siang" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Berapa Rupiah?</label>
+                        <input value={amount} onChange={e => setAmount(formatNumberInput(e.target.value))} className="mt-1 w-full border p-2 rounded" required placeholder="0" />
+                    </div>
+                    {mode === 'use-daily' && (
+                         <div>
+                            <label className="block text-sm font-medium text-gray-700">Ambil Dana Dari:</label>
+                            <select 
+                                value={targetId} 
+                                onChange={e => setTargetId(e.target.value === 'daily' ? 'daily' : Number(e.target.value))}
+                                className="mt-1 w-full border p-2 rounded bg-white"
+                            >
+                                <option value="daily">Dana Harian (Tersedia)</option>
+                                {allBudgets.map(b => (
+                                    <option key={b.id} value={b.id}>{b.name}</option>
+                                ))}
+                            </select>
+                         </div>
+                    )}
+                </>
+            )}
+            <button type="submit" className="w-full py-2 bg-primary-navy text-white rounded font-bold">Simpan Transaksi</button>
+        </form>
+    );
+};
+
+const AssetModalContent: React.FC<{
+    assetToEdit?: Asset;
+    onSubmit: (id: number | null, name: string, quantity: number, price: number, type: 'custom' | 'gold' | 'crypto', symbol?: string) => void;
+}> = ({ assetToEdit, onSubmit }) => {
+    const [type, setType] = useState<'custom' | 'gold' | 'crypto'>(assetToEdit?.type || 'custom');
+    const [name, setName] = useState(assetToEdit?.name || '');
+    const [qty, setQty] = useState(assetToEdit?.quantity.toString() || '1');
+    const [price, setPrice] = useState(assetToEdit ? formatNumberInput(assetToEdit.pricePerUnit) : '');
+    const [symbol, setSymbol] = useState(assetToEdit?.symbol || '');
+
+    const goldOptions = [
+        { label: 'Emas Antam', value: 'ANTAM' },
+        { label: 'Emas UBS', value: 'UBS' },
+    ];
+
+    const cryptoOptions = [
+        { label: 'Bitcoin (BTC)', value: 'BTC' },
+        { label: 'Ethereum (ETH)', value: 'ETH' },
+        { label: 'Solana (SOL)', value: 'SOL' },
+    ];
+
+    const handleTypeChange = (newType: 'custom' | 'gold' | 'crypto') => {
+        setType(newType);
+        if (newType === 'custom') {
+            setSymbol('');
+        } else if (newType === 'gold') {
+            setSymbol('ANTAM');
+            setName('Emas Antam');
+        } else if (newType === 'crypto') {
+            setSymbol('BTC');
+            setName('Bitcoin');
+        }
+    };
+
+    const handleSymbolChange = (newSymbol: string) => {
+        setSymbol(newSymbol);
+        if (type === 'gold') {
+            const opt = goldOptions.find(o => o.value === newSymbol);
+            if (opt) setName(opt.label);
+        } else if (type === 'crypto') {
+            const opt = cryptoOptions.find(o => o.value === newSymbol);
+            if (opt) setName(opt.label.split(' (')[0]);
+        }
+    };
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        onSubmit(assetToEdit?.id || null, name, Number(qty), getRawNumber(price), type, symbol);
+    };
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tipe Aset</label>
+                <div className="flex gap-2">
+                    <button type="button" onClick={() => handleTypeChange('custom')} className={`flex-1 py-2 text-sm font-bold rounded ${type === 'custom' ? 'bg-primary-navy text-white' : 'bg-gray-100 text-gray-600'}`}>Manual</button>
+                    <button type="button" onClick={() => handleTypeChange('gold')} className={`flex-1 py-2 text-sm font-bold rounded ${type === 'gold' ? 'bg-yellow-500 text-white' : 'bg-gray-100 text-gray-600'}`}>Emas (Live)</button>
+                    <button type="button" onClick={() => handleTypeChange('crypto')} className={`flex-1 py-2 text-sm font-bold rounded ${type === 'crypto' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600'}`}>Kripto (Live)</button>
+                </div>
+            </div>
+
+            {type === 'gold' && (
+                <div>
+                    <label className="block text-sm font-medium text-gray-700">Jenis Emas</label>
+                    <select value={symbol} onChange={(e) => handleSymbolChange(e.target.value)} className="w-full border p-2 rounded bg-white">
+                        {goldOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                    </select>
+                </div>
+            )}
+
+            {type === 'crypto' && (
+                <div>
+                    <label className="block text-sm font-medium text-gray-700">Koin Kripto</label>
+                    <select value={symbol} onChange={(e) => handleSymbolChange(e.target.value)} className="w-full border p-2 rounded bg-white">
+                        {cryptoOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                    </select>
+                </div>
+            )}
+
+            <div>
+                <label className="block text-sm font-medium text-gray-700">Nama Aset</label>
+                <input value={name} onChange={e => setName(e.target.value)} className="w-full border p-2 rounded" required />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                        {type === 'gold' ? 'Berat (Gram)' : 'Jumlah Unit'}
+                    </label>
+                    <input type="number" step="any" value={qty} onChange={e => setQty(e.target.value)} className="w-full border p-2 rounded" required />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                        {type === 'custom' ? 'Estimasi Harga Total' : 'Harga Beli Satuan (Opsional)'}
+                    </label>
+                    <input value={price} onChange={e => setPrice(formatNumberInput(e.target.value))} className="w-full border p-2 rounded" />
+                    {type !== 'custom' && <p className="text-xs text-gray-500 mt-1">Harga pasar live akan digunakan di dashboard.</p>}
+                </div>
+            </div>
+            <button type="submit" className="w-full py-2 bg-accent-teal text-white font-bold rounded">Simpan Aset</button>
+        </form>
+    );
+};
+
+const BatchInputModalContent: React.FC<{
+    budgets: Budget[];
+    onSave: (items: ScannedItem[]) => void;
+}> = ({ budgets, onSave }) => {
+    const [text, setText] = useState('');
+    
+    const handleProcess = () => {
+        const lines = text.split('\n').filter(l => l.trim());
+        const items: ScannedItem[] = lines.map(line => {
+            // Simple logic: last number is amount, rest is desc
+            const match = line.match(/^(.+?)\s+(\d[\d\.]*)$/);
+            if (match) {
+                return { desc: match[1].trim(), amount: getRawNumber(match[2]), budgetId: 'daily' };
+            }
+            return { desc: line, amount: 0, budgetId: 'daily' };
+        });
+        onSave(items);
+    };
+
+    return (
+        <div className="space-y-4">
+            <p className="text-sm text-gray-600">Masukkan daftar pengeluaran, satu per baris. Format: "Nama Barang Harga" (contoh: Nasi Goreng 15000).</p>
+            <textarea value={text} onChange={e => setText(e.target.value)} className="w-full h-40 border p-2 rounded" placeholder="Bakso 15000&#10;Es Teh 3000" />
+            <button onClick={handleProcess} className="w-full py-2 bg-primary-navy text-white font-bold rounded">Proses & Simpan</button>
+        </div>
+    );
+};
+
+const AddBudgetModalContent: React.FC<{ onSubmit: (name: string, amount: number, icon: string, color: string) => void }> = ({ onSubmit }) => {
+    return <InputModalContent mode="edit-post" allBudgets={[]} onSubmit={(d) => onSubmit(d.description, d.amount, d.icon || availableIcons[0], d.color || availableColors[0])} prefillData={null} onPrefillConsumed={() => {}} />;
+};
+
+const AddSavingsGoalModalContent: React.FC<{ onSubmit: (name: string, isInfinite: boolean, targetAmount?: number) => void }> = ({ onSubmit }) => {
+    const [name, setName] = useState('');
+    const [target, setTarget] = useState('');
+    const [isInfinite, setIsInfinite] = useState(false);
+
+    return (
+        <form onSubmit={(e) => { e.preventDefault(); onSubmit(name, isInfinite, isInfinite ? undefined : getRawNumber(target)); }} className="space-y-4">
+            <div><label className="block text-sm">Nama Tujuan</label><input value={name} onChange={e => setName(e.target.value)} className="w-full border p-2 rounded" required /></div>
+            <div className="flex items-center"><input type="checkbox" checked={isInfinite} onChange={e => setIsInfinite(e.target.checked)} className="mr-2" /> <label>Celengan Tanpa Target (Fleksibel)</label></div>
+            {!isInfinite && <div><label className="block text-sm">Target Dana</label><input value={target} onChange={e => setTarget(formatNumberInput(e.target.value))} className="w-full border p-2 rounded" required /></div>}
+            <button type="submit" className="w-full py-2 bg-accent-teal text-white font-bold rounded">Buat Celengan</button>
+        </form>
+    );
+};
+
+const AddSavingsModalContent: React.FC<{ goal?: SavingsGoal, availableFunds: number, onSubmit: (amount: number) => void }> = ({ goal, availableFunds, onSubmit }) => {
+    const [amount, setAmount] = useState('');
+    return (
+        <form onSubmit={(e) => { e.preventDefault(); onSubmit(getRawNumber(amount)); }} className="space-y-4">
+            <p className="text-sm text-gray-600">Dana tersedia: {formatCurrency(availableFunds)}</p>
+            <input value={amount} onChange={e => setAmount(formatNumberInput(e.target.value))} className="w-full border p-2 rounded" placeholder="Nominal Tabungan" required />
+            <button type="submit" className="w-full py-2 bg-primary-navy text-white font-bold rounded">Tabung Sekarang</button>
+        </form>
+    );
+};
+
+const SavingsDetailModalContent: React.FC<{ goal?: SavingsGoal, onDelete: () => void }> = ({ goal, onDelete }) => {
+    if (!goal) return null;
+    return (
+        <div className="space-y-4">
+            <h4 className="font-bold">Riwayat Tabungan</h4>
+            <ul className="max-h-40 overflow-y-auto space-y-2">
+                {goal.history.map((h, i) => (
+                    <li key={i} className="flex justify-between text-sm">
+                        <span>{new Date(h.timestamp).toLocaleDateString()}</span>
+                        <span className="text-accent-teal font-semibold">+{formatCurrency(h.amount)}</span>
+                    </li>
+                ))}
+            </ul>
+            <button onClick={onDelete} className="w-full py-2 bg-red-100 text-red-600 font-bold rounded">Hapus / Batalkan Celengan</button>
+        </div>
+    );
+};
+
+const FundsManagementModalContent: React.FC<{ onSubmit: (type: 'add' | 'remove', desc: string, amount: number) => void, onViewHistory: () => void }> = ({ onSubmit, onViewHistory }) => {
+    const [tab, setTab] = useState<'add' | 'remove'>('add');
+    const [desc, setDesc] = useState('');
+    const [amount, setAmount] = useState('');
+
+    return (
+        <div className="space-y-4">
+            <div className="flex gap-2"><button onClick={() => setTab('add')} className={`flex-1 py-2 rounded ${tab === 'add' ? 'bg-accent-teal text-white' : 'bg-gray-100'}`}>Pemasukan</button><button onClick={() => setTab('remove')} className={`flex-1 py-2 rounded ${tab === 'remove' ? 'bg-danger-red text-white' : 'bg-gray-100'}`}>Pengeluaran</button></div>
+            <input value={desc} onChange={e => setDesc(e.target.value)} className="w-full border p-2 rounded" placeholder="Keterangan (Gaji, Bonus, dll)" required />
+            <input value={amount} onChange={e => setAmount(formatNumberInput(e.target.value))} className="w-full border p-2 rounded" placeholder="Jumlah" required />
+            <button onClick={() => onSubmit(tab, desc, getRawNumber(amount))} className="w-full py-2 bg-primary-navy text-white font-bold rounded">Simpan</button>
+            <button onClick={onViewHistory} className="w-full py-2 text-sm text-gray-600 underline">Lihat Riwayat</button>
+        </div>
+    );
+};
+
+const HistoryModalContent: React.FC<{ transactions: any[], type: string, budgetId?: number, onDelete: (ts: number, type: string, bid?: number) => void }> = ({ transactions, type, budgetId, onDelete }) => (
+    <ul className="space-y-2">
+        {transactions.length === 0 ? <p className="text-center text-gray-500">Belum ada riwayat.</p> : transactions.map((t) => (
+            <li key={t.timestamp} className="flex justify-between items-center p-2 border-b"><div className="text-sm"><p className="font-bold">{t.desc}</p><p className="text-xs text-gray-500">{new Date(t.timestamp).toLocaleDateString()}</p></div><div className="flex items-center gap-2"><span className={`font-bold ${t.type === 'add' ? 'text-green-600' : 'text-red-600'}`}>{t.type === 'add' ? '+' : '-'}{formatCurrency(t.amount)}</span><button onClick={() => onDelete(t.timestamp, type, budgetId)} className="text-red-400"><TrashIcon className="w-4 h-4"/></button></div></li>
+        ))}
+    </ul>
+);
+
+const InfoModalContent: React.FC<{ monthlyIncome: number, totalAllocated: number, unallocatedFunds: number, generalAndDailyExpenses: number, remainingUnallocated: number }> = (props) => (
+    <div className="space-y-2 text-sm">
+        <div className="flex justify-between"><span>Total Pemasukan:</span><span className="font-bold">{formatCurrency(props.monthlyIncome)}</span></div>
+        <div className="flex justify-between"><span>Dialokasikan ke Pos:</span><span className="font-bold">-{formatCurrency(props.totalAllocated)}</span></div>
+        <div className="border-t my-1"></div>
+        <div className="flex justify-between"><span>Dana Tidak Terikat:</span><span className="font-bold">{formatCurrency(props.unallocatedFunds)}</span></div>
+        <div className="flex justify-between text-red-600"><span>Pengeluaran (Harian+Umum):</span><span>-{formatCurrency(props.generalAndDailyExpenses)}</span></div>
+        <div className="border-t my-1"></div>
+        <div className="flex justify-between text-lg font-bold text-primary-navy"><span>Sisa Dana Tersedia:</span><span>{formatCurrency(props.remainingUnallocated)}</span></div>
+    </div>
+);
+
+const EditAssetModalContent: React.FC<{ currentAsset: number, onSubmit: (val: number) => void }> = ({ currentAsset, onSubmit }) => {
+    const [val, setVal] = useState(formatNumberInput(currentAsset));
+    return (
+        <div className="space-y-4">
+            <p className="text-sm">Saldo saat ini: {formatCurrency(currentAsset)}</p>
+            <input value={val} onChange={e => setVal(formatNumberInput(e.target.value))} className="w-full border p-2 rounded" placeholder="Masukkan Saldo Sebenarnya" />
+            <button onClick={() => onSubmit(getRawNumber(val))} className="w-full py-2 bg-accent-teal text-white font-bold rounded">Simpan Koreksi</button>
+        </div>
+    );
+};
+
+const SettingsModalContent: React.FC<{ onExport: () => void, onImport: () => void, onManageArchived: () => void, onManualBackup: () => void, onManageBackups: () => void, onResetMonthly: () => void, onResetAll: () => void, onManualCloseBook: () => void }> = (props) => (
+    <div className="grid grid-cols-1 gap-3">
+        <button onClick={props.onExport} className="p-3 bg-gray-100 rounded text-left font-semibold">Ekspor Data (JSON)</button>
+        <button onClick={props.onImport} className="p-3 bg-gray-100 rounded text-left font-semibold">Impor Data (JSON)</button>
+        <button onClick={props.onManualBackup} className="p-3 bg-blue-100 text-blue-800 rounded text-left font-semibold">Buat Cadangan Internal Sekarang</button>
+        <button onClick={props.onManageBackups} className="p-3 bg-gray-100 rounded text-left font-semibold">Kelola Cadangan Internal</button>
+        <button onClick={props.onManageArchived} className="p-3 bg-gray-100 rounded text-left font-semibold">Kelola Anggaran Diarsipkan</button>
+        <div className="border-t my-2"></div>
+        <button onClick={props.onManualCloseBook} className="p-3 bg-yellow-100 text-yellow-800 rounded text-left font-bold">Tutup Buku Bulan Ini</button>
+        <button onClick={props.onResetMonthly} className="p-3 bg-red-50 text-red-600 rounded text-left font-semibold">Reset Data Bulan Ini (Debug)</button>
+        <button onClick={props.onResetAll} className="p-3 bg-red-100 text-red-800 rounded text-left font-bold">Reset SEMUA Data (Bahaya)</button>
+    </div>
+);
+
+const ArchivedBudgetsModalContent: React.FC<{ archivedBudgets: Budget[], onRestore: (id: number) => void, onDelete: (id: number) => void }> = ({ archivedBudgets, onRestore, onDelete }) => (
+    <ul className="space-y-2">
+        {archivedBudgets.length === 0 ? <p className="text-center text-gray-500">Tidak ada arsip.</p> : archivedBudgets.map(b => (
+            <li key={b.id} className="flex justify-between items-center p-2 bg-gray-50 rounded"><span className="font-semibold">{b.name}</span><div className="flex gap-2"><button onClick={() => onRestore(b.id)} className="text-sm text-blue-600">Pulihkan</button><button onClick={() => onDelete(b.id)} className="text-sm text-red-600">Hapus</button></div></li>
+        ))}
+    </ul>
+);
+
+const BackupRestoreModalContent: React.FC<{ backups: { key: string, timestamp: number }[], onRestore: (key: string) => void }> = ({ backups, onRestore }) => (
+    <ul className="space-y-2">
+        {backups.length === 0 ? <p className="text-center text-gray-500">Tidak ada cadangan internal.</p> : backups.map(b => (
+            <li key={b.key} className="flex justify-between items-center p-2 border rounded"><span>{new Date(b.timestamp).toLocaleString()}</span><button onClick={() => onRestore(b.key)} className="bg-blue-500 text-white px-3 py-1 rounded text-xs">Pulihkan</button></li>
+        ))}
+    </ul>
+);
+
+const ScanResultModalContent: React.FC<{ isLoading: boolean, error: string | null, items: ScannedItem[], budgets: Budget[], onItemsChange: (items: ScannedItem[]) => void, onSave: () => void }> = ({ isLoading, error, items, budgets, onItemsChange, onSave }) => {
+    if (isLoading) return <div className="text-center p-8"><ArrowPathIcon className="w-8 h-8 animate-spin mx-auto" /><p>Memproses...</p></div>;
+    if (error) return <div className="text-red-500 text-center p-4">{error}</div>;
+    return (
+        <div className="space-y-4">
+            {items.map((item, idx) => (
+                <div key={idx} className="flex gap-2 items-center">
+                    <input value={item.desc} onChange={e => { const n = [...items]; n[idx].desc = e.target.value; onItemsChange(n); }} className="flex-1 border p-1 rounded" />
+                    <input value={item.amount} type="number" onChange={e => { const n = [...items]; n[idx].amount = Number(e.target.value); onItemsChange(n); }} className="w-20 border p-1 rounded" />
+                    <select value={item.budgetId} onChange={e => { const n = [...items]; n[idx].budgetId = e.target.value === 'daily' ? 'daily' : e.target.value === 'none' ? 'none' : Number(e.target.value); onItemsChange(n); }} className="w-24 border p-1 rounded bg-white text-xs">
+                        <option value="daily">Harian</option><option value="none">Abaikan</option>
+                        {budgets.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </select>
+                </div>
+            ))}
+            <button onClick={onSave} className="w-full py-2 bg-primary-navy text-white font-bold rounded">Simpan Semua</button>
+        </div>
+    );
+};
+
+const VoiceAssistantModalContent: React.FC<{ budgets: Budget[], onFinish: (items: ScannedItem[]) => void, onClose: () => void }> = ({ budgets, onFinish, onClose }) => {
+    const [isConnected, setIsConnected] = useState(false);
+    const [status, setStatus] = useState("Siap terhubung...");
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const [collectedItems, setCollectedItems] = useState<ScannedItem[]>([]);
+
+    const addTransactionTool: FunctionDeclaration = {
+        name: 'addTransaction',
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                desc: { type: Type.STRING },
+                amount: { type: Type.NUMBER },
+                category: { type: Type.STRING },
+            },
+            required: ['desc', 'amount'],
+        }
+    };
+
+    const connect = async () => {
+        try {
+            setStatus("Menghubungkan...");
+            const ai = new GoogleGenAI({ apiKey: getApiKey() });
+            
+            // Audio Contexts
+            const inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({sampleRate: 16000});
+            const outputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({sampleRate: 24000});
+            const outputNode = outputAudioContext.createGain();
+            outputNode.connect(outputAudioContext.destination); // Ensure output is connected
+            
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            
+            let nextStartTime = 0;
+            const sources = new Set<AudioBufferSourceNode>();
+
+            const sessionPromise = ai.live.connect({
+                model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+                callbacks: {
+                    onopen: () => {
+                        setStatus("Terhubung! Silakan bicara.");
+                        setIsConnected(true);
+                        
+                        // Microphone Stream
+                        const source = inputAudioContext.createMediaStreamSource(stream);
+                        const scriptProcessor = inputAudioContext.createScriptProcessor(4096, 1, 1);
+                        scriptProcessor.onaudioprocess = (e) => {
+                            const inputData = e.inputBuffer.getChannelData(0);
+                            const pcmBlob = createBlob(inputData);
+                            sessionPromise.then(session => session.sendRealtimeInput({ media: pcmBlob }));
+                        };
+                        source.connect(scriptProcessor);
+                        scriptProcessor.connect(inputAudioContext.destination);
+                    },
+                    onmessage: async (message: LiveServerMessage) => {
+                        // Tool Calls
+                        if (message.toolCall) {
+                            for (const fc of message.toolCall.functionCalls) {
+                                if (fc.name === 'addTransaction') {
+                                    const args = fc.args as any;
+                                    let budgetId: string | number = 'daily';
+                                    const matched = budgets.find(b => b.name.toLowerCase() === (args.category || '').toLowerCase());
+                                    if (matched) budgetId = matched.id;
+                                    
+                                    const newItem: ScannedItem = {
+                                        desc: args.desc,
+                                        amount: args.amount,
+                                        budgetId: budgetId as any
+                                    };
+                                    setCollectedItems(prev => [...prev, newItem]);
+                                    
+                                    sessionPromise.then(session => session.sendToolResponse({
+                                        functionResponses: {
+                                            id: fc.id,
+                                            name: fc.name,
+                                            response: { result: "Transaction noted." }
+                                        }
+                                    }));
+                                }
+                            }
+                        }
+
+                        // Audio Output
+                        const audioData = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
+                        if (audioData) {
+                             nextStartTime = Math.max(nextStartTime, outputAudioContext.currentTime);
+                             const audioBuffer = await decodeAudioData(decode(audioData), outputAudioContext, 24000, 1);
+                             const source = outputAudioContext.createBufferSource();
+                             source.buffer = audioBuffer;
+                             source.connect(outputNode);
+                             source.addEventListener('ended', () => sources.delete(source));
+                             source.start(nextStartTime);
+                             nextStartTime += audioBuffer.duration;
+                             sources.add(source);
+                        }
+                    },
+                    onclose: () => {
+                        setStatus("Terputus.");
+                        setIsConnected(false);
+                    },
+                    onerror: (e) => {
+                        console.error(e);
+                        setStatus("Error koneksi.");
+                    }
+                },
+                config: {
+                    responseModalities: [Modality.AUDIO],
+                    tools: [{functionDeclarations: [addTransactionTool]}],
+                    systemInstruction: "Kamu asisten keuangan. Bantu catat pengeluaran pengguna. Jika pengguna menyebutkan pengeluaran, panggil fungsi addTransaction. Bicara santai.",
+                }
+            });
+        } catch (err) {
+            console.error(err);
+            setStatus("Gagal inisialisasi.");
+        }
+    };
+
+    return (
+        <div className="p-6 text-center space-y-4">
+            <SpeakerWaveIcon className={`w-16 h-16 mx-auto ${isConnected ? 'text-green-500 animate-pulse' : 'text-gray-400'}`} />
+            <p className="font-bold text-lg">{status}</p>
+            {!isConnected ? (
+                <button onClick={connect} className="px-6 py-2 bg-primary-navy text-white rounded-full font-bold">Mulai Bicara</button>
+            ) : (
+                <div className="space-y-2">
+                    <p className="text-sm text-gray-600">Transaksi terdeteksi: {collectedItems.length}</p>
+                    <button onClick={() => { onFinish(collectedItems); onClose(); }} className="px-6 py-2 bg-red-500 text-white rounded-full font-bold">Selesai</button>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const SmartInputModalContent: React.FC<{ isProcessing: boolean, error: string | null, resultItems: ScannedItem[], budgets: Budget[], onProcess: (text: string) => void, onSave: () => void, onItemsChange: (items: ScannedItem[]) => void, onClearError: () => void }> = ({ isProcessing, error, resultItems, budgets, onProcess, onSave, onItemsChange, onClearError }) => {
+    const [input, setInput] = useState('');
+    return (
+        <div className="space-y-4">
+            {resultItems.length === 0 ? (
+                <>
+                    <p className="text-sm text-gray-600">Ceritakan pengeluaran Anda secara alami. Contoh: "Tadi beli bensin 20rb sama makan siang 15rb pakai uang harian."</p>
+                    <textarea value={input} onChange={e => { setInput(e.target.value); onClearError(); }} className="w-full h-32 border p-2 rounded" placeholder="Ketik di sini..." />
+                    {error && <p className="text-red-500 text-sm">{error}</p>}
+                    <button onClick={() => onProcess(input)} disabled={isProcessing} className="w-full py-2 bg-primary-navy text-white font-bold rounded disabled:bg-gray-400">{isProcessing ? 'Memproses...' : 'Analisis AI'}</button>
+                </>
+            ) : (
+                <ScanResultModalContent isLoading={false} error={null} items={resultItems} budgets={budgets} onItemsChange={onItemsChange} onSave={onSave} />
+            )}
+        </div>
+    );
+};
+
+const AIAdviceModalContent: React.FC<{ isLoading: boolean, error: string | null, advice: string }> = ({ isLoading, error, advice }) => {
+    if (isLoading) return <AISkeleton />;
+    if (error) return <div className="text-center text-red-500">{error}</div>;
+    return <div className="prose prose-sm max-w-none whitespace-pre-line">{advice}</div>;
+};
+
+const AIChatModalContent: React.FC<{ history: { role: string, text: string }[], isLoading: boolean, error: string | null, onSendMessage: (msg: string) => void }> = ({ history, isLoading, error, onSendMessage }) => {
+    const [msg, setMsg] = useState('');
+    const endRef = useRef<HTMLDivElement>(null);
+    useEffect(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), [history]);
+    return (
+        <div className="flex flex-col h-[400px]">
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50/50">
+                {history.map((h, i) => (
+                    <div key={i} className={`flex ${h.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[80%] p-3 rounded-lg ${h.role === 'user' ? 'bg-primary-navy text-white shadow-md' : 'bg-white border shadow-sm text-gray-800'}`}>{h.text}</div>
+                    </div>
+                ))}
+                {isLoading && <div className="flex justify-start"><div className="bg-white border p-3 rounded-lg shadow-sm text-gray-500 w-1/2"><AISkeleton /></div></div>}
+                {error && <div className="text-center text-red-500 text-xs">{error}</div>}
+                <div ref={endRef} />
+            </div>
+            <div className="p-3 border-t bg-white/80 backdrop-blur-md flex gap-2">
+                <input value={msg} onChange={e => setMsg(e.target.value)} onKeyDown={e => e.key === 'Enter' && !isLoading && (onSendMessage(msg), setMsg(''))} className="flex-1 border rounded-full px-4 py-2 focus:ring-2 focus:ring-primary-navy focus:outline-none" placeholder="Tanya sesuatu..." />
+                <button onClick={() => { onSendMessage(msg); setMsg(''); }} disabled={isLoading || !msg.trim()} className="p-2 bg-primary-navy text-white rounded-full disabled:bg-gray-300 hover:bg-primary-navy-dark transition-colors"><PaperAirplaneIcon className="w-5 h-5" /></button>
+            </div>
+        </div>
+    );
+};
+
+const AddWishlistModalContent: React.FC<{ onSubmit: (name: string, price: number, days: number) => void }> = ({ onSubmit }) => {
+    const [name, setName] = useState('');
+    const [price, setPrice] = useState('');
+    const [days, setDays] = useState('3');
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const rawPrice = getRawNumber(price);
+        const rawDays = parseInt(days);
+        if (name.trim() && rawPrice > 0 && rawDays > 0) {
+            onSubmit(name.trim(), rawPrice, rawDays);
+        }
+    };
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+                <label htmlFor="wish-name" className="block text-sm font-medium text-secondary-gray">Nama Barang</label>
+                <input type="text" id="wish-name" value={name} onChange={e => setName(e.target.value)} required placeholder="Contoh: Sepatu Lari Baru" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-navy focus:border-primary-navy"/>
+            </div>
+            <div>
+                <label htmlFor="wish-price" className="block text-sm font-medium text-secondary-gray">Harga (Rp)</label>
+                <input type="text" id="wish-price" value={price} onChange={e => setPrice(formatNumberInput(e.target.value))} required inputMode="numeric" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-navy focus:border-primary-navy"/>
+            </div>
+            <div>
+                <label htmlFor="wish-days" className="block text-sm font-medium text-secondary-gray">Waktu Pendinginan (Hari)</label>
+                <select 
+                    id="wish-days" 
+                    value={days} 
+                    onChange={e => setDays(e.target.value)}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary-navy focus:border-primary-navy"
+                >
+                    <option value="1">1 Hari (Cepat)</option>
+                    <option value="3">3 Hari (Standar)</option>
+                    <option value="7">7 Hari (Seminggu)</option>
+                    <option value="14">14 Hari (Dua Minggu)</option>
+                    <option value="30">30 Hari (Sebulan)</option>
+                </select>
+                <p className="text-xs text-secondary-gray mt-1">Selama waktu ini, Anda tidak bisa menekan tombol 'Beli'.</p>
+            </div>
+            <button type="submit" className="w-full bg-primary-navy text-white font-bold py-3 rounded-lg hover:bg-primary-navy-dark transition-colors">Simpan ke Wishlist</button>
+        </form>
+    );
+};
+
+const AchievementUnlockedToast: React.FC<{ achievement: Achievement | null }> = ({ achievement }) => {
+    const [visible, setVisible] = useState(false);
+
+    useEffect(() => {
+        if (achievement) {
+            setVisible(true);
+            const timer = setTimeout(() => setVisible(false), 3500);
+            return () => clearTimeout(timer);
+        }
+    }, [achievement]);
+
+    return (
+        <div 
+            className={`fixed top-5 left-1/2 -translate-x-1/2 z-[100] transition-all duration-500 ease-in-out ${visible ? 'translate-y-0 opacity-100' : '-translate-y-20 opacity-0'}`}
+        >
+            {achievement && (
+                <div className="bg-primary-navy/95 backdrop-blur-md text-white rounded-xl shadow-2xl p-4 flex items-center space-x-4 max-w-sm mx-auto border border-white/10">
+                    <TrophyIcon className="w-10 h-10 text-warning-yellow flex-shrink-0" />
+                    <div>
+                        <p className="font-bold">Lencana Terbuka!</p>
+                        <p className="text-sm">{achievement.name}</p>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// --- APP COMPONENT ---
+type Page = 'dashboard' | 'reports' | 'visualizations' | 'savings' | 'achievements' | 'personalBest' | 'netWorth' | 'wishlist' | 'subscriptions';
+type ModalType = 'input' | 'funds' | 'addBudget' | 'history' | 'info' | 'menu' | 'editAsset' | 'confirm' | 'scanResult' | 'aiAdvice' | 'smartInput' | 'aiChat' | 'voiceAssistant' | 'voiceResult' | 'addSavingsGoal' | 'addSavings' | 'savingsDetail' | 'settings' | 'archivedBudgets' | 'backupRestore' | 'asset' | 'batchInput' | 'addWishlist';
+
+const APP_VERSION = '3.14.0';
+const BACKUP_PREFIX = 'budgetAppBackup_';
+const MAX_BACKUPS = 4;
+
+const initialState: AppState = {
+    budgets: [],
+    dailyExpenses: [],
+    fundHistory: [],
+    archives: [],
+    lastArchiveDate: null,
+    savingsGoals: [],
+    wishlist: [],
+    subscriptions: [],
+    unlockedAchievements: {},
+    achievementData: {
+        monthlyStreak: 0,
+        dailyStreak: 0,
+        noSpendStreak: 0,
+        appOpenStreak: 0,
+        morningTransactionStreak: 0,
+        savingStreak: 0,
+        lastStreakCheck: undefined,
+    },
+    assets: [],
+};
 
 const App: React.FC = () => {
     const [state, setState] = useState<AppState>(initialState);
@@ -224,7 +887,11 @@ const App: React.FC = () => {
     const [activeModal, setActiveModal] = useState<ModalType | null>(null);
     const [internalBackups, setInternalBackups] = useState<{ key: string, timestamp: number }[]>([]);
     const [dailyBackup, setDailyBackup] = useState<{ url: string; filename: string } | null>(null);
+    const [notifications, setNotifications] = useState<string[]>([]);
     const backupCreatedToday = useRef(false);
+    
+    // Global Click Tracking for Hero Animation
+    const lastClickPos = useRef<{x: number, y: number} | null>(null);
 
     // Modal-specific state
     const [inputModalMode, setInputModalMode] = useState<'use-daily' | 'use-post' | 'edit-post'>('use-daily');
@@ -275,6 +942,15 @@ const App: React.FC = () => {
     const importFileInputRef = useRef<HTMLInputElement>(null);
     const scanFileInputRef = useRef<HTMLInputElement>(null);
     
+    // Global click listener to update lastClickPos
+    useEffect(() => {
+        const handleClick = (e: MouseEvent) => {
+            lastClickPos.current = { x: e.clientX, y: e.clientY };
+        };
+        window.addEventListener('mousedown', handleClick, true); // Capture phase to get click before modal opens
+        return () => window.removeEventListener('mousedown', handleClick, true);
+    }, []);
+
     // Wrapper for setState to also check for achievements and streak resets
     const updateState = useCallback((updater: (prevState: AppState) => AppState) => {
         setState(prevState => {
@@ -295,10 +971,8 @@ const App: React.FC = () => {
             const newUnallocatedFunds = newMonthlyIncome - newTotalAllocated;
             const newCurrentAvailableFunds = newUnallocatedFunds - newMonthlyGeneralExpense - newTotalDailySpent;
             const remainingDays = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate() - new Date().getDate() + 1;
-            const todaysDailyExpenses = newState.dailyExpenses.filter(exp => new Date(exp.timestamp).toDateString() === new Date().toDateString());
-            const totalDailySpentToday = todaysDailyExpenses.reduce((sum, exp) => sum + exp.amount, 0);
             const dailyBudgetMax = remainingDays > 0 ? newCurrentAvailableFunds / remainingDays : newCurrentAvailableFunds;
-            const dailyBudgetRemaining = dailyBudgetMax - totalDailySpentToday;
+            const dailyBudgetRemaining = dailyBudgetMax;
 
             if (newTotalRemaining < 0) {
                 newAchievementData.monthlyStreak = 0;
@@ -360,6 +1034,9 @@ const App: React.FC = () => {
                     parsed.unlockedAchievements = migrated;
                 }
                 parsed.achievementData = { ...initialState.achievementData, ...parsed.achievementData };
+                // Ensure wishlist/subscriptions is initialized
+                parsed.wishlist = parsed.wishlist || [];
+                parsed.subscriptions = parsed.subscriptions || [];
                 loadedState = { ...initialState, ...parsed };
             } catch (error) { console.error("Failed to parse state from localStorage", error); }
         }
@@ -384,6 +1061,47 @@ const App: React.FC = () => {
         
         // 3. Update the UI state for the modal
         setInternalBackups(listInternalBackups());
+        
+        // 4. Check for Subscription Notifications
+        if (loadedState.subscriptions && loadedState.subscriptions.length > 0) {
+            const alerts: string[] = [];
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            const threeDaysFromNow = new Date(today);
+            threeDaysFromNow.setDate(today.getDate() + 3);
+
+            loadedState.subscriptions.forEach((sub: Subscription) => {
+                if (!sub.isActive) return;
+                
+                // Simple next date logic for notification check
+                let nextDate = new Date(sub.firstBillDate);
+                const currentMonthDate = new Date(today.getFullYear(), today.getMonth(), new Date(sub.firstBillDate).getDate());
+                
+                if (sub.cycle === 'monthly') {
+                    // Check if it's due this month and hasn't passed, or next month
+                    if (currentMonthDate >= today) {
+                        nextDate = currentMonthDate;
+                    } else {
+                        nextDate = new Date(today.getFullYear(), today.getMonth() + 1, new Date(sub.firstBillDate).getDate());
+                    }
+                } else {
+                     // Yearly logic simplified for notification
+                    const currentYearDate = new Date(today.getFullYear(), new Date(sub.firstBillDate).getMonth(), new Date(sub.firstBillDate).getDate());
+                    if (currentYearDate >= today) {
+                        nextDate = currentYearDate;
+                    } else {
+                         nextDate = new Date(today.getFullYear() + 1, new Date(sub.firstBillDate).getMonth(), new Date(sub.firstBillDate).getDate());
+                    }
+                }
+
+                if (nextDate >= today && nextDate <= threeDaysFromNow) {
+                    const daysLeft = Math.ceil((nextDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                    const dayText = daysLeft === 0 ? 'HARI INI' : daysLeft === 1 ? 'besok' : `${daysLeft} hari lagi`;
+                    alerts.push(`Tagihan ${sub.name} jatuh tempo ${dayText}!`);
+                }
+            });
+            setNotifications(alerts);
+        }
     }, [listInternalBackups]);
 
     // Save state from localStorage whenever it changes
@@ -804,21 +1522,23 @@ const App: React.FC = () => {
     };
 
     // --- ASSET HANDLERS ---
-    const handleAddAsset = (name: string, quantity: number, pricePerUnit: number) => {
+    const handleAddAsset = (name: string, quantity: number, pricePerUnit: number, type: 'custom' | 'gold' | 'crypto', symbol?: string) => {
         const newAsset: Asset = {
             id: Date.now(),
             name,
             quantity,
             pricePerUnit,
+            type,
+            symbol
         };
         updateState(prev => ({ ...prev, assets: [...prev.assets, newAsset] }));
         setActiveModal(null);
     };
 
-    const handleEditAssetItem = (id: number, name: string, quantity: number, pricePerUnit: number) => {
+    const handleEditAssetItem = (id: number, name: string, quantity: number, pricePerUnit: number, type: 'custom' | 'gold' | 'crypto', symbol?: string) => {
         updateState(prev => ({
             ...prev,
-            assets: prev.assets.map(a => a.id === id ? { ...a, name, quantity, pricePerUnit } : a)
+            assets: prev.assets.map(a => a.id === id ? { ...a, name, quantity, pricePerUnit, type, symbol } : a)
         }));
         setActiveModal(null);
     };
@@ -826,6 +1546,80 @@ const App: React.FC = () => {
     const handleDeleteAsset = (id: number) => {
         openConfirm("Anda yakin ingin menghapus aset ini dari daftar?", () => {
             updateState(prev => ({ ...prev, assets: prev.assets.filter(a => a.id !== id) }));
+        });
+    };
+    
+    // --- WISHLIST HANDLERS ---
+    const handleAddWishlist = (name: string, price: number, days: number) => {
+        const newItem: WishlistItem = {
+            id: Date.now(),
+            name,
+            price,
+            cooldownDays: days,
+            createdAt: Date.now(),
+            status: 'waiting'
+        };
+        updateState(prev => ({ ...prev, wishlist: [...(prev.wishlist || []), newItem] }));
+        setActiveModal(null);
+    };
+
+    const handleFulfillWishlist = (id: number) => {
+        const item = state.wishlist.find(i => i.id === id);
+        if (!item) return;
+        
+        // Pre-fill the transaction modal
+        setPrefillData({ desc: item.name, amount: formatNumberInput(item.price) });
+        
+        // Mark as purchased
+        updateState(prev => ({
+            ...prev,
+            wishlist: prev.wishlist.map(i => i.id === id ? { ...i, status: 'purchased' } : i)
+        }));
+        
+        // Open input modal
+        setInputModalMode('use-daily');
+        setActiveModal('input');
+    };
+
+    const handleCancelWishlist = (id: number) => {
+        updateState(prev => ({
+            ...prev,
+            wishlist: prev.wishlist.map(i => i.id === id ? { ...i, status: 'cancelled' } : i)
+        }));
+    };
+
+    const handleDeleteWishlist = (id: number) => {
+        updateState(prev => ({
+            ...prev,
+            wishlist: prev.wishlist.filter(i => i.id !== id)
+        }));
+    };
+
+    // --- SUBSCRIPTION HANDLERS ---
+    const handleAddSubscription = (subData: Omit<Subscription, 'id'>) => {
+        const newSub: Subscription = {
+            ...subData,
+            id: Date.now()
+        };
+        updateState(prev => ({
+            ...prev,
+            subscriptions: [...(prev.subscriptions || []), newSub]
+        }));
+    };
+
+    const handleEditSubscription = (subData: Subscription) => {
+        updateState(prev => ({
+            ...prev,
+            subscriptions: prev.subscriptions.map(s => s.id === subData.id ? subData : s)
+        }));
+    };
+
+    const handleDeleteSubscription = (id: number) => {
+        openConfirm("Hapus langganan ini?", () => {
+            updateState(prev => ({
+                ...prev,
+                subscriptions: prev.subscriptions.filter(s => s.id !== id)
+            }));
         });
     };
 
@@ -1612,6 +2406,21 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
                     onEditAsset={(assetId) => openAssetModal(assetId)}
                     onDeleteAsset={handleDeleteAsset}
                 />;
+            case 'wishlist':
+                return <Wishlist 
+                    wishlist={state.wishlist || []} 
+                    onAddWishlist={() => setActiveModal('addWishlist')}
+                    onFulfillWishlist={handleFulfillWishlist}
+                    onCancelWishlist={handleCancelWishlist}
+                    onDeleteWishlist={handleDeleteWishlist}
+                />;
+            case 'subscriptions':
+                return <Subscriptions 
+                    state={state}
+                    onAddSubscription={handleAddSubscription}
+                    onDeleteSubscription={handleDeleteSubscription}
+                    onEditSubscription={handleEditSubscription}
+                />;
             case 'dashboard':
             default:
                 return <Dashboard
@@ -1659,6 +2468,7 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
             <input type="file" ref={scanFileInputRef} accept="image/*" className="hidden" onChange={handleImageFileChange} />
             
             <AchievementUnlockedToast achievement={newlyUnlockedAchievement} />
+            <NotificationToast messages={notifications} onClose={() => setNotifications([])} />
 
             {dailyBackup && <DailyBackupToast backup={dailyBackup} onClose={handleCloseBackupToast} />}
 
@@ -1673,7 +2483,7 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
             {/* --- MODALS --- */}
             <Modal isOpen={activeModal === 'input'} onClose={() => setActiveModal(null)} title={
                 inputModalMode === 'edit-post' ? 'Edit Pos Anggaran' : 'Gunakan Uang'
-            }>
+            } originCoords={lastClickPos.current}>
                 <InputModalContent 
                     mode={inputModalMode} 
                     budget={budgetForInputModal}
@@ -1685,35 +2495,39 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
                 />
             </Modal>
             
-            <Modal isOpen={activeModal === 'asset'} onClose={() => setActiveModal(null)} title={currentAssetId ? 'Edit Aset' : 'Tambah Aset Baru'}>
+            <Modal isOpen={activeModal === 'asset'} onClose={() => setActiveModal(null)} title={currentAssetId ? 'Edit Aset' : 'Tambah Aset Baru'} originCoords={lastClickPos.current}>
                 <AssetModalContent
                     assetToEdit={assetForModal}
-                    onSubmit={(id, name, quantity, price) => {
+                    onSubmit={(id, name, quantity, price, type, symbol) => {
                         if(id) {
-                            handleEditAssetItem(id, name, quantity, price);
+                            handleEditAssetItem(id, name, quantity, price, type, symbol);
                         } else {
-                            handleAddAsset(name, quantity, price);
+                            handleAddAsset(name, quantity, price, type, symbol);
                         }
                     }}
                 />
             </Modal>
+            
+            <Modal isOpen={activeModal === 'addWishlist'} onClose={() => setActiveModal(null)} title="Tambah Keinginan" originCoords={lastClickPos.current}>
+                <AddWishlistModalContent onSubmit={handleAddWishlist} />
+            </Modal>
 
-            <Modal isOpen={activeModal === 'batchInput'} onClose={() => setActiveModal(null)} title="Catat Banyak Pengeluaran" size="lg">
+            <Modal isOpen={activeModal === 'batchInput'} onClose={() => setActiveModal(null)} title="Catat Banyak Pengeluaran" size="lg" originCoords={lastClickPos.current}>
                 <BatchInputModalContent 
                     budgets={state.budgets.filter(b => !b.isArchived)}
                     onSave={handleSaveScannedItems}
                 />
             </Modal>
 
-            <Modal isOpen={activeModal === 'addBudget'} onClose={() => setActiveModal(null)} title="Buat Pos Anggaran Baru">
+            <Modal isOpen={activeModal === 'addBudget'} onClose={() => setActiveModal(null)} title="Buat Pos Anggaran Baru" originCoords={lastClickPos.current}>
                 <AddBudgetModalContent onSubmit={handleAddBudget} />
             </Modal>
 
-            <Modal isOpen={activeModal === 'addSavingsGoal'} onClose={() => setActiveModal(null)} title="Buat Celengan Baru">
+            <Modal isOpen={activeModal === 'addSavingsGoal'} onClose={() => setActiveModal(null)} title="Buat Celengan Baru" originCoords={lastClickPos.current}>
                 <AddSavingsGoalModalContent onSubmit={handleAddSavingsGoal} />
             </Modal>
             
-            <Modal isOpen={activeModal === 'addSavings'} onClose={() => setActiveModal(null)} title={`Tambah Tabungan: ${savingsGoalForModal?.name || ''}`}>
+            <Modal isOpen={activeModal === 'addSavings'} onClose={() => setActiveModal(null)} title={`Tambah Tabungan: ${savingsGoalForModal?.name || ''}`} originCoords={lastClickPos.current}>
                 <AddSavingsModalContent
                     goal={savingsGoalForModal}
                     availableFunds={currentAvailableFunds}
@@ -1721,7 +2535,7 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
                 />
             </Modal>
 
-            <Modal isOpen={activeModal === 'savingsDetail'} onClose={() => setActiveModal(null)} title={`Detail: ${savingsGoalForModal?.name || ''}`}>
+            <Modal isOpen={activeModal === 'savingsDetail'} onClose={() => setActiveModal(null)} title={`Detail: ${savingsGoalForModal?.name || ''}`} originCoords={lastClickPos.current}>
                 <SavingsDetailModalContent
                     goal={savingsGoalForModal}
                     onDelete={() => currentSavingsGoalId && handleDeleteSavingsGoal(currentSavingsGoalId)}
@@ -1729,11 +2543,11 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
             </Modal>
 
 
-            <Modal isOpen={activeModal === 'funds'} onClose={() => setActiveModal(null)} title="Kelola Dana Bulan Ini">
+            <Modal isOpen={activeModal === 'funds'} onClose={() => setActiveModal(null)} title="Kelola Dana Bulan Ini" originCoords={lastClickPos.current}>
                 <FundsManagementModalContent onSubmit={handleFundTransaction} onViewHistory={openFundHistory} />
             </Modal>
             
-            <Modal isOpen={activeModal === 'history'} onClose={() => setActiveModal(null)} title={historyModalContent.title}>
+            <Modal isOpen={activeModal === 'history'} onClose={() => setActiveModal(null)} title={historyModalContent.title} originCoords={lastClickPos.current}>
                 <HistoryModalContent 
                     transactions={historyModalContent.transactions} 
                     type={historyModalContent.type} 
@@ -1742,7 +2556,7 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
                 />
             </Modal>
 
-             <Modal isOpen={activeModal === 'info'} onClose={() => setActiveModal(null)} title="Info Keuangan Bulan Ini">
+             <Modal isOpen={activeModal === 'info'} onClose={() => setActiveModal(null)} title="Info Keuangan Bulan Ini" originCoords={lastClickPos.current}>
                 <InfoModalContent
                     monthlyIncome={monthlyIncome}
                     totalAllocated={totalAllocated}
@@ -1752,11 +2566,11 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
                 />
             </Modal>
 
-             <Modal isOpen={activeModal === 'editAsset'} onClose={() => setActiveModal(null)} title="Koreksi Saldo Aset">
+             <Modal isOpen={activeModal === 'editAsset'} onClose={() => setActiveModal(null)} title="Koreksi Saldo Aset" originCoords={lastClickPos.current}>
                 <EditAssetModalContent currentAsset={currentAsset} onSubmit={handleEditAsset} />
             </Modal>
             
-            <Modal isOpen={activeModal === 'menu'} onClose={() => setActiveModal(null)} title="Menu & Opsi">
+            <Modal isOpen={activeModal === 'menu'} onClose={() => setActiveModal(null)} title="Menu & Opsi" originCoords={lastClickPos.current}>
                 <MainMenu 
                     onNavigate={(page) => { setCurrentPage(page); setActiveModal(null); }}
                     onShowInfo={() => setActiveModal('info')}
@@ -1770,7 +2584,7 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
                 />
             </Modal>
             
-            <Modal isOpen={activeModal === 'settings'} onClose={() => setActiveModal(null)} title="Pengaturan & Opsi">
+            <Modal isOpen={activeModal === 'settings'} onClose={() => setActiveModal(null)} title="Pengaturan & Opsi" originCoords={lastClickPos.current}>
                 <SettingsModalContent
                     onExport={() => { setActiveModal(null); handleExportData(); }}
                     onImport={handleTriggerImport}
@@ -1783,7 +2597,7 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
                 />
             </Modal>
             
-            <Modal isOpen={activeModal === 'archivedBudgets'} onClose={() => setActiveModal(null)} title="Kelola Anggaran Diarsipkan">
+            <Modal isOpen={activeModal === 'archivedBudgets'} onClose={() => setActiveModal(null)} title="Kelola Anggaran Diarsipkan" originCoords={lastClickPos.current}>
                 <ArchivedBudgetsModalContent
                     archivedBudgets={state.budgets.filter(b => b.isArchived)}
                     onRestore={handleRestoreBudget}
@@ -1791,14 +2605,14 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
                 />
             </Modal>
             
-            <Modal isOpen={activeModal === 'backupRestore'} onClose={() => setActiveModal(null)} title="Cadangan Internal Otomatis">
+            <Modal isOpen={activeModal === 'backupRestore'} onClose={() => setActiveModal(null)} title="Cadangan Internal Otomatis" originCoords={lastClickPos.current}>
                 <BackupRestoreModalContent
                     backups={internalBackups}
                     onRestore={handleRestoreBackup}
                 />
             </Modal>
 
-            <Modal isOpen={activeModal === 'scanResult'} onClose={() => setActiveModal(null)} title="Hasil Pindai Struk">
+            <Modal isOpen={activeModal === 'scanResult'} onClose={() => setActiveModal(null)} title="Hasil Pindai Struk" originCoords={lastClickPos.current}>
                 <ScanResultModalContent 
                     isLoading={isScanning}
                     error={scanError}
@@ -1809,7 +2623,7 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
                 />
             </Modal>
             
-             <Modal isOpen={activeModal === 'voiceAssistant'} onClose={() => setActiveModal(null)} title="Asisten Suara Interaktif" size="lg" contentClassName="p-0">
+             <Modal isOpen={activeModal === 'voiceAssistant'} onClose={() => setActiveModal(null)} title="Asisten Suara Interaktif" size="lg" contentClassName="p-0" originCoords={lastClickPos.current}>
                 {activeModal === 'voiceAssistant' && (
                     <VoiceAssistantModalContent
                         budgets={state.budgets.filter(b => !b.isArchived)}
@@ -1822,7 +2636,7 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
                 )}
             </Modal>
             
-            <Modal isOpen={activeModal === 'voiceResult'} onClose={() => setActiveModal(null)} title="Konfirmasi Transaksi Suara">
+            <Modal isOpen={activeModal === 'voiceResult'} onClose={() => setActiveModal(null)} title="Konfirmasi Transaksi Suara" originCoords={lastClickPos.current}>
                 <ScanResultModalContent
                     isLoading={false}
                     error={null}
@@ -1837,7 +2651,7 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
             </Modal>
 
 
-            <Modal isOpen={activeModal === 'smartInput'} onClose={() => setActiveModal(null)} title="Input Transaksi Cerdas">
+            <Modal isOpen={activeModal === 'smartInput'} onClose={() => setActiveModal(null)} title="Input Transaksi Cerdas" originCoords={lastClickPos.current}>
                 <SmartInputModalContent
                     isProcessing={isProcessingSmartInput}
                     error={smartInputError}
@@ -1850,7 +2664,7 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
                 />
             </Modal>
             
-             <Modal isOpen={activeModal === 'aiAdvice'} onClose={() => setActiveModal(null)} title="Saran Keuangan dari AI">
+             <Modal isOpen={activeModal === 'aiAdvice'} onClose={() => setActiveModal(null)} title="Saran Keuangan dari AI" originCoords={lastClickPos.current}>
                 <AIAdviceModalContent 
                     isLoading={isFetchingAdvice}
                     error={adviceError}
@@ -1858,7 +2672,7 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
                 />
             </Modal>
             
-            <Modal isOpen={activeModal === 'aiChat'} onClose={() => {setActiveModal(null); setAiChatSession(null);}} title="Tanya AI" size="lg" contentClassName="p-0">
+            <Modal isOpen={activeModal === 'aiChat'} onClose={() => {setActiveModal(null); setAiChatSession(null);}} title="Tanya AI" size="lg" contentClassName="p-0" originCoords={lastClickPos.current}>
                 <AIChatModalContent
                     history={aiChatHistory}
                     isLoading={isAiChatLoading}
@@ -1892,13 +2706,13 @@ const BottomNavBar: React.FC<{
     ];
 
     return (
-        <nav className="fixed bottom-0 left-0 right-0 bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.05)] max-w-3xl mx-auto border-t">
+        <nav className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md shadow-[0_-2px_10px_rgba(0,0,0,0.05)] max-w-3xl mx-auto border-t border-white/20 z-40">
             <div className="flex justify-around items-center h-16">
                 {navItems.map(item => (
                     <button 
                         key={item.page} 
                         onClick={() => onNavigate(item.page as Page)}
-                        className={`flex flex-col items-center justify-center space-y-1 w-full h-full transition-colors ${currentPage === item.page ? 'text-primary-navy' : 'text-secondary-gray'}`}
+                        className={`flex flex-col items-center justify-center space-y-1 w-full h-full transition-colors ${currentPage === item.page ? 'text-primary-navy' : 'text-secondary-gray hover:text-primary-navy'}`}
                     >
                         <item.icon className="w-6 h-6" />
                         <span className={`text-xs font-medium ${currentPage === item.page ? 'font-bold' : ''}`}>{item.label}</span>
@@ -1906,7 +2720,7 @@ const BottomNavBar: React.FC<{
                 ))}
                 <button
                     onClick={onOpenMenu}
-                    className="flex flex-col items-center justify-center space-y-1 w-full h-full text-secondary-gray"
+                    className="flex flex-col items-center justify-center space-y-1 w-full h-full text-secondary-gray hover:text-primary-navy"
                 >
                     <Squares2x2Icon className="w-6 h-6" />
                     <span className="text-xs font-medium">Menu</span>
@@ -1915,1148 +2729,6 @@ const BottomNavBar: React.FC<{
         </nav>
     );
 }
-
-const AchievementUnlockedToast: React.FC<{ achievement: Achievement | null }> = ({ achievement }) => {
-    const [visible, setVisible] = useState(false);
-
-    useEffect(() => {
-        if (achievement) {
-            setVisible(true);
-            const timer = setTimeout(() => setVisible(false), 3500);
-            return () => clearTimeout(timer);
-        }
-    }, [achievement]);
-
-    return (
-        <div 
-            className={`fixed top-5 left-1/2 -translate-x-1/2 z-[100] transition-all duration-500 ease-in-out ${visible ? 'translate-y-0 opacity-100' : '-translate-y-20 opacity-0'}`}
-        >
-            {achievement && (
-                <div className="bg-primary-navy text-white rounded-xl shadow-2xl p-4 flex items-center space-x-4 max-w-sm mx-auto">
-                    <TrophyIcon className="w-10 h-10 text-warning-yellow flex-shrink-0" />
-                    <div>
-                        <p className="font-bold">Lencana Terbuka!</p>
-                        <p className="text-sm">{achievement.name}</p>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
-
-
-// --- MODAL CONTENT COMPONENTS ---
-
-const InputModalContent: React.FC<{
-    mode: 'use-daily' | 'use-post' | 'edit-post';
-    budget?: Budget;
-    allBudgets: Budget[];
-    onSubmit: (data: { description: string, amount: number, targetId?: 'daily' | number, icon?: string, color?: string }) => void;
-    onArchive: () => void;
-    prefillData: { desc: string, amount: string } | null;
-    onPrefillConsumed: () => void;
-}> = ({ mode, budget, allBudgets, onSubmit, onArchive, prefillData, onPrefillConsumed }) => {
-    const [amount, setAmount] = useState('');
-    const [desc, setDesc] = useState('');
-    const [target, setTarget] = useState<'daily' | number>('daily');
-    const [suggestion, setSuggestion] = useState<string | null>(null);
-    const [suggestedCategory, setSuggestedCategory] = useState<string | null>(null);
-    const [isSuggesting, setIsSuggesting] = useState(false);
-    const [selectedIcon, setSelectedIcon] = useState(budget?.icon || availableIcons[0]);
-    const [selectedColor, setSelectedColor] = useState(budget?.color || availableColors[0]);
-
-    useEffect(() => {
-        if (prefillData) {
-            setDesc(prefillData.desc);
-            setAmount(prefillData.amount);
-            onPrefillConsumed();
-        } else if (mode === 'edit-post' && budget) {
-            setAmount(formatNumberInput(budget.totalBudget));
-            setDesc(budget.name);
-            setSelectedIcon(budget.icon || availableIcons[0]);
-            setSelectedColor(budget.color || availableColors[0]);
-        } else {
-            setAmount('');
-            setDesc('');
-        }
-        
-        if (mode === 'use-post' && budget) {
-            setTarget(budget.id);
-        } else {
-            setTarget('daily');
-        }
-
-        setSuggestion(null);
-        setSuggestedCategory(null);
-        setIsSuggesting(false);
-    }, [mode, budget, prefillData]);
-
-    const handleDescBlur = () => {
-        // AI suggestion feature is now locked/disabled.
-    };
-
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        const rawAmount = getRawNumber(amount);
-        if (rawAmount > 0 && desc.trim()) {
-            if (mode === 'edit-post') {
-                onSubmit({ description: desc, amount: rawAmount, icon: selectedIcon, color: selectedColor });
-            } else {
-                onSubmit({ description: desc, amount: rawAmount, targetId: target });
-            }
-        }
-    };
-
-    const handleSwitchCategory = () => {
-        if (suggestedCategory) {
-            const suggestedBudget = allBudgets.find(b => b.name === suggestedCategory);
-            if (suggestedBudget) {
-                setTarget(suggestedBudget.id);
-            }
-            setSuggestion(null);
-            setSuggestedCategory(null);
-        }
-    };
-    
-    return (
-        <form onSubmit={handleSubmit} className="space-y-4">
-            {mode !== 'edit-post' && (
-                 <div>
-                    <label htmlFor="input-target" className="block text-sm font-medium text-secondary-gray">Alokasi Dana</label>
-                    <select 
-                        id="input-target" 
-                        value={target} 
-                        onChange={e => setTarget(e.target.value === 'daily' ? 'daily' : Number(e.target.value))}
-                        className="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary-navy focus:border-primary-navy"
-                    >
-                        <option value="daily">Uang Harian</option>
-                        {allBudgets.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                    </select>
-                </div>
-            )}
-            
-            {mode !== 'edit-post' ? (
-                <div>
-                    <label htmlFor="input-desc" className="block text-sm font-medium text-secondary-gray">Keterangan</label>
-                    <input type="text" id="input-desc" value={desc} onChange={e => setDesc(e.target.value)} onBlur={handleDescBlur} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-navy focus:border-primary-navy"/>
-                    {isSuggesting && <p className="text-xs text-gray-500 mt-1 animate-pulse">Menganalisis...</p>}
-                    {suggestion && suggestedCategory && (
-                        <div className="mt-2 text-sm text-primary-navy bg-blue-50 p-3 rounded-md">
-                            <div className="flex items-start space-x-2">
-                                <SparklesIcon className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                                <span>{suggestion}</span>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={handleSwitchCategory}
-                                className="mt-2 w-full text-sm bg-primary-navy text-white font-semibold py-2 px-3 rounded-lg hover:bg-primary-navy-dark transition-colors"
-                            >
-                                Pindahkan ke "{suggestedCategory}"
-                            </button>
-                        </div>
-                    )}
-                </div>
-            ) : (
-                 <div>
-                    <label htmlFor="input-desc-edit" className="block text-sm font-medium text-secondary-gray">Nama Pos Anggaran</label>
-                    <input type="text" id="input-desc-edit" value={desc} onChange={e => setDesc(e.target.value)} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-navy focus:border-primary-navy"/>
-                </div>
-            )}
-            <div>
-                <label htmlFor="input-amount" className="block text-sm font-medium text-secondary-gray">{mode === 'edit-post' ? 'Kuota Dana (Rp)' : 'Nominal (Rp)'}</label>
-                <input type="text" id="input-amount" value={amount} onChange={e => setAmount(formatNumberInput(e.target.value))} required inputMode="numeric" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-navy focus:border-primary-navy"/>
-            </div>
-             {mode === 'edit-post' && (
-                <div className="space-y-4">
-                    <IconColorPicker 
-                        selectedIcon={selectedIcon} 
-                        selectedColor={selectedColor}
-                        onIconSelect={setSelectedIcon}
-                        onColorSelect={setSelectedColor}
-                    />
-                </div>
-            )}
-            <div className="pt-2 flex flex-col gap-3">
-                <button type="submit" className="w-full bg-primary-navy text-white font-bold py-3 rounded-lg hover:bg-primary-navy-dark transition-colors">Simpan</button>
-                {mode === 'edit-post' && (
-                    <button type="button" onClick={onArchive} className="w-full flex items-center justify-center gap-2 bg-yellow-500 text-white font-bold py-3 rounded-lg hover:bg-yellow-600 transition-colors">
-                        <ArchiveBoxIcon className="w-5 h-5" />
-                        <span>Arsipkan Pos Ini</span>
-                    </button>
-                )}
-            </div>
-        </form>
-    );
-};
-
-const AddBudgetModalContent: React.FC<{ onSubmit: (name: string, amount: number, icon: string, color: string) => void }> = ({ onSubmit }) => {
-    const [name, setName] = useState('');
-    const [amount, setAmount] = useState('');
-    const [selectedIcon, setSelectedIcon] = useState(availableIcons[0]);
-    const [selectedColor, setSelectedColor] = useState(availableColors[0]);
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        const rawAmount = getRawNumber(amount);
-        if (name && rawAmount > 0) {
-            onSubmit(name, rawAmount, selectedIcon, selectedColor);
-        }
-    };
-    return (
-        <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-                <label htmlFor="budget-name" className="block text-sm font-medium text-secondary-gray">Nama Anggaran</label>
-                <input type="text" id="budget-name" value={name} onChange={e => setName(e.target.value)} required placeholder="Contoh: Belanja Bulanan" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-navy focus:border-primary-navy"/>
-            </div>
-            <div>
-                <label htmlFor="budget-amount" className="block text-sm font-medium text-secondary-gray">Kuota Dana (Rp)</label>
-                <input type="text" id="budget-amount" value={amount} onChange={e => setAmount(formatNumberInput(e.target.value))} required placeholder="Contoh: 1.000.000" inputMode="numeric" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-navy focus:border-primary-navy"/>
-            </div>
-            <IconColorPicker 
-                selectedIcon={selectedIcon} 
-                selectedColor={selectedColor}
-                onIconSelect={setSelectedIcon}
-                onColorSelect={setSelectedColor}
-            />
-            <button type="submit" className="w-full bg-primary-navy text-white font-bold py-3 rounded-lg hover:bg-primary-navy-dark transition-colors">Tambah Pos Anggaran</button>
-        </form>
-    );
-};
-
-const AssetModalContent: React.FC<{
-    assetToEdit?: Asset;
-    onSubmit: (id: number | null, name: string, quantity: number, pricePerUnit: number) => void;
-}> = ({ assetToEdit, onSubmit }) => {
-    const [name, setName] = useState('');
-    const [quantity, setQuantity] = useState('');
-    const [price, setPrice] = useState('');
-
-    useEffect(() => {
-        if (assetToEdit) {
-            setName(assetToEdit.name);
-            setQuantity(String(assetToEdit.quantity));
-            setPrice(formatNumberInput(assetToEdit.pricePerUnit));
-        }
-    }, [assetToEdit]);
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        const rawQuantity = getRawNumber(quantity);
-        const rawPrice = getRawNumber(price);
-        if (name.trim() && rawQuantity > 0 && rawPrice > 0) {
-            onSubmit(assetToEdit?.id || null, name.trim(), rawQuantity, rawPrice);
-        }
-    };
-
-    return (
-        <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-                <label htmlFor="asset-name" className="block text-sm font-medium text-secondary-gray">Nama Aset</label>
-                <input type="text" id="asset-name" value={name} onChange={e => setName(e.target.value)} required placeholder="Contoh: Laptop MacBook Pro" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-navy focus:border-primary-navy"/>
-            </div>
-            <div>
-                <label htmlFor="asset-quantity" className="block text-sm font-medium text-secondary-gray">Jumlah</label>
-                <input type="text" id="asset-quantity" value={quantity} onChange={e => setQuantity(formatNumberInput(e.target.value))} required placeholder="Contoh: 1" inputMode="numeric" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-navy focus:border-primary-navy"/>
-            </div>
-            <div>
-                <label htmlFor="asset-price" className="block text-sm font-medium text-secondary-gray">Perkiraan Harga per Unit (Rp)</label>
-                <input type="text" id="asset-price" value={price} onChange={e => setPrice(formatNumberInput(e.target.value))} required placeholder="Contoh: 20.000.000" inputMode="numeric" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-navy focus:border-primary-navy"/>
-            </div>
-            <button type="submit" className="w-full bg-primary-navy text-white font-bold py-3 rounded-lg hover:bg-primary-navy-dark transition-colors">Simpan Aset</button>
-        </form>
-    );
-};
-
-
-const IconColorPicker: React.FC<{
-    selectedIcon: string;
-    selectedColor: string;
-    onIconSelect: (icon: string) => void;
-    onColorSelect: (color: string) => void;
-}> = ({ selectedIcon, selectedColor, onIconSelect, onColorSelect }) => {
-    return (
-        <div className="space-y-4">
-            <div>
-                <label className="block text-sm font-medium text-secondary-gray">Pilih Ikon</label>
-                <div className="mt-2 grid grid-cols-6 gap-2">
-                    {availableIcons.map(iconName => (
-                        <button
-                            type="button"
-                            key={iconName}
-                            onClick={() => onIconSelect(iconName)}
-                            className={`flex items-center justify-center p-2 rounded-lg border-2 ${selectedIcon === iconName ? 'border-primary-navy bg-blue-50' : 'border-transparent hover:bg-gray-100'}`}
-                        >
-                            <BudgetIcon icon={iconName} className="w-6 h-6 text-dark-text" />
-                        </button>
-                    ))}
-                </div>
-            </div>
-            <div>
-                 <label className="block text-sm font-medium text-secondary-gray">Pilih Warna</label>
-                 <div className="mt-2 flex flex-wrap gap-3">
-                    {availableColors.map(color => (
-                        <button
-                            type="button"
-                            key={color}
-                            onClick={() => onColorSelect(color)}
-                            style={{ backgroundColor: color }}
-                            className={`w-8 h-8 rounded-full border-2 transition-transform transform hover:scale-110 ${selectedColor === color ? 'border-white ring-2 ring-primary-navy' : 'border-transparent'}`}
-                            aria-label={`Select color ${color}`}
-                        />
-                    ))}
-                 </div>
-            </div>
-        </div>
-    )
-};
-
-const FundsManagementModalContent: React.FC<{ onSubmit: (type: 'add' | 'remove', desc: string, amount: number) => void, onViewHistory: () => void }> = ({ onSubmit, onViewHistory }) => {
-    const [type, setType] = useState<'add' | 'remove'>('add');
-    const [desc, setDesc] = useState('');
-    const [amount, setAmount] = useState('');
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        const rawAmount = getRawNumber(amount);
-        if (desc && rawAmount > 0) {
-            onSubmit(type, desc, rawAmount);
-            setDesc('');
-            setAmount('');
-        }
-    };
-    return (
-        <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-                <label htmlFor="fund-trans-type" className="block text-sm font-medium text-secondary-gray">Jenis Transaksi</label>
-                <select id="fund-trans-type" value={type} onChange={e => setType(e.target.value as 'add' | 'remove')} className="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary-navy focus:border-primary-navy">
-                    <option value="add">Pemasukan</option>
-                    <option value="remove">Pengeluaran Umum</option>
-                </select>
-            </div>
-            <div>
-                <label htmlFor="fund-trans-desc" className="block text-sm font-medium text-secondary-gray">Keterangan</label>
-                <input type="text" id="fund-trans-desc" value={desc} onChange={e => setDesc(e.target.value)} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-navy focus:border-primary-navy"/>
-            </div>
-            <div>
-                <label htmlFor="fund-trans-amount" className="block text-sm font-medium text-secondary-gray">Nominal (Rp)</label>
-                <input type="text" id="fund-trans-amount" value={amount} onChange={e => setAmount(formatNumberInput(e.target.value))} required inputMode="numeric" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-navy focus:border-primary-navy"/>
-            </div>
-            <button type="submit" className="w-full bg-primary-navy text-white font-bold py-3 rounded-lg hover:bg-primary-navy-dark transition-colors">Proses Transaksi</button>
-            <button type="button" onClick={onViewHistory} className="w-full bg-gray-200 text-dark-text font-bold py-3 rounded-lg hover:bg-gray-300 transition-colors mt-2">Lihat Riwayat</button>
-        </form>
-    );
-};
-
-const HistoryModalContent: React.FC<{ transactions: any[], type: string, budgetId?: number, onDelete: (timestamp: number, type: string, budgetId?: number) => void }> = ({ transactions, type, budgetId, onDelete }) => {
-    return (
-        <ul className="max-h-80 overflow-y-auto -mx-6">
-            {transactions.length === 0 ? (
-                <li className="px-6 py-4 text-center text-secondary-gray">Tidak ada riwayat.</li>
-            ) : (
-                transactions.map((item) => (
-                    <li key={item.timestamp} className="flex justify-between items-center px-6 py-3 border-b border-gray-100">
-                        <div>
-                            <p className="font-semibold text-dark-text">{item.desc}</p>
-                            <p className={`font-bold ${item.type === 'add' ? 'text-accent-teal' : 'text-danger-red'}`}>{item.type === 'add' ? '+' : '-'} {formatCurrency(item.amount)}</p>
-                            <p className="text-xs text-secondary-gray mt-1">{new Date(item.timestamp).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</p>
-                        </div>
-                        <button onClick={() => onDelete(item.timestamp, type, budgetId)} className="text-gray-400 hover:text-danger-red text-xl p-2">&#128465;</button>
-                    </li>
-                ))
-            )}
-        </ul>
-    );
-};
-
-const InfoModalContent: React.FC<{ monthlyIncome: number, totalAllocated: number, unallocatedFunds: number, generalAndDailyExpenses: number, remainingUnallocated: number }> = 
-({ monthlyIncome, totalAllocated, unallocatedFunds, generalAndDailyExpenses, remainingUnallocated }) => {
-    return (
-        <div>
-            <div className="space-y-3 text-sm text-dark-text">
-                <div className="flex justify-between items-center"><h3 className="text-secondary-gray">Total Pemasukan Bulan Ini</h3><p className="font-semibold text-primary-navy">{formatCurrency(monthlyIncome)}</p></div>
-                <div className="flex justify-between items-center"><h3 className="text-secondary-gray">Dialokasikan ke Pos</h3><p className="font-semibold text-dark-text">- {formatCurrency(totalAllocated)}</p></div>
-                <hr/>
-                <div className="flex justify-between items-center"><h3 className="text-secondary-gray">Dana Tak Terikat (Awal)</h3><p className="font-semibold text-primary-navy">{formatCurrency(unallocatedFunds)}</p></div>
-                <div className="flex justify-between items-center"><h3 className="text-secondary-gray">Pengeluaran Umum & Harian</h3><p className="font-semibold text-dark-text">- {formatCurrency(generalAndDailyExpenses)}</p></div>
-                <hr/>
-                <div className="flex justify-between items-center font-bold text-base"><h3 className="text-dark-text">Sisa Dana Tak Terikat</h3><p className="text-primary-navy">{formatCurrency(remainingUnallocated)}</p></div>
-            </div>
-        </div>
-    );
-};
-
-const EditAssetModalContent: React.FC<{ currentAsset: number; onSubmit: (newAmount: number) => void; }> = ({ currentAsset, onSubmit }) => {
-    const [amount, setAmount] = useState('');
-    useEffect(() => {
-        setAmount(formatNumberInput(currentAsset));
-    }, [currentAsset]);
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        onSubmit(getRawNumber(amount));
-    };
-    return (
-        <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-                <label htmlFor="new-asset-amount" className="block text-sm font-medium text-secondary-gray">Total Aset Seharusnya (Rp)</label>
-                <input type="text" id="new-asset-amount" value={amount} onChange={e => setAmount(formatNumberInput(e.target.value))} required inputMode="numeric" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-navy focus:border-primary-navy"/>
-            </div>
-            <button type="submit" className="w-full bg-primary-navy text-white font-bold py-3 rounded-lg hover:bg-primary-navy-dark transition-colors">Simpan Koreksi</button>
-        </form>
-    );
-};
-
-const SettingsGroup: React.FC<{
-    title: React.ReactNode;
-    variant?: 'default' | 'blue' | 'red';
-    children: React.ReactNode;
-    footer?: React.ReactNode;
-}> = ({ title, variant = 'default', children, footer }) => {
-    const [isOpen, setIsOpen] = useState(false);
-
-    const variantStyles = {
-        default: {
-            container: 'bg-gray-50 border-gray-200',
-            header: 'text-dark-text',
-            content: 'border-gray-200'
-        },
-        blue: {
-            container: 'bg-blue-50 border-blue-200',
-            header: 'text-primary-navy',
-            content: 'border-blue-200'
-        },
-        red: {
-            container: 'bg-red-50 border-danger-red',
-            header: 'text-danger-red',
-            content: 'border-red-200'
-        }
-    };
-
-    const styles = variantStyles[variant];
-
-    return (
-        <div className={`rounded-lg border overflow-hidden transition-all duration-300 ${styles.container}`}>
-            <button 
-                onClick={() => setIsOpen(!isOpen)}
-                className={`w-full flex items-center justify-between p-4 text-left font-bold ${styles.header} hover:opacity-80 transition-opacity`}
-            >
-                <div className="flex items-center gap-2">{title}</div>
-                <ChevronRightIcon className={`w-5 h-5 transition-transform duration-300 ${isOpen ? 'rotate-90' : ''}`} />
-            </button>
-            <div 
-                className={`transition-all duration-300 ease-in-out overflow-hidden ${isOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}
-            >
-                <div className={`p-4 pt-0 border-t ${styles.content} mt-2`}>
-                    <div className="pt-3 flex flex-col gap-3">
-                        {children}
-                    </div>
-                    {footer && <div className="mt-3 pt-2 border-t border-gray-200/50">{footer}</div>}
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const SettingsModalContent: React.FC<{
-    onExport: () => void;
-    onImport: () => void;
-    onManageArchived: () => void;
-    onManualBackup: () => void;
-    onManageBackups: () => void;
-    onResetMonthly: () => void;
-    onResetAll: () => void;
-    onManualCloseBook: () => void;
-}> = ({ onExport, onImport, onManageArchived, onManualBackup, onManageBackups, onResetMonthly, onResetAll, onManualCloseBook }) => {
-    return (
-        <div className="space-y-4">
-            <SettingsGroup title="Manajemen Anggaran" variant="default">
-                <button
-                    onClick={onManualCloseBook}
-                    className="w-full flex items-center justify-center gap-3 bg-primary-navy text-white font-bold py-3 px-4 rounded-lg hover:bg-primary-navy-dark transition-colors shadow-md"
-                >
-                    <CalendarDaysIcon className="w-6 h-6"/>
-                    <span>Akhiri Bulan / Tutup Buku</span>
-                </button>
-                <button
-                    onClick={onManageArchived}
-                    className="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-300 text-dark-text font-bold py-3 px-4 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                    <ArchiveBoxIcon className="w-6 h-6"/>
-                    <span>Kelola Pos Anggaran Diarsipkan</span>
-                </button>
-            </SettingsGroup>
-
-            <SettingsGroup 
-                title="Cadangan & Pemulihan" 
-                variant="blue"
-                footer={<p className="text-xs text-secondary-gray text-center">Cadangan otomatis mingguan untuk memulihkan data jika terjadi kesalahan.</p>}
-            >
-                <button
-                    onClick={onManualBackup}
-                    className="w-full flex items-center justify-center gap-3 bg-white border-2 border-primary-navy text-primary-navy font-bold py-3 px-4 rounded-lg hover:bg-blue-100 transition-colors"
-                >
-                    <ArrowDownTrayIcon className="w-6 h-6"/>
-                    <span>Cadangkan Manual Sekarang</span>
-                </button>
-                <button
-                    onClick={onManageBackups}
-                    className="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-300 text-dark-text font-bold py-3 px-4 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                    <ServerStackIcon className="w-6 h-6"/>
-                    <span>Kelola Cadangan Internal</span>
-                </button>
-            </SettingsGroup>
-
-            <SettingsGroup title="Manajemen Data" variant="default">
-                <button
-                    onClick={onImport}
-                    className="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-300 text-dark-text font-bold py-3 px-4 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                    <ArrowUpTrayIcon className="w-6 h-6"/>
-                    <span>Impor Data dari File</span>
-                </button>
-                <button
-                    onClick={onExport}
-                    className="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-300 text-dark-text font-bold py-3 px-4 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                        <ArrowDownTrayIcon className="w-6 h-6"/>
-                    <span>Ekspor Data ke File</span>
-                </button>
-            </SettingsGroup>
-
-            <SettingsGroup 
-                title={
-                    <div className="flex items-center gap-2">
-                        <ExclamationTriangleIcon className="w-6 h-6"/>
-                        <span>Zona Berbahaya</span>
-                    </div>
-                } 
-                variant="red"
-            >
-                <button onClick={onResetMonthly} className="w-full bg-white border-2 border-danger-red text-danger-red font-bold py-3 px-4 rounded-lg hover:bg-red-100 transition-colors">
-                    Reset Data Bulan Ini
-                </button>
-                <button onClick={onResetAll} className="w-full bg-danger-red text-white font-bold py-3 px-4 rounded-lg hover:bg-danger-red-dark transition-colors">
-                    Reset Semua Data Aplikasi
-                </button>
-            </SettingsGroup>
-
-            <div className="bg-gray-50 rounded-lg border p-4 text-center mt-4">
-                <h4 className="font-bold text-dark-text mb-2">Tentang Aplikasi</h4>
-                <div className="space-y-1 text-sm text-secondary-gray">
-                    <p>Versi: {APP_VERSION}</p>
-                    <p>Pembuat Asli: Abdul Wahab Maulana</p>
-                    <p className="pt-1 text-xs">Teknologi: React, TypeScript, Tailwind, Gemini API</p>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const ArchivedBudgetsModalContent: React.FC<{
-    archivedBudgets: Budget[];
-    onRestore: (budgetId: number) => void;
-    onDelete: (budgetId: number) => void;
-}> = ({ archivedBudgets, onRestore, onDelete }) => {
-    return (
-        <div className="space-y-3">
-            {archivedBudgets.length === 0 ? (
-                <p className="text-center text-secondary-gray py-6">Tidak ada pos anggaran yang diarsipkan.</p>
-            ) : (
-                archivedBudgets.map(budget => (
-                    <div key={budget.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div className="flex items-center gap-3 min-w-0">
-                            {budget.icon && budget.color && (
-                                <div style={{ backgroundColor: budget.color }} className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0">
-                                    <BudgetIcon icon={budget.icon} className="w-5 h-5 text-white" />
-                                </div>
-                            )}
-                            <span className="font-semibold text-dark-text truncate">{budget.name}</span>
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                            <button onClick={() => onRestore(budget.id)} className="flex items-center gap-2 text-sm bg-accent-teal text-white font-semibold py-2 px-3 rounded-lg hover:bg-accent-teal-dark transition-colors">
-                                <ArrowUturnLeftIcon className="w-4 h-4" />
-                                <span>Pulihkan</span>
-                            </button>
-                            <button 
-                                onClick={() => onDelete(budget.id)} 
-                                title="Hapus Permanen"
-                                className="p-2 text-gray-400 hover:text-white hover:bg-danger-red rounded-lg transition-colors"
-                            >
-                                <TrashIcon className="w-5 h-5" />
-                            </button>
-                        </div>
-                    </div>
-                ))
-            )}
-        </div>
-    );
-};
-
-const BackupRestoreModalContent: React.FC<{
-    backups: { key: string; timestamp: number }[];
-    onRestore: (key: string) => void;
-}> = ({ backups, onRestore }) => {
-    return (
-        <div className="space-y-3">
-            {backups.length === 0 ? (
-                <p className="text-center text-secondary-gray py-6">Tidak ada cadangan internal yang ditemukan.</p>
-            ) : (
-                backups.map(backup => (
-                    <div key={backup.key} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div className="flex items-center gap-3 min-w-0">
-                           <ServerStackIcon className="w-6 h-6 text-secondary-gray flex-shrink-0" />
-                            <span className="font-semibold text-dark-text truncate">
-                                {new Date(backup.timestamp).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })}
-                            </span>
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                            <button onClick={() => onRestore(backup.key)} className="flex items-center gap-2 text-sm bg-accent-teal text-white font-semibold py-2 px-3 rounded-lg hover:bg-accent-teal-dark transition-colors">
-                                <ArrowUturnLeftIcon className="w-4 h-4" />
-                                <span>Pulihkan</span>
-                            </button>
-                        </div>
-                    </div>
-                ))
-            )}
-            <p className="text-xs text-secondary-gray pt-2">Aplikasi menyimpan hingga 4 cadangan mingguan terakhir secara otomatis. Cadangan ini disimpan di perangkat Anda dan akan hilang jika data browser dihapus.</p>
-        </div>
-    );
-};
-
-
-const ScanResultModalContent: React.FC<{ 
-    isLoading: boolean;
-    error: string | null;
-    items: ScannedItem[];
-    budgets: Budget[];
-    onItemsChange: (newItems: ScannedItem[]) => void;
-    onSave: () => void;
-}> = ({ isLoading, error, items, budgets, onItemsChange, onSave }) => {
-
-    const handleBudgetChange = (index: number, budgetId: string) => {
-        const newItems = [...items];
-        newItems[index].budgetId = budgetId === 'daily' || budgetId === 'none' ? budgetId : Number(budgetId);
-        onItemsChange(newItems);
-    };
-    
-    const handleDeleteItem = (indexToDelete: number) => {
-        const newItems = items.filter((_, index) => index !== indexToDelete);
-        onItemsChange(newItems);
-    };
-
-    if (isLoading) {
-        return <div className="text-center py-10">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-navy mx-auto"></div>
-            <p className="mt-4 text-secondary-gray">Memindai struk Anda...</p>
-        </div>;
-    }
-
-    if (error) {
-        return <div className="text-center py-10 text-danger-red">{error}</div>;
-    }
-
-    if (items.length === 0) {
-        return <div className="text-center py-10 text-secondary-gray">Tidak ada item yang terdeteksi.</div>;
-    }
-    
-    return (
-        <div className="space-y-4">
-            <div className="max-h-80 overflow-y-auto space-y-3 pr-2">
-            {items.map((item, index) => (
-                <div key={index} className="p-3 bg-gray-50 rounded-lg border">
-                    <div className="flex justify-between items-start mb-2">
-                        <div className="flex-grow mr-2">
-                            <p className="font-semibold text-dark-text">{item.desc}</p>
-                            <p className="font-bold text-primary-navy">{formatCurrency(item.amount)}</p>
-                        </div>
-                        <button onClick={() => handleDeleteItem(index)} className="p-1 text-gray-400 hover:text-danger-red transition-colors flex-shrink-0">
-                           <TrashIcon className="w-5 h-5" />
-                        </button>
-                    </div>
-                    <select 
-                        value={String(item.budgetId)} 
-                        onChange={e => handleBudgetChange(index, e.target.value)}
-                        className="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm text-dark-text focus:outline-none focus:ring-primary-navy focus:border-primary-navy"
-                    >
-                        <option value="none">-- Pilih Pos Anggaran --</option>
-                        <option value="daily">Uang Harian</option>
-                        {budgets.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                    </select>
-                </div>
-            ))}
-            </div>
-            <button onClick={onSave} disabled={items.filter(i => i.budgetId !== 'none').length === 0} className="w-full bg-accent-teal text-white font-bold py-3 rounded-lg hover:bg-accent-teal-dark transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
-                Simpan Transaksi Terpilih
-            </button>
-        </div>
-    );
-};
-
-// --- VOICE ASSISTANT MODAL (NEW) ---
-type ConversationStatus = 'idle' | 'connecting' | 'listening' | 'speaking' | 'processing' | 'finished' | 'error';
-type TranscriptItem = { speaker: 'user' | 'ai' | 'system'; text: string; isFinal?: boolean };
-
-const VoiceAssistantModalContent: React.FC<{
-    budgets: Budget[];
-    onFinish: (items: ScannedItem[]) => void;
-    onClose: () => void;
-}> = ({ budgets, onFinish, onClose }) => {
-    const [status, setStatus] = useState<ConversationStatus>('idle');
-    const [transcript, setTranscript] = useState<TranscriptItem[]>([]);
-    const [stagedTransactions, setStagedTransactions] = useState<ScannedItem[]>([]);
-    const [error, setError] = useState<string | null>(null);
-
-    const sessionPromiseRef = useRef<Promise<LiveSession> | null>(null);
-    const inputAudioContextRef = useRef<AudioContext | null>(null);
-    const outputAudioContextRef = useRef<AudioContext | null>(null);
-    const streamRef = useRef<MediaStream | null>(null);
-    const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
-    const nextAudioStartTimeRef = useRef<number>(0);
-    const outputAudioSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
-    
-    const currentUserTranscriptionRef = useRef('');
-    const currentAiTranscriptionRef = useRef('');
-
-    const closeSession = useCallback(() => {
-        sessionPromiseRef.current?.then(session => session.close());
-        
-        if (streamRef.current) {
-            streamRef.current.getTracks().forEach(track => track.stop());
-            streamRef.current = null;
-        }
-        if (scriptProcessorRef.current) {
-            scriptProcessorRef.current.disconnect();
-            scriptProcessorRef.current = null;
-        }
-        if (inputAudioContextRef.current?.state !== 'closed') {
-            inputAudioContextRef.current?.close();
-        }
-        if (outputAudioContextRef.current?.state !== 'closed') {
-            outputAudioContextRef.current?.close();
-        }
-        outputAudioSourcesRef.current.forEach(source => source.stop());
-        outputAudioSourcesRef.current.clear();
-
-    }, []);
-
-    useEffect(() => {
-        const startSession = async () => {
-            setStatus('connecting');
-            setError(null);
-            setTranscript([{ speaker: 'system', text: 'Menghubungkan ke Asisten AI...', isFinal: true }]);
-
-            try {
-                const apiKey = getApiKey();
-                const ai = new GoogleGenAI({ apiKey });
-                const budgetCategories = [...budgets.map(b => b.name), 'Uang Harian'];
-
-                const recordTransactionTool: FunctionDeclaration = {
-                    name: 'catatTransaksi',
-                    description: 'Mencatat satu transaksi keuangan. Gunakan ini untuk setiap item yang disebutkan pengguna.',
-                    parameters: {
-                        type: Type.OBJECT,
-                        properties: {
-                            desc: { type: Type.STRING, description: 'Deskripsi singkat transaksi, misal "Kopi" atau "Makan siang"' },
-                            amount: { type: Type.NUMBER, description: 'Jumlah uang yang dikeluarkan' },
-                            category: { type: Type.STRING, description: 'Kategori anggaran yang paling sesuai', enum: budgetCategories }
-                        },
-                        required: ['desc', 'amount', 'category']
-                    }
-                };
-                
-                inputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
-                outputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-                
-                if (outputAudioContextRef.current.state === 'suspended') {
-                    outputAudioContextRef.current.resume();
-                }
-
-                nextAudioStartTimeRef.current = 0;
-
-                sessionPromiseRef.current = ai.live.connect({
-                    model: 'gemini-2.5-flash-native-audio-preview-09-2025',
-                    config: {
-                        responseModalities: [Modality.AUDIO],
-                        inputAudioTranscription: {},
-                        outputAudioTranscription: {},
-                        tools: [{ functionDeclarations: [recordTransactionTool] }],
-                        systemInstruction: `Anda adalah asisten keuangan AI yang ramah dalam Bahasa Indonesia. Tugas Anda adalah membantu pengguna mencatat transaksi. Tanyakan detail jika perlu, konfirmasikan setiap transaksi setelah Anda memanggil fungsi 'catatTransaksi', dan tanyakan apakah ada lagi. Gunakan kategori yang tersedia: [${budgetCategories.join(', ')}]. Jika ragu, gunakan 'Uang Harian'.`
-                    },
-                    callbacks: {
-                        onopen: async () => {
-                            try {
-                                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                                streamRef.current = stream;
-                                const source = inputAudioContextRef.current!.createMediaStreamSource(stream);
-                                scriptProcessorRef.current = inputAudioContextRef.current!.createScriptProcessor(4096, 1, 1);
-
-                                scriptProcessorRef.current.onaudioprocess = (audioProcessingEvent) => {
-                                    const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
-                                    const pcmBlob = createBlob(inputData);
-                                    sessionPromiseRef.current?.then((session) => {
-                                        session.sendRealtimeInput({ media: pcmBlob });
-                                    });
-                                };
-
-                                source.connect(scriptProcessorRef.current);
-                                scriptProcessorRef.current.connect(inputAudioContextRef.current!.destination);
-                                // The initial audio greeting comes from the model as the first message
-                                setStatus('listening');
-                            } catch (err) {
-                                console.error('Microphone error:', err);
-                                setError('Gagal mengakses mikrofon. Mohon berikan izin dan coba lagi.');
-                                setStatus('error');
-                            }
-                        },
-                        onmessage: async (message: LiveServerMessage) => {
-                            if (message.serverContent?.inputTranscription) {
-                                currentUserTranscriptionRef.current += message.serverContent.inputTranscription.text;
-                                setTranscript(prev => {
-                                    const newTranscript = [...prev];
-                                    const last = newTranscript[newTranscript.length - 1];
-                                    if (last?.speaker === 'user' && !last.isFinal) {
-                                        last.text = currentUserTranscriptionRef.current;
-                                    } else {
-                                        newTranscript.push({ speaker: 'user', text: currentUserTranscriptionRef.current, isFinal: false });
-                                    }
-                                    return newTranscript;
-                                });
-                            }
-                             if (message.serverContent?.outputTranscription) {
-                                currentAiTranscriptionRef.current += message.serverContent.outputTranscription.text;
-                                 setTranscript(prev => {
-                                    const newTranscript = [...prev];
-                                    const last = newTranscript[newTranscript.length - 1];
-                                    if (last?.speaker === 'ai' && !last.isFinal) {
-                                        last.text = currentAiTranscriptionRef.current;
-                                    } else {
-                                        newTranscript.push({ speaker: 'ai', text: currentAiTranscriptionRef.current, isFinal: false });
-                                    }
-                                    return newTranscript;
-                                });
-                            }
-                             if(message.serverContent?.turnComplete) {
-                                setTranscript(prev => prev.map(t => ({...t, isFinal: true})));
-                                currentUserTranscriptionRef.current = '';
-                                currentAiTranscriptionRef.current = '';
-                            }
-                            if (message.toolCall?.functionCalls) {
-                                setStatus('processing');
-                                for (const fc of message.toolCall.functionCalls) {
-                                    const { desc, amount, category } = fc.args;
-                                    const matchedBudget = budgets.find(b => b.name === category);
-                                    const budgetId = matchedBudget ? matchedBudget.id : 'daily';
-                                    setStagedTransactions(prev => [...prev, { desc, amount, budgetId }]);
-                                    
-                                    const session = await sessionPromiseRef.current;
-                                    session?.sendToolResponse({
-                                      functionResponses: { id : fc.id, name: fc.name, response: { result: "OK" } }
-                                    });
-                                }
-                            }
-                             const base64Audio = message.serverContent?.modelTurn?.parts[0]?.inlineData.data;
-                            if (base64Audio) {
-                                setStatus('speaking');
-                                const audioContext = outputAudioContextRef.current!;
-                                nextAudioStartTimeRef.current = Math.max(nextAudioStartTimeRef.current, audioContext.currentTime);
-                                
-                                const audioBuffer = await decodeAudioData(decode(base64Audio), audioContext, 24000, 1);
-                                const source = audioContext.createBufferSource();
-                                source.buffer = audioBuffer;
-                                source.connect(audioContext.destination);
-
-                                source.addEventListener('ended', () => {
-                                    outputAudioSourcesRef.current.delete(source);
-                                    if (outputAudioSourcesRef.current.size === 0) {
-                                        setStatus('listening');
-                                    }
-                                });
-
-                                source.start(nextAudioStartTimeRef.current);
-                                nextAudioStartTimeRef.current += audioBuffer.duration;
-                                outputAudioSourcesRef.current.add(source);
-                            }
-                        },
-                        onerror: (e: ErrorEvent) => {
-                             console.error('Session error:', e);
-                             setError('Koneksi ke Asisten AI gagal. Pastikan koneksi internet Anda stabil dan coba lagi.');
-                             setStatus('error');
-                             closeSession();
-                        },
-                        onclose: () => {
-                            setStatus('finished');
-                        }
-                    }
-                });
-            } catch (err) {
-                console.error('Failed to start session:', err);
-                setError('Gagal memulai sesi Asisten AI. Coba lagi.');
-                setStatus('error');
-            }
-        };
-
-        startSession();
-        return () => closeSession();
-    }, [budgets, closeSession]);
-
-    const handleFinishSession = () => {
-        onFinish(stagedTransactions);
-    };
-    
-    const StatusIndicator = () => {
-        let color = 'bg-gray-400';
-        let text = 'Menunggu';
-        switch (status) {
-            case 'connecting': color = 'bg-yellow-400 animate-pulse'; text = 'Menghubungkan...'; break;
-            case 'listening': color = 'bg-green-500 animate-pulse'; text = 'Mendengarkan...'; break;
-            case 'speaking': color = 'bg-blue-500'; text = 'AI Berbicara...'; break;
-            case 'processing': color = 'bg-yellow-400'; text = 'Memproses...'; break;
-            case 'finished': color = 'bg-gray-500'; text = 'Sesi Selesai'; break;
-            case 'error': color = 'bg-danger-red'; text = 'Error'; break;
-        }
-        return <div className="flex items-center space-x-2 text-sm"><div className={`w-3 h-3 rounded-full ${color}`}></div><span>{text}</span></div>;
-    };
-
-    return (
-        <div className="flex flex-col h-[70vh]">
-            <div className="flex justify-between items-center p-2 bg-gray-50 rounded-t-lg">
-                <StatusIndicator />
-                <button onClick={onClose} className="px-4 py-2 text-sm bg-danger-red text-white font-semibold rounded-lg hover:bg-danger-red-dark">Tutup Sesi</button>
-            </div>
-             {error && <p className="p-2 text-center text-sm bg-red-100 text-danger-red">{error}</p>}
-            
-            <div className="flex-grow overflow-y-auto p-4 space-y-3 bg-gray-100">
-                 {transcript.map((item, index) => (
-                    <div key={index} className={`flex ${item.speaker === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-xs md:max-w-md p-3 rounded-2xl ${item.speaker === 'user' ? 'bg-primary-navy text-white' : 'bg-white text-dark-text shadow-sm'}`}>
-                            {item.text}
-                        </div>
-                    </div>
-                ))}
-            </div>
-
-            {stagedTransactions.length > 0 && (
-                 <div className="flex-shrink-0 p-4 border-t">
-                    <h4 className="font-bold text-primary-navy mb-2">Transaksi yang akan dikonfirmasi:</h4>
-                    <div className="max-h-28 overflow-y-auto space-y-2">
-                        {stagedTransactions.map((item, index) => (
-                            <div key={index} className="flex justify-between items-center text-sm p-2 bg-blue-50 rounded">
-                                <span>{item.desc}</span>
-                                <span className="font-semibold">{formatCurrency(item.amount)}</span>
-                            </div>
-                        ))}
-                    </div>
-                    <button onClick={handleFinishSession} className="w-full mt-3 bg-accent-teal text-white font-bold py-3 rounded-lg hover:bg-accent-teal-dark">
-                        Selesai & Konfirmasi ({stagedTransactions.length})
-                    </button>
-                 </div>
-            )}
-        </div>
-    );
-};
-
-const SmartInputModalContent: React.FC<{
-    isProcessing: boolean;
-    error: string | null;
-    resultItems: ScannedItem[];
-    budgets: Budget[];
-    onProcess: (text: string) => void;
-    onSave: () => void;
-    onItemsChange: (items: ScannedItem[]) => void;
-    onClearError: () => void;
-}> = ({ isProcessing, error, resultItems, budgets, onProcess, onSave, onItemsChange, onClearError }) => {
-    const [text, setText] = useState('');
-
-    const handleBudgetChange = (index: number, budgetId: string) => {
-        const newItems = [...resultItems];
-        newItems[index].budgetId = budgetId === 'daily' || budgetId === 'none' ? budgetId : Number(budgetId);
-        onItemsChange(newItems);
-    };
-
-    const handleRetry = () => {
-        onItemsChange([]);
-        onClearError();
-    };
-
-    if (isProcessing) {
-        return <div className="text-center py-10">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-navy mx-auto"></div>
-            <p className="mt-4 text-secondary-gray">AI sedang memproses...</p>
-        </div>;
-    }
-
-    if (resultItems.length > 0) {
-        return (
-            <div className="space-y-4">
-                <div className="max-h-80 overflow-y-auto space-y-3 pr-2">
-                    {resultItems.map((item, index) => (
-                        <div key={index} className="p-3 bg-gray-50 rounded-lg border">
-                            <div className="flex justify-between items-center mb-2">
-                                <p className="font-semibold text-dark-text flex-grow">{item.desc}</p>
-                                <p className="font-bold text-primary-navy">{formatCurrency(item.amount)}</p>
-                            </div>
-                            <select 
-                                value={String(item.budgetId)} 
-                                onChange={e => handleBudgetChange(index, e.target.value)}
-                                className="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm text-dark-text focus:outline-none focus:ring-primary-navy focus:border-primary-navy"
-                            >
-                                <option value="none">-- Jangan Simpan --</option>
-                                <option value="daily">Uang Harian</option>
-                                {budgets.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                            </select>
-                        </div>
-                    ))}
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                    <button onClick={handleRetry} className="w-full bg-gray-200 text-dark-text font-bold py-3 rounded-lg hover:bg-gray-300 transition-colors">
-                        Input Ulang
-                    </button>
-                    <button onClick={onSave} className="w-full bg-accent-teal text-white font-bold py-3 rounded-lg hover:bg-accent-teal-dark transition-colors">
-                        Simpan
-                    </button>
-                </div>
-            </div>
-        );
-    }
-    
-    return (
-        <form onSubmit={(e) => { e.preventDefault(); onProcess(text); }} className="space-y-4">
-            <div>
-                <label htmlFor="smart-input-text" className="block text-sm font-medium text-secondary-gray">Tuliskan pengeluaran Anda</label>
-                <textarea 
-                    id="smart-input-text"
-                    rows={4}
-                    value={text}
-                    onChange={e => setText(e.target.value)}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-navy focus:border-primary-navy"
-                    placeholder="Contoh: Beli kopi 25rb, makan siang 30000, dan bayar parkir 5rb"
-                />
-            </div>
-            {error && <p className="text-sm text-center text-danger-red bg-red-50 p-2 rounded-md">{error}</p>}
-            <button type="submit" className="w-full bg-primary-navy text-white font-bold py-3 rounded-lg hover:bg-primary-navy-dark transition-colors">
-                Proses dengan AI
-            </button>
-        </form>
-    );
-};
-
-const AIAdviceModalContent: React.FC<{ 
-    isLoading: boolean;
-    error: string | null;
-    advice: string;
-}> = ({ isLoading, error, advice }) => {
-    if (isLoading) {
-        return (
-            <div className="text-center py-10">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-navy mx-auto"></div>
-                <p className="mt-4 text-secondary-gray">AI sedang menganalisis data Anda...</p>
-            </div>
-        );
-    }
-
-    if (error) {
-        return <div className="text-center py-10 text-danger-red">{error}</div>;
-    }
-
-    // A simple markdown to HTML converter for bullet points
-    const formatAdvice = (text: string) => {
-        return text
-            .split('\n')
-            .map((line, index) => {
-                if (line.trim().startsWith('* ')) {
-                    return <li key={index} className="ml-5 list-disc">{line.trim().substring(2)}</li>;
-                }
-                if (line.trim().startsWith('**') && line.trim().endsWith('**')) {
-                    return <p key={index} className="font-bold mt-2">{line.trim().replace(/\*\*/g, '')}</p>
-                }
-                return <p key={index}>{line}</p>;
-            });
-    };
-    
-    return (
-        <div className="max-h-96 overflow-y-auto prose prose-sm">
-            {formatAdvice(advice)}
-        </div>
-    );
-};
-
-const AIChatModalContent: React.FC<{
-    history: { role: 'user' | 'model', text: string }[];
-    isLoading: boolean;
-    error: string | null;
-    onSendMessage: (message: string) => void;
-}> = ({ history, isLoading, error, onSendMessage }) => {
-    const [message, setMessage] = useState('');
-    const chatContainerRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        if (chatContainerRef.current) {
-            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-        }
-    }, [history, isLoading]);
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (message.trim() && !isLoading) {
-            onSendMessage(message);
-            setMessage('');
-        }
-    };
-
-    const formatMessage = (text: string) => {
-        return text.split('\n').map((line, index) => {
-            const trimmedLine = line.trim();
-            if (trimmedLine.startsWith('* ')) {
-                return <li key={index} className="ml-5 list-disc">{trimmedLine.substring(2)}</li>;
-            }
-             if (trimmedLine.startsWith('**') && trimmedLine.endsWith('**')) {
-                return <p key={index} className="font-bold">{trimmedLine.replace(/\*\*/g, '')}</p>
-            }
-            return <p key={index}>{line}</p>;
-        });
-    };
-
-    return (
-        <div className="flex flex-col h-[70vh]">
-            <div ref={chatContainerRef} className="flex-grow overflow-y-auto p-4 space-y-4">
-                {history.map((chat, index) => (
-                    <div key={index} className={`flex ${chat.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-xs md:max-w-md p-3 rounded-2xl ${chat.role === 'user' ? 'bg-primary-navy text-white' : 'bg-gray-200 text-dark-text'}`}>
-                           <div className="prose prose-sm max-w-none text-current">{formatMessage(chat.text)}</div>
-                        </div>
-                    </div>
-                ))}
-                {isLoading && (
-                     <div className="flex justify-start">
-                        <div className="max-w-xs md:max-w-md p-3 rounded-2xl bg-gray-200 text-dark-text">
-                           <div className="flex items-center space-x-2">
-                                <div className="w-2 h-2 bg-gray-500 rounded-full animate-pulse" style={{ animationDelay: '0s' }}></div>
-                                <div className="w-2 h-2 bg-gray-500 rounded-full animate-pulse" style={{ animationDelay: '0.1s' }}></div>
-                                <div className="w-2 h-2 bg-gray-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
-                           </div>
-                        </div>
-                    </div>
-                )}
-            </div>
-            <div className="p-4 border-t flex-shrink-0">
-                 {error && <p className="text-sm text-center text-danger-red mb-2">{error}</p>}
-                <form onSubmit={handleSubmit} className="flex items-center space-x-2">
-                    <input
-                        type="text"
-                        value={message}
-                        onChange={(e) => setMessage(e.target.value)}
-                        placeholder="Ketik pertanyaan Anda..."
-                        className="flex-grow px-4 py-2 border border-gray-300 rounded-full focus:outline-none focus:ring-1 focus:ring-primary-navy"
-                        disabled={isLoading}
-                    />
-                    <button type="submit" className="bg-primary-navy text-white rounded-full p-3 hover:bg-primary-navy-dark transition-colors disabled:bg-gray-400" disabled={isLoading || !message.trim()}>
-                        <PaperAirplaneIcon className="w-5 h-5" />
-                    </button>
-                </form>
-            </div>
-        </div>
-    );
-};
 
 const MainMenu: React.FC<{ 
     onNavigate: (page: Page) => void, 
@@ -3070,220 +2742,42 @@ const MainMenu: React.FC<{
     onOpenSettings: () => void 
 }> = (props) => {
     const menuItems = [
+        { icon: CreditCardIcon, label: 'Langganan', action: () => props.onNavigate('subscriptions'), disabled: false },
         { icon: BuildingLibraryIcon, label: 'Celengan', action: () => props.onNavigate('savings'), disabled: false },
-        { icon: CircleStackIcon, label: 'Aset & Kekayaan', action: () => props.onNavigate('netWorth'), disabled: false },
+        { icon: HeartIcon, label: 'Wishlist', action: () => props.onNavigate('wishlist'), disabled: false },
+        { icon: CircleStackIcon, label: 'Aset', action: () => props.onNavigate('netWorth'), disabled: false },
         { icon: TrophyIcon, label: 'Lencana', action: () => props.onNavigate('achievements'), disabled: false },
-        { icon: FireIcon, label: 'Pencapaian Terbaik', action: () => props.onNavigate('personalBest'), disabled: false },
-        { icon: ListBulletIcon, label: 'Info Bulanan', action: props.onShowInfo, disabled: false },
-        { icon: DocumentTextIcon, label: 'Kelola Dana', action: props.onManageFunds, disabled: false },
-        { icon: CameraIcon, label: 'Scan Struk', action: props.onScanReceipt, disabled: false },
+        { icon: FireIcon, label: 'Rekor', action: () => props.onNavigate('personalBest'), disabled: false },
+        { icon: ListBulletIcon, label: 'Info', action: props.onShowInfo, disabled: false },
+        { icon: DocumentTextIcon, label: 'Dana', action: props.onManageFunds, disabled: false },
+        { icon: CameraIcon, label: 'Scan', action: props.onScanReceipt, disabled: false },
         { icon: SparklesIcon, label: 'Input Cerdas', action: props.onSmartInput, disabled: false },
         { icon: LightbulbIcon, label: 'Saran AI', action: props.onGetAIAdvice, disabled: false },
         { icon: ChatBubbleLeftRightIcon, label: 'Tanya AI', action: props.onAskAI, disabled: false },
-        { icon: SpeakerWaveIcon, label: 'Asisten Suara', action: props.onVoiceInput, disabled: false },
+        { icon: SpeakerWaveIcon, label: 'Suara', action: props.onVoiceInput, disabled: false },
         { icon: Cog6ToothIcon, label: 'Pengaturan', action: props.onOpenSettings, disabled: false },
     ];
     return (
-         <div className="grid grid-cols-4 gap-2">
+         <div className="grid grid-cols-4 gap-3 p-2">
             {menuItems.map(item => (
                 <button 
                     key={item.label} 
                     onClick={item.action} 
                     disabled={item.disabled}
-                    className="relative flex flex-col items-center justify-center p-2 rounded-lg hover:bg-gray-100 transition-colors space-y-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                    className="relative flex flex-col items-center justify-center p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-all active:scale-95 space-y-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent border border-gray-100"
                     title={item.disabled ? 'Fitur Terkunci' : ''}
                 >
-                    <item.icon className="w-8 h-8 text-primary-navy" />
+                    <item.icon className="w-7 h-7 text-primary-navy" />
                     {item.disabled && (
                         <div className="absolute top-1 right-1 bg-gray-600 bg-opacity-80 rounded-full p-0.5">
                             <LockClosedIcon className="w-3 h-3 text-white" />
                         </div>
                     )}
-                    <span className="text-xs text-center text-secondary-gray">{item.label}</span>
+                    <span className="text-[10px] font-medium text-center text-secondary-gray leading-tight">{item.label}</span>
                 </button>
             ))}
         </div>
     );
 };
-
-const AddSavingsGoalModalContent: React.FC<{ onSubmit: (name: string, isInfinite: boolean, targetAmount?: number) => void }> = ({ onSubmit }) => {
-    const [name, setName] = useState('');
-    const [amount, setAmount] = useState('');
-    const [isInfinite, setIsInfinite] = useState(false);
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        const rawAmount = getRawNumber(amount);
-        if (name.trim() && (isInfinite || rawAmount > 0)) {
-            onSubmit(name.trim(), isInfinite, isInfinite ? undefined : rawAmount);
-        }
-    };
-    return (
-        <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-                <label htmlFor="goal-name" className="block text-sm font-medium text-secondary-gray">Nama Tujuan</label>
-                <input type="text" id="goal-name" value={name} onChange={e => setName(e.target.value)} required placeholder="Contoh: Dana Darurat" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-navy focus:border-primary-navy"/>
-            </div>
-            
-            <div className="flex items-center">
-                <input
-                    id="is-infinite-checkbox"
-                    type="checkbox"
-                    checked={isInfinite}
-                    onChange={e => setIsInfinite(e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 text-primary-navy focus:ring-primary-navy"
-                />
-                <label htmlFor="is-infinite-checkbox" className="ml-2 block text-sm text-secondary-gray">
-                    Tabungan tanpa target
-                </label>
-            </div>
-
-            {!isInfinite && (
-                <div>
-                    <label htmlFor="goal-amount" className="block text-sm font-medium text-secondary-gray">Target Dana (Rp)</label>
-                    <input type="text" id="goal-amount" value={amount} onChange={e => setAmount(formatNumberInput(e.target.value))} required={!isInfinite} placeholder="Contoh: 15.000.000" inputMode="numeric" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-navy focus:border-primary-navy"/>
-                </div>
-            )}
-            <button type="submit" className="w-full bg-primary-navy text-white font-bold py-3 rounded-lg hover:bg-primary-navy-dark transition-colors">Buat Celengan Baru</button>
-        </form>
-    );
-};
-
-const AddSavingsModalContent: React.FC<{ goal?: SavingsGoal; availableFunds: number; onSubmit: (amount: number) => void; }> = ({ goal, availableFunds, onSubmit }) => {
-    const [amount, setAmount] = useState('');
-    if (!goal) return null;
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        const rawAmount = getRawNumber(amount);
-        if (rawAmount > 0) {
-            onSubmit(rawAmount);
-        }
-    };
-    
-    return (
-        <form onSubmit={handleSubmit} className="space-y-4">
-             <div className="p-3 bg-blue-50 rounded-lg text-center">
-                <p className="text-sm text-secondary-gray">Sisa Dana Tersedia</p>
-                <p className="font-bold text-lg text-primary-navy">{formatCurrency(availableFunds)}</p>
-            </div>
-            <div>
-                <label htmlFor="savings-amount" className="block text-sm font-medium text-secondary-gray">Nominal (Rp)</label>
-                <input type="text" id="savings-amount" value={amount} onChange={e => setAmount(formatNumberInput(e.target.value))} required inputMode="numeric" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-navy focus:border-primary-navy"/>
-            </div>
-            <button type="submit" className="w-full bg-primary-navy text-white font-bold py-3 rounded-lg hover:bg-primary-navy-dark transition-colors">Simpan</button>
-        </form>
-    );
-};
-
-const SavingsDetailModalContent: React.FC<{ goal?: SavingsGoal; onDelete: () => void; }> = ({ goal, onDelete }) => {
-    if (!goal) return null;
-    return (
-        <div className="space-y-4">
-            <div className="max-h-80 overflow-y-auto -mx-6">
-                <h4 className="font-semibold text-secondary-gray px-6 pb-2 border-b">Riwayat Menabung</h4>
-                {goal.history.length === 0 ? (
-                    <p className="px-6 py-4 text-center text-secondary-gray">Belum ada riwayat.</p>
-                ) : (
-                    [...goal.history].reverse().map(item => (
-                        <div key={item.timestamp} className="flex justify-between items-center px-6 py-3 border-b border-gray-100">
-                            <div>
-                                <p className="font-semibold text-accent-teal">+ {formatCurrency(item.amount)}</p>
-                                <p className="text-xs text-secondary-gray mt-1">{new Date(item.timestamp).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</p>
-                            </div>
-                        </div>
-                    ))
-                )}
-            </div>
-             <button type="button" onClick={onDelete} className="w-full bg-danger-red text-white font-bold py-3 rounded-lg hover:bg-danger-red-dark transition-colors">Hapus Celengan</button>
-        </div>
-    );
-}
-
-const BatchInputModalContent: React.FC<{ 
-    budgets: Budget[];
-    onSave: (items: ScannedItem[]) => void;
-}> = ({ budgets, onSave }) => {
-    const [items, setItems] = useState<ScannedItem[]>([{ desc: '', amount: 0, budgetId: 'daily' }]);
-
-    const updateItem = (index: number, field: keyof ScannedItem, value: string | number) => {
-        const newItems = [...items];
-        if (field === 'amount') {
-            newItems[index][field] = getRawNumber(value as string);
-        } else if (field === 'budgetId') {
-            newItems[index][field] = value === 'daily' ? 'daily' : Number(value);
-        } else {
-            newItems[index][field] = value as string;
-        }
-        setItems(newItems);
-    };
-
-    const addItem = () => {
-        setItems([...items, { desc: '', amount: 0, budgetId: 'daily' }]);
-    };
-
-    const deleteItem = (indexToDelete: number) => {
-        if (items.length > 1) {
-            setItems(items.filter((_, index) => index !== indexToDelete));
-        }
-    };
-
-    const totalAmount = useMemo(() => items.reduce((sum, item) => sum + item.amount, 0), [items]);
-
-    return (
-        <div className="space-y-4">
-            <div className="max-h-[50vh] overflow-y-auto space-y-3 pr-2 -mx-2 px-2">
-                {items.map((item, index) => (
-                    <div key={index} className="p-3 bg-gray-50 rounded-lg border flex flex-col sm:flex-row gap-3">
-                        <div className="flex-grow space-y-2">
-                            <input
-                                type="text"
-                                placeholder="Keterangan"
-                                value={item.desc}
-                                onChange={(e) => updateItem(index, 'desc', e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm"
-                            />
-                            <input
-                                type="text"
-                                placeholder="Nominal"
-                                value={item.amount > 0 ? formatNumberInput(item.amount) : ''}
-                                onChange={(e) => updateItem(index, 'amount', e.target.value)}
-                                inputMode="numeric"
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm"
-                            />
-                        </div>
-                        <div className="flex-shrink-0 sm:w-48 space-y-2">
-                             <select 
-                                value={String(item.budgetId)} 
-                                onChange={(e) => updateItem(index, 'budgetId', e.target.value)}
-                                className="w-full h-10 px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm text-sm"
-                            >
-                                <option value="daily">Uang Harian</option>
-                                {budgets.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                            </select>
-                            <button onClick={() => deleteItem(index)} disabled={items.length <= 1} className="w-full h-10 flex items-center justify-center bg-gray-200 text-dark-text font-bold rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed">
-                               <TrashIcon className="w-5 h-5"/>
-                            </button>
-                        </div>
-                    </div>
-                ))}
-            </div>
-             <button onClick={addItem} className="w-full flex items-center justify-center gap-2 bg-white border-2 border-dashed border-secondary-gray text-secondary-gray font-bold py-2 px-4 rounded-lg hover:bg-gray-50 hover:text-dark-text hover:border-dark-text transition-colors">
-                <PlusCircleIcon className="w-5 h-5" />
-                <span>Tambah Item</span>
-            </button>
-            <div className="border-t pt-4">
-                <div className="flex justify-between items-center mb-4">
-                    <span className="font-semibold text-secondary-gray">Total Pengeluaran</span>
-                    <span className="font-bold text-xl text-danger-red">{formatCurrency(totalAmount)}</span>
-                </div>
-                <button onClick={() => onSave(items)} disabled={items.every(i => i.amount <= 0 || !i.desc.trim())} className="w-full bg-accent-teal text-white font-bold py-3 rounded-lg hover:bg-accent-teal-dark transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
-                    Simpan Semua
-                </button>
-            </div>
-        </div>
-    );
-};
-
 
 export default App;

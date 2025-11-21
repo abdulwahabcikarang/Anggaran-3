@@ -5,7 +5,7 @@ import {
     BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid 
 } from 'recharts';
 import type { AppState, Budget, GlobalTransaction } from '../types';
-import { LightbulbIcon, SparklesIcon, LockClosedIcon } from './Icons';
+import { LightbulbIcon, SparklesIcon, LockClosedIcon, ShieldCheckIcon, BuildingLibraryIcon, BanknotesIcon, Squares2x2Icon, ExclamationTriangleIcon } from './Icons';
 
 interface VisualizationsProps {
     state: AppState;
@@ -116,6 +116,125 @@ const TransactionDetailModal: React.FC<{
     );
 };
 
+// --- FINANCIAL HEALTH CARD COMPONENT ---
+const FinancialHealthCard: React.FC<{
+    score: number;
+    savingsScore: number;
+    expenseScore: number;
+    budgetScore: number;
+    totalIncome: number;
+}> = ({ score, savingsScore, expenseScore, budgetScore, totalIncome }) => {
+    let scoreColor = 'text-danger-red';
+    let progressColor = 'text-danger-red'; // Changed to text class for SVG stroke
+    let feedbackTitle = 'Perlu Perhatian Serius';
+    let feedbackDesc = 'Kondisi keuanganmu sedang tidak seimbang. Pengeluaran mungkin terlalu besar dibandingkan pemasukan. Evaluasi ulang anggaranmu segera.';
+    let feedbackIcon = ExclamationTriangleIcon;
+    let feedbackBg = 'bg-red-50 border-danger-red';
+
+    if (score >= 80) {
+        scoreColor = 'text-accent-teal';
+        progressColor = 'text-accent-teal';
+        feedbackTitle = 'Kondisi Keuangan Prima!';
+        feedbackDesc = 'Hebat! Kamu memiliki rasio tabungan yang kuat dan pengeluaran yang terkendali. Pertahankan konsistensi ini.';
+        feedbackIcon = ShieldCheckIcon;
+        feedbackBg = 'bg-teal-50 border-accent-teal';
+    } else if (score >= 50) {
+        scoreColor = 'text-warning-yellow';
+        progressColor = 'text-warning-yellow';
+        feedbackTitle = 'Cukup Sehat';
+        feedbackDesc = 'Sudah cukup baik, tapi masih ada ruang untuk perbaikan. Coba kurangi pengeluaran tidak perlu untuk meningkatkan skor.';
+        feedbackIcon = LightbulbIcon;
+        feedbackBg = 'bg-yellow-50 border-warning-yellow';
+    }
+
+    const ScoreBar: React.FC<{ label: string, val: number, icon: React.FC<{className?: string}>, max: number, colorClass: string }> = ({ label, val, icon: Icon, max, colorClass }) => (
+        <div className="mb-3 last:mb-0">
+            <div className="flex justify-between text-xs mb-1">
+                <div className="flex items-center gap-1 text-secondary-gray">
+                    <Icon className="w-3 h-3" />
+                    <span>{label}</span>
+                </div>
+                <span className="font-bold text-dark-text">{Math.round(val)} / {max} Poin</span>
+            </div>
+            <div className="w-full bg-gray-100 rounded-full h-2">
+                <div className={`h-2 rounded-full transition-all duration-1000 ${colorClass}`} style={{ width: `${(val/max)*100}%` }}></div>
+            </div>
+        </div>
+    );
+
+    if (totalIncome === 0) {
+         return (
+            <section className="bg-white rounded-xl p-6 shadow-md mb-6">
+                <h2 className="text-xl font-bold text-primary-navy text-center mb-2">Skor Kesehatan Finansial</h2>
+                <p className="text-center text-secondary-gray text-sm">Belum cukup data pemasukan untuk menghitung skor periode ini.</p>
+            </section>
+         );
+    }
+
+    // Calculate stroke offset for radial progress
+    const radius = 50;
+    const circumference = 2 * Math.PI * radius;
+    const strokeDashoffset = circumference - (score / 100) * circumference;
+
+    return (
+        <section className="bg-white rounded-xl p-6 shadow-md mb-6 border border-gray-100">
+            <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-primary-navy">Skor Kesehatan Finansial</h2>
+                <button className="text-secondary-gray hover:text-primary-navy">
+                   <feedbackIcon className={`w-6 h-6 ${scoreColor}`} />
+                </button>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-8 items-center justify-center">
+                {/* Circular Score Indicator */}
+                <div className="relative w-40 h-40 flex-shrink-0 flex items-center justify-center">
+                     <svg className="transform -rotate-90 w-full h-full" viewBox="0 0 120 120">
+                        {/* Background Circle */}
+                        <circle
+                            cx="60"
+                            cy="60"
+                            r={radius}
+                            stroke="#f3f4f6"
+                            strokeWidth="10"
+                            fill="transparent"
+                        />
+                        {/* Progress Circle */}
+                        <circle
+                            cx="60"
+                            cy="60"
+                            r={radius}
+                            stroke="currentColor"
+                            strokeWidth="10"
+                            fill="transparent"
+                            strokeDasharray={circumference}
+                            strokeDashoffset={strokeDashoffset}
+                            strokeLinecap="round"
+                            className={`${progressColor} transition-all duration-1000 ease-out`}
+                        />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className={`text-4xl font-bold ${scoreColor}`}>{score}</span>
+                        <span className="text-xs font-bold text-secondary-gray uppercase tracking-wide mt-1">Skor</span>
+                    </div>
+                </div>
+
+                {/* Breakdown */}
+                <div className="flex-grow w-full max-w-md">
+                    <ScoreBar label="Rasio Tabungan (Bobot 40%)" val={savingsScore} max={40} icon={BuildingLibraryIcon} colorClass="bg-blue-500" />
+                    <ScoreBar label="Beban Pengeluaran (Bobot 30%)" val={expenseScore} max={30} icon={BanknotesIcon} colorClass="bg-orange-400" />
+                    <ScoreBar label="Disiplin Anggaran (Bobot 30%)" val={budgetScore} max={30} icon={Squares2x2Icon} colorClass="bg-purple-500" />
+                </div>
+            </div>
+
+            <div className={`mt-6 p-4 rounded-lg border-l-4 ${feedbackBg}`}>
+                <p className="font-bold text-sm text-dark-text">{feedbackTitle}</p>
+                <p className="text-xs text-secondary-gray mt-1 leading-relaxed">{feedbackDesc}</p>
+            </div>
+        </section>
+    );
+};
+
+
 const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack, onAnalyzeChart }) => {
     const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
     const [detailModalData, setDetailModalData] = useState<{ category: string; transactions: GlobalTransaction[] } | null>(null);
@@ -157,9 +276,95 @@ const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack, onAnalyz
             : allExpenses.filter(e => new Date(e.timestamp).toISOString().startsWith(selectedMonth));
     }, [allExpenses, selectedMonth]);
 
+    // --- FINANCIAL HEALTH CALCULATION ---
+    const healthData = useMemo(() => {
+        const isAllTime = selectedMonth === 'all';
+        const currentMonthPrefix = selectedMonth;
+
+        // 1. Calculate Income
+        const incomeTxns = state.fundHistory.filter(t => t.type === 'add' && (isAllTime || new Date(t.timestamp).toISOString().startsWith(currentMonthPrefix)));
+        const totalIncome = incomeTxns.reduce((sum, t) => sum + t.amount, 0);
+
+        // 2. Calculate Savings
+        // LOGIC: Savings are identified by transactions in fundHistory that are 'remove' type AND start with 'Tabungan:'
+        const savingsTxns = state.fundHistory.filter(t => t.type === 'remove' && t.desc.startsWith('Tabungan:') && (isAllTime || new Date(t.timestamp).toISOString().startsWith(currentMonthPrefix)));
+        const totalSavings = savingsTxns.reduce((sum, t) => sum + t.amount, 0);
+
+        // 3. Calculate Total Expenses (General + Budget + Daily) - EXCLUDING Savings transactions
+        // General (excluding savings)
+        const generalExpenseTxns = state.fundHistory.filter(t => t.type === 'remove' && !t.desc.startsWith('Tabungan:') && (isAllTime || new Date(t.timestamp).toISOString().startsWith(currentMonthPrefix)));
+        const generalExpenses = generalExpenseTxns.reduce((sum, t) => sum + t.amount, 0);
+        // Budget Usage
+        const budgetTxns = state.budgets.flatMap(b => b.history).filter(t => (isAllTime || new Date(t.timestamp).toISOString().startsWith(currentMonthPrefix)));
+        const budgetExpenses = budgetTxns.reduce((sum, t) => sum + t.amount, 0);
+        // Daily
+        const dailyTxns = state.dailyExpenses.filter(t => (isAllTime || new Date(t.timestamp).toISOString().startsWith(currentMonthPrefix)));
+        const dailyExpenses = dailyTxns.reduce((sum, t) => sum + t.amount, 0);
+
+        const totalExpenses = generalExpenses + budgetExpenses + dailyExpenses;
+
+        if (totalIncome === 0) {
+            return { score: 0, savingsScore: 0, expenseScore: 0, budgetScore: 0, totalIncome: 0 };
+        }
+
+        // --- SCORING LOGIC ---
+
+        // 1. Savings Ratio (Weight 40%)
+        // Target: 20% Savings = 100% Score.
+        // Raw Ratio
+        const savingsRatio = totalSavings / totalIncome;
+        // Normalized Score (0.2 -> 40 points)
+        let savingsRawScore = (savingsRatio / 0.20) * 40; 
+        savingsRawScore = Math.min(40, Math.max(0, savingsRawScore));
+
+        // 2. Expense Burden (Weight 30%)
+        // Target: < 50% Expense = 100% Score. > 100% Expense = 0% Score.
+        const expenseRatio = totalExpenses / totalIncome;
+        let expenseRawScore = 0;
+        if (expenseRatio <= 0.5) {
+            expenseRawScore = 30; // Perfect score for this component
+        } else if (expenseRatio >= 1.0) {
+            expenseRawScore = 0;
+        } else {
+            // Linear interpolation between 0.5 (30 pts) and 1.0 (0 pts)
+            // Formula: 30 - ((Ratio - 0.5) / 0.5) * 30
+            expenseRawScore = 30 - ((expenseRatio - 0.5) / 0.5) * 30;
+        }
+
+        // 3. Budget Discipline (Weight 30%)
+        let budgetRawScore = 30; // Default to max if no budgets
+        if (state.budgets.length > 0) {
+            let overBudgetCount = 0;
+            state.budgets.forEach(b => {
+                const usage = b.history
+                    .filter(h => isAllTime || new Date(h.timestamp).toISOString().startsWith(currentMonthPrefix))
+                    .reduce((s, h) => s + h.amount, 0);
+                if (b.totalBudget > 0 && usage > b.totalBudget) {
+                    overBudgetCount++;
+                }
+            });
+            budgetRawScore = ((state.budgets.length - overBudgetCount) / state.budgets.length) * 30;
+        }
+
+        const totalScore = Math.round(savingsRawScore + expenseRawScore + budgetRawScore);
+
+        return {
+            score: totalScore,
+            savingsScore: savingsRawScore,
+            expenseScore: expenseRawScore,
+            budgetScore: budgetRawScore,
+            totalIncome
+        };
+
+    }, [state, selectedMonth]);
+
+
     const pieChartData = useMemo(() => {
         const expenseByCategory: { [key: string]: number } = {};
         filteredExpenses.forEach(expense => {
+            // Exclude savings from pie chart to show spending only
+            if (expense.desc && expense.desc.startsWith('Tabungan:')) return;
+
             const category = expense.category || 'Lain-lain';
             if (!expenseByCategory[category]) {
                 expenseByCategory[category] = 0;
@@ -176,7 +381,7 @@ const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack, onAnalyz
         if (!data || !data.name) return;
         const category = data.name;
         const transactions = filteredExpenses
-            .filter(e => (e.category || 'Lain-lain') === category)
+            .filter(e => (e.category || 'Lain-lain') === category && (!e.desc || !e.desc.startsWith('Tabungan:')))
             .sort((a, b) => b.amount - a.amount); // Sort by amount descending
         setDetailModalData({ category, transactions });
     };
@@ -186,6 +391,9 @@ const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack, onAnalyz
 
         const dailyTotals: { [key: string]: number } = {};
         filteredExpenses.forEach(expense => {
+            // Exclude savings
+            if (expense.desc && expense.desc.startsWith('Tabungan:')) return;
+
             const date = new Date(expense.timestamp).toLocaleDateString('fr-CA'); // YYYY-MM-DD format
             if (!dailyTotals[date]) {
                 dailyTotals[date] = 0;
@@ -284,6 +492,15 @@ const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack, onAnalyz
                     </select>
                 </div>
             </header>
+
+            {/* FINANCIAL HEALTH CARD */}
+            <FinancialHealthCard 
+                score={healthData.score}
+                savingsScore={healthData.savingsScore}
+                expenseScore={healthData.expenseScore}
+                budgetScore={healthData.budgetScore}
+                totalIncome={healthData.totalIncome}
+            />
 
             {selectedMonth !== 'all' && (
                 <section className="bg-white rounded-xl p-6 shadow-md">

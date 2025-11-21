@@ -1,8 +1,8 @@
 
-
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import type { AppState, Budget, Transaction } from '../types';
 import { LightbulbIcon, ArrowPathIcon, PlusCircleIcon, BudgetIcon, LockClosedIcon, ListBulletIcon } from './Icons';
+import { CountUp, Skeleton, AISkeleton } from './UI';
 
 interface DashboardProps {
   state: AppState;
@@ -53,20 +53,26 @@ const OverviewCard: React.FC<{
     const dailyPercentageUsed = dailyBudgetMax > 0 ? (totalDailySpentToday / dailyBudgetMax) * 100 : 100;
 
     return (
-        <section className="bg-white rounded-xl p-6 mb-6 shadow-md">
+        <section className="bg-white rounded-xl p-6 mb-6 shadow-md relative z-10 mt-4">
             <div className="text-center mb-4">
                 <h3 className="text-sm font-medium text-secondary-gray">Sisa Dana Bulan Ini</h3>
-                <p className={`font-bold text-4xl ${totalRemaining < 0 ? 'text-danger-red' : 'text-primary-navy'}`}>{formatCurrency(totalRemaining)}</p>
+                <div className={`font-bold text-4xl ${totalRemaining < 0 ? 'text-danger-red' : 'text-primary-navy'}`}>
+                    <CountUp end={totalRemaining} formatter={formatCurrency} />
+                </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4 text-center mb-6">
                 <div>
                     <h4 className="text-xs text-secondary-gray">Pemasukan</h4>
-                    <p className="font-semibold text-dark-text">{formatCurrency(monthlyIncome)}</p>
+                    <p className="font-semibold text-dark-text">
+                        <CountUp end={monthlyIncome} formatter={formatCurrency} duration={800} />
+                    </p>
                 </div>
                 <div>
                     <h4 className="text-xs text-secondary-gray">Terpakai</h4>
-                    <p className="font-semibold text-dark-text">{formatCurrency(totalUsedOverall)}</p>
+                    <p className="font-semibold text-dark-text">
+                        <CountUp end={totalUsedOverall} formatter={formatCurrency} duration={800} />
+                    </p>
                 </div>
             </div>
 
@@ -80,7 +86,7 @@ const OverviewCard: React.FC<{
                         ></div>
                     </div>
                     <p className="text-xs text-secondary-gray text-right group-hover:text-dark-text transition-colors">
-                        Sisa {formatCurrency(dailyBudgetRemaining)} dari kuota {formatCurrency(dailyBudgetMax)}
+                        Sisa <span className="font-semibold">{formatCurrency(dailyBudgetRemaining)}</span> dari kuota {formatCurrency(dailyBudgetMax)}
                     </p>
                 </div>
                 
@@ -116,10 +122,7 @@ const AIInsightCard: React.FC<{
                 </button>
             </div>
             {isLoading ? (
-                <div className="text-center py-4 text-secondary-gray">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-navy mx-auto"></div>
-                    <p className="mt-2">AI sedang menganalisis...</p>
-                </div>
+                <AISkeleton />
             ) : (
                 <div className="text-secondary-gray text-sm max-w-none">
                     {formatMarkdown(insight)}
@@ -177,7 +180,9 @@ const BudgetItem: React.FC<{
                         <h3 className="text-lg font-bold text-dark-text flex-1 truncate">{budget.name}</h3>
                     </div>
                     <div className="text-right flex-shrink-0">
-                        <p className="font-bold text-primary-navy">{formatCurrency(remaining)}</p>
+                        <p className="font-bold text-primary-navy">
+                            <CountUp end={remaining} formatter={formatCurrency} duration={500} />
+                        </p>
                         <p className="text-xs text-secondary-gray">dari {formatCurrency(budget.totalBudget)}</p>
                     </div>
                 </div>
@@ -222,6 +227,10 @@ const Dashboard: React.FC<DashboardProps> = (props) => {
     const [draggedId, setDraggedId] = useState<number | null>(null);
     const [dragOverZone, setDragOverZone] = useState<'fixed' | 'temporary' | null>(null);
     const [dragOverBudgetId, setDragOverBudgetId] = useState<number | null>(null);
+    
+    // Parallax & Sticky State
+    const [scrollProgress, setScrollProgress] = useState(0);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
 
     const activeBudgets = state.budgets.filter(b => !b.isArchived);
     const fixedBudgets = activeBudgets.filter(b => !b.isTemporary).sort((a,b) => a.order - b.order);
@@ -239,6 +248,13 @@ const Dashboard: React.FC<DashboardProps> = (props) => {
     const currentAvailableFunds = unallocatedFunds - monthlyGeneralExpense - totalDailySpent;
     const todaysDailyExpenses = state.dailyExpenses.filter(exp => new Date(exp.timestamp).toDateString() === new Date().toDateString());
     const totalDailySpentToday = todaysDailyExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+
+    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        const scrollTop = e.currentTarget.scrollTop;
+        const maxScroll = 100; // Range for the animation
+        const progress = Math.min(scrollTop / maxScroll, 1);
+        setScrollProgress(progress);
+    };
 
     const handleDropOnZone = (targetZone: 'fixed' | 'temporary') => {
         if (draggedId === null) return;
@@ -326,75 +342,116 @@ const Dashboard: React.FC<DashboardProps> = (props) => {
         ));
     };
 
+    // Parallax styles calculation
+    const headerScale = 1 - (scrollProgress * 0.3); // 1 -> 0.7
+    const headerOpacity = 1 - scrollProgress;
+    const headerY = scrollProgress * 10;
+    const bgOpacity = Math.min(0.9, scrollProgress);
+
     return (
-        <main id="dashboard-page" className="p-4 pb-24" onDragEnd={handleDragEnd}>
-            <h1 className="text-3xl font-bold text-primary-navy text-center">Dashboard</h1>
-            <p className="text-center text-secondary-gray mb-6">
-                {new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-            </p>
-
-            <OverviewCard
-                monthlyIncome={monthlyIncome}
-                totalUsedOverall={totalUsedOverall}
-                totalRemaining={totalRemaining}
-                currentAvailableFunds={currentAvailableFunds}
-                totalDailySpentToday={totalDailySpentToday}
-                onUseDailyBudget={props.onUseDailyBudget}
-                onViewDailyHistory={props.onViewDailyHistory}
-                onOpenBatchInput={props.onOpenBatchInput}
-            />
-            
-            <AIInsightCard 
-                insight={props.aiInsight}
-                isLoading={props.isFetchingInsight}
-                onRefresh={props.onRefreshInsight}
-            />
-
-            <section className="space-y-8">
-                {/* Fixed Budgets Section */}
-                <div 
-                    onDragOver={(e) => { e.preventDefault(); setDragOverZone('fixed'); }}
-                    onDragLeave={() => setDragOverZone(null)}
-                    onDrop={() => handleDropOnZone('fixed')}
-                    className={`p-4 rounded-xl transition-colors duration-300 ${dragOverZone === 'fixed' ? 'bg-blue-100' : ''}`}
-                >
-                    <h2 className="text-2xl font-bold text-primary-navy mb-4">Anggaran Tetap</h2>
-                    <div className="grid md:grid-cols-2 gap-6">
-                        {renderBudgetList(fixedBudgets)}
-                    </div>
-                </div>
-                
-                {/* Temporary Budgets Section */}
-                <div 
-                    onDragOver={(e) => { e.preventDefault(); setDragOverZone('temporary'); }}
-                    onDragLeave={() => setDragOverZone(null)}
-                    onDrop={() => handleDropOnZone('temporary')}
-                    className={`p-4 rounded-xl transition-colors duration-300 border-2 border-dashed ${dragOverZone === 'temporary' ? 'bg-green-100 border-accent-teal' : 'border-secondary-gray'}`}
-                >
-                    <h2 className="text-2xl font-bold text-primary-navy mb-2">Anggaran Sementara (Bulan Ini Saja)</h2>
-                    <p className="text-sm text-secondary-gray mb-4">Seret pos dari atas ke sini untuk menjadikannya sementara. Anggaran di sini akan otomatis diarsipkan di akhir bulan.</p>
-                    <div className="grid md:grid-cols-2 gap-6">
-                        {temporaryBudgets.length === 0 ? (
-                             <div className="md:col-span-2 text-center text-secondary-gray py-6">
-                                <p>Belum ada anggaran sementara.</p>
-                            </div>
-                        ) : (
-                            renderBudgetList(temporaryBudgets)
-                        )}
-                    </div>
-                </div>
-
-                 <div className="mt-6">
-                    <button 
-                        onClick={props.onAddBudget} 
-                        className="w-full flex items-center justify-center gap-2 bg-white border-2 border-dashed border-secondary-gray text-secondary-gray font-bold py-3 px-4 rounded-lg hover:bg-gray-50 hover:text-dark-text hover:border-dark-text transition-colors"
+        <div 
+            id="dashboard-page" 
+            className="h-screen overflow-y-auto no-scrollbar relative bg-light-bg pb-24" 
+            onScroll={handleScroll}
+            ref={scrollContainerRef}
+            onDragEnd={handleDragEnd}
+        >
+            {/* Sticky Parallax Header */}
+            <header 
+                className="sticky top-0 z-30 transition-all duration-300 px-4 py-3 border-b border-transparent"
+                style={{ 
+                    backgroundColor: `rgba(255, 255, 255, ${bgOpacity})`, 
+                    backdropFilter: scrollProgress > 0.2 ? 'blur(12px)' : 'none',
+                    borderColor: scrollProgress > 0.5 ? 'rgba(0,0,0,0.05)' : 'transparent'
+                }}
+            >
+                <div className="flex flex-col items-center justify-center transition-all duration-300 h-14 relative overflow-hidden">
+                    {/* Large Title (Morphs) */}
+                    <h1 
+                        className="font-bold text-primary-navy absolute transition-transform duration-300 origin-center"
+                        style={{ 
+                            transform: `scale(${headerScale}) translateY(${headerY}px)`,
+                            fontSize: scrollProgress > 0.8 ? '1.25rem' : '1.875rem', // text-xl vs text-3xl
+                            top: scrollProgress > 0.8 ? '8px' : '4px'
+                        }}
                     >
-                        <PlusCircleIcon className="w-6 h-6" />
-                        <span>Tambah Pos Anggaran Baru</span>
-                    </button>
+                        Dashboard
+                    </h1>
+                    
+                    {/* Date (Fades Out) */}
+                    <p 
+                        className="text-secondary-gray text-sm absolute top-10 transition-opacity duration-300"
+                        style={{ opacity: headerOpacity }}
+                    >
+                        {new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                    </p>
                 </div>
-            </section>
-        </main>
+            </header>
+
+            <div className="px-4">
+                <OverviewCard
+                    monthlyIncome={monthlyIncome}
+                    totalUsedOverall={totalUsedOverall}
+                    totalRemaining={totalRemaining}
+                    currentAvailableFunds={currentAvailableFunds}
+                    totalDailySpentToday={totalDailySpentToday}
+                    onUseDailyBudget={props.onUseDailyBudget}
+                    onViewDailyHistory={props.onViewDailyHistory}
+                    onOpenBatchInput={props.onOpenBatchInput}
+                />
+                
+                <AIInsightCard 
+                    insight={props.aiInsight}
+                    isLoading={props.isFetchingInsight}
+                    onRefresh={props.onRefreshInsight}
+                />
+
+                <section className="space-y-8">
+                    {/* Fixed Budgets Section */}
+                    <div 
+                        onDragOver={(e) => { e.preventDefault(); setDragOverZone('fixed'); }}
+                        onDragLeave={() => setDragOverZone(null)}
+                        onDrop={() => handleDropOnZone('fixed')}
+                        className={`p-4 rounded-xl transition-colors duration-300 ${dragOverZone === 'fixed' ? 'bg-blue-100' : ''}`}
+                    >
+                        <h2 className="text-2xl font-bold text-primary-navy mb-4">Anggaran Tetap</h2>
+                        <div className="grid md:grid-cols-2 gap-6">
+                            {renderBudgetList(fixedBudgets)}
+                        </div>
+                    </div>
+                    
+                    {/* Temporary Budgets Section */}
+                    <div 
+                        onDragOver={(e) => { e.preventDefault(); setDragOverZone('temporary'); }}
+                        onDragLeave={() => setDragOverZone(null)}
+                        onDrop={() => handleDropOnZone('temporary')}
+                        className={`p-4 rounded-xl transition-colors duration-300 border-2 border-dashed ${dragOverZone === 'temporary' ? 'bg-green-100 border-accent-teal' : 'border-secondary-gray'}`}
+                    >
+                        <h2 className="text-2xl font-bold text-primary-navy mb-2">Anggaran Sementara (Bulan Ini Saja)</h2>
+                        <p className="text-sm text-secondary-gray mb-4">Seret pos dari atas ke sini untuk menjadikannya sementara. Anggaran di sini akan otomatis diarsipkan di akhir bulan.</p>
+                        <div className="grid md:grid-cols-2 gap-6">
+                            {temporaryBudgets.length === 0 ? (
+                                 <div className="md:col-span-2 text-center text-secondary-gray py-6">
+                                    <p>Belum ada anggaran sementara.</p>
+                                </div>
+                            ) : (
+                                renderBudgetList(temporaryBudgets)
+                            )}
+                        </div>
+                    </div>
+
+                     <div className="mt-6 pb-8">
+                        <button 
+                            onClick={props.onAddBudget} 
+                            className="w-full flex items-center justify-center gap-2 bg-white border-2 border-dashed border-secondary-gray text-secondary-gray font-bold py-3 px-4 rounded-lg hover:bg-gray-50 hover:text-dark-text hover:border-dark-text transition-colors"
+                        >
+                            <PlusCircleIcon className="w-6 h-6" />
+                            <span>Tambah Pos Anggaran Baru</span>
+                        </button>
+                    </div>
+                </section>
+            </div>
+        </div>
     );
 };
 
