@@ -1,8 +1,8 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
-    PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, 
-    BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid 
+    Treemap, Tooltip, Legend, ResponsiveContainer, 
+    BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid 
 } from 'recharts';
 import type { AppState, Budget, GlobalTransaction } from '../types';
 import { LightbulbIcon, SparklesIcon, LockClosedIcon, ShieldCheckIcon, BuildingLibraryIcon, BanknotesIcon, Squares2x2Icon, ExclamationTriangleIcon } from './Icons';
@@ -20,24 +20,102 @@ const formatShortCurrency = (amount: number) => {
     return amount;
 };
 
-
-const COLORS = ['#2C3E50', '#1ABC9C', '#F1C40F', '#E74C3C', '#3498DB', '#9B59B6', '#E67E22', '#7F8C8D'];
+const COLORS = ['#2C3E50', '#1ABC9C', '#F1C40F', '#E74C3C', '#3498DB', '#9B59B6', '#E67E22', '#7F8C8D', '#16A085', '#2980B9'];
 
 const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
+        // Handle Treemap payload structure which is slightly different
+        const data = payload[0].payload;
+        const name = data.name || label;
+        const value = data.size !== undefined ? data.size : data.value;
+        const color = data.fill || payload[0].color;
+
         return (
-            <div className="bg-white p-3 border border-gray-300 rounded shadow-lg">
-                <p className="font-semibold mb-1 text-dark-text">{label || payload[0].name}</p>
-                {payload.map((pld: any, index: number) => (
-                    <p key={index} style={{ color: pld.color || pld.fill }}>
-                        {`${pld.name}: ${formatCurrency(pld.value)}`}
-                    </p>
-                ))}
+            <div className="bg-white p-3 border border-gray-300 rounded shadow-lg z-50 relative">
+                <p className="font-semibold mb-1 text-dark-text">{name}</p>
+                <p style={{ color: color }}>
+                    {formatCurrency(value)}
+                </p>
             </div>
         );
     }
     return null;
 };
+
+// --- CUSTOM COMPONENTS ---
+
+const SegmentedControl: React.FC<{
+    options: { label: string; value: string }[];
+    value: string;
+    onChange: (val: any) => void;
+}> = ({ options, value, onChange }) => {
+    const activeIndex = options.findIndex(o => o.value === value);
+    
+    return (
+        <div className="relative bg-gray-200 p-1 rounded-xl flex items-center font-medium shadow-inner">
+            {/* Sliding Background */}
+            <div 
+                className="absolute bg-white rounded-lg shadow-sm h-[calc(100%-8px)] transition-all duration-300 ease-out"
+                style={{
+                    width: `${100 / options.length}%`,
+                    left: `${(activeIndex * 100) / options.length}%`,
+                }}
+            />
+            {options.map((opt) => (
+                <button
+                    key={opt.value}
+                    onClick={() => onChange(opt.value)}
+                    className={`relative flex-1 py-2 text-xs sm:text-sm text-center z-10 transition-colors duration-300 ${value === opt.value ? 'text-primary-navy font-bold' : 'text-secondary-gray hover:text-gray-600'}`}
+                >
+                    {opt.label}
+                </button>
+            ))}
+        </div>
+    );
+};
+
+const CustomizedTreemapContent = (props: any) => {
+    const { x, y, width, height, name, size, fill, onClick } = props;
+    
+    // Logic to determine font size based on box size
+    const fontSize = Math.min(width / 5, height / 3, 14);
+    const showText = width > 40 && height > 30;
+
+    return (
+      <g onClick={() => onClick && onClick({ name, transactions: [] /* Logic handled in parent */ })}>
+        <rect
+          x={x}
+          y={y}
+          width={width}
+          height={height}
+          style={{
+            fill: fill,
+            stroke: '#fff',
+            strokeWidth: 2,
+            cursor: 'pointer',
+          }}
+          className="hover:opacity-80 transition-opacity"
+        />
+        {showText && (
+          <text
+            x={x + width / 2}
+            y={y + height / 2}
+            textAnchor="middle"
+            fill="#fff"
+            fontSize={fontSize}
+            fontWeight="bold"
+            pointerEvents="none" // Let clicks pass to rect
+          >
+            <tspan x={x + width / 2} dy="-0.5em">{name}</tspan>
+            <tspan x={x + width / 2} dy="1.2em" fontSize={fontSize * 0.8} opacity={0.9}>
+                {formatShortCurrency(size)}
+            </tspan>
+          </text>
+        )}
+      </g>
+    );
+  };
+
 
 const ChartExplanationSection: React.FC<{
     onAnalyze: () => void;
@@ -87,7 +165,7 @@ const TransactionDetailModal: React.FC<{
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={onClose}>
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg animate-fade-in-up flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center p-4 border-b flex-shrink-0">
-                    <h3 className="text-lg font-bold text-primary-navy">Detail Transaksi: {data.category}</h3>
+                    <h3 className="text-lg font-bold text-primary-navy">Detail: {data.category}</h3>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-2xl">&times;</button>
                 </div>
                 <div className="p-6 overflow-y-auto">
@@ -236,16 +314,15 @@ const FinancialHealthCard: React.FC<{
 
 
 const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack, onAnalyzeChart }) => {
-    const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+    type RangeType = '7d' | '30d' | 'thisMonth' | 'lastMonth' | 'all';
+    const [filterRange, setFilterRange] = useState<RangeType>('thisMonth');
     const [detailModalData, setDetailModalData] = useState<{ category: string; transactions: GlobalTransaction[] } | null>(null);
 
     // AI Analysis States
     const [trendExplanation, setTrendExplanation] = useState('');
     const [isTrendLoading, setIsTrendLoading] = useState(false);
-    
     const [budgetExplanation, setBudgetExplanation] = useState('');
     const [isBudgetLoading, setIsBudgetLoading] = useState(false);
-
     const [allocationExplanation, setAllocationExplanation] = useState('');
     const [isAllocationLoading, setIsAllocationLoading] = useState(false);
 
@@ -261,91 +338,96 @@ const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack, onAnalyz
         return expenses;
     }, [state]);
     
-    const monthOptions = useMemo(() => {
-        const options = new Set(allExpenses.map(t => new Date(t.timestamp).toISOString().slice(0, 7)));
-        // Get current month if no other data exists
-        if (options.size === 0) {
-            options.add(new Date().toISOString().slice(0, 7));
-        }
-        return ['all', ...[...options].sort().reverse()];
-    }, [allExpenses]);
-    
     const filteredExpenses = useMemo(() => {
-         return selectedMonth === 'all' 
-            ? allExpenses 
-            : allExpenses.filter(e => new Date(e.timestamp).toISOString().startsWith(selectedMonth));
-    }, [allExpenses, selectedMonth]);
+        const now = new Date();
+        const oneDay = 24 * 60 * 60 * 1000;
+        
+        return allExpenses.filter(t => {
+            const tDate = new Date(t.timestamp);
+            const tTime = tDate.getTime();
 
-    // --- FINANCIAL HEALTH CALCULATION ---
+            switch (filterRange) {
+                case '7d':
+                    return tTime >= (Date.now() - (7 * oneDay));
+                case '30d':
+                    return tTime >= (Date.now() - (30 * oneDay));
+                case 'thisMonth':
+                     return tDate.getMonth() === now.getMonth() && tDate.getFullYear() === now.getFullYear();
+                case 'lastMonth':
+                     // Logic for last month
+                     const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                     return tDate.getMonth() === lastMonthDate.getMonth() && tDate.getFullYear() === lastMonthDate.getFullYear();
+                case 'all':
+                    return true;
+                default:
+                    return true;
+            }
+        });
+    }, [allExpenses, filterRange]);
+
+    // --- FINANCIAL HEALTH CALCULATION (Reused Logic based on Filter) ---
     const healthData = useMemo(() => {
-        const isAllTime = selectedMonth === 'all';
-        const currentMonthPrefix = selectedMonth;
+        // Note: Health Score usually needs monthly context, but we'll adapt to the filter or default to this month for global score if 'all' selected
+        const currentTxns = filteredExpenses;
+        
+        // Need income for score
+        let incomeTxns = state.fundHistory.filter(t => t.type === 'add');
+        // Apply same date filter to income
+        const now = new Date();
+        const oneDay = 24 * 60 * 60 * 1000;
+        incomeTxns = incomeTxns.filter(t => {
+             const tTime = t.timestamp;
+             const tDate = new Date(tTime);
+             if (filterRange === '7d') return tTime >= (Date.now() - 7*oneDay);
+             if (filterRange === '30d') return tTime >= (Date.now() - 30*oneDay);
+             if (filterRange === 'thisMonth') return tDate.getMonth() === now.getMonth() && tDate.getFullYear() === now.getFullYear();
+             if (filterRange === 'lastMonth') {
+                 const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                 return tDate.getMonth() === lastMonth.getMonth() && tDate.getFullYear() === lastMonth.getFullYear();
+             }
+             return true;
+        });
 
-        // 1. Calculate Income
-        const incomeTxns = state.fundHistory.filter(t => t.type === 'add' && (isAllTime || new Date(t.timestamp).toISOString().startsWith(currentMonthPrefix)));
         const totalIncome = incomeTxns.reduce((sum, t) => sum + t.amount, 0);
 
-        // 2. Calculate Savings
-        // LOGIC: Savings are identified by transactions in fundHistory that are 'remove' type AND start with 'Tabungan:'
-        const savingsTxns = state.fundHistory.filter(t => t.type === 'remove' && t.desc.startsWith('Tabungan:') && (isAllTime || new Date(t.timestamp).toISOString().startsWith(currentMonthPrefix)));
+        // Savings (from fundHistory 'remove' transactions starting with 'Tabungan:')
+        let savingsTxns = state.fundHistory.filter(t => t.type === 'remove' && t.desc.startsWith('Tabungan:'));
+         // Apply filter
+         savingsTxns = savingsTxns.filter(t => {
+             const tTime = t.timestamp;
+             const tDate = new Date(tTime);
+             if (filterRange === '7d') return tTime >= (Date.now() - 7*oneDay);
+             if (filterRange === '30d') return tTime >= (Date.now() - 30*oneDay);
+             if (filterRange === 'thisMonth') return tDate.getMonth() === now.getMonth() && tDate.getFullYear() === now.getFullYear();
+             if (filterRange === 'lastMonth') {
+                 const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                 return tDate.getMonth() === lastMonth.getMonth() && tDate.getFullYear() === lastMonth.getFullYear();
+             }
+             return true;
+        });
         const totalSavings = savingsTxns.reduce((sum, t) => sum + t.amount, 0);
 
-        // 3. Calculate Total Expenses (General + Budget + Daily) - EXCLUDING Savings transactions
-        // General (excluding savings)
-        const generalExpenseTxns = state.fundHistory.filter(t => t.type === 'remove' && !t.desc.startsWith('Tabungan:') && (isAllTime || new Date(t.timestamp).toISOString().startsWith(currentMonthPrefix)));
-        const generalExpenses = generalExpenseTxns.reduce((sum, t) => sum + t.amount, 0);
-        // Budget Usage
-        const budgetTxns = state.budgets.flatMap(b => b.history).filter(t => (isAllTime || new Date(t.timestamp).toISOString().startsWith(currentMonthPrefix)));
-        const budgetExpenses = budgetTxns.reduce((sum, t) => sum + t.amount, 0);
-        // Daily
-        const dailyTxns = state.dailyExpenses.filter(t => (isAllTime || new Date(t.timestamp).toISOString().startsWith(currentMonthPrefix)));
-        const dailyExpenses = dailyTxns.reduce((sum, t) => sum + t.amount, 0);
+        // Total Expenses calculated earlier
+        const totalExpenses = currentTxns.reduce((sum, t) => sum + t.amount, 0);
 
-        const totalExpenses = generalExpenses + budgetExpenses + dailyExpenses;
+        if (totalIncome === 0) return { score: 0, savingsScore: 0, expenseScore: 0, budgetScore: 0, totalIncome: 0 };
 
-        if (totalIncome === 0) {
-            return { score: 0, savingsScore: 0, expenseScore: 0, budgetScore: 0, totalIncome: 0 };
-        }
-
-        // --- SCORING LOGIC ---
-
-        // 1. Savings Ratio (Weight 40%)
-        // Target: 20% Savings = 100% Score.
-        // Raw Ratio
+        // Scoring Logic
         const savingsRatio = totalSavings / totalIncome;
-        // Normalized Score (0.2 -> 40 points)
-        let savingsRawScore = (savingsRatio / 0.20) * 40; 
-        savingsRawScore = Math.min(40, Math.max(0, savingsRawScore));
+        let savingsRawScore = Math.min(40, Math.max(0, (savingsRatio / 0.20) * 40));
 
-        // 2. Expense Burden (Weight 30%)
-        // Target: < 50% Expense = 100% Score. > 100% Expense = 0% Score.
         const expenseRatio = totalExpenses / totalIncome;
         let expenseRawScore = 0;
-        if (expenseRatio <= 0.5) {
-            expenseRawScore = 30; // Perfect score for this component
-        } else if (expenseRatio >= 1.0) {
-            expenseRawScore = 0;
-        } else {
-            // Linear interpolation between 0.5 (30 pts) and 1.0 (0 pts)
-            // Formula: 30 - ((Ratio - 0.5) / 0.5) * 30
-            expenseRawScore = 30 - ((expenseRatio - 0.5) / 0.5) * 30;
-        }
+        if (expenseRatio <= 0.5) expenseRawScore = 30;
+        else if (expenseRatio >= 1.0) expenseRawScore = 0;
+        else expenseRawScore = 30 - ((expenseRatio - 0.5) / 0.5) * 30;
 
-        // 3. Budget Discipline (Weight 30%)
-        let budgetRawScore = 30; // Default to max if no budgets
-        if (state.budgets.length > 0) {
-            let overBudgetCount = 0;
-            state.budgets.forEach(b => {
-                const usage = b.history
-                    .filter(h => isAllTime || new Date(h.timestamp).toISOString().startsWith(currentMonthPrefix))
-                    .reduce((s, h) => s + h.amount, 0);
-                if (b.totalBudget > 0 && usage > b.totalBudget) {
-                    overBudgetCount++;
-                }
-            });
-            budgetRawScore = ((state.budgets.length - overBudgetCount) / state.budgets.length) * 30;
-        }
-
+        // Budget Discipline
+        let budgetRawScore = 30; 
+        // Simplified budget score for custom ranges: just check overall ratio
+        if (expenseRatio > 1.0) budgetRawScore = 0;
+        else if (expenseRatio > 0.9) budgetRawScore = 10;
+        
         const totalScore = Math.round(savingsRawScore + expenseRawScore + budgetRawScore);
 
         return {
@@ -356,13 +438,12 @@ const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack, onAnalyz
             totalIncome
         };
 
-    }, [state, selectedMonth]);
+    }, [state, filteredExpenses, filterRange]);
 
 
-    const pieChartData = useMemo(() => {
+    const treemapData = useMemo(() => {
         const expenseByCategory: { [key: string]: number } = {};
         filteredExpenses.forEach(expense => {
-            // Exclude savings from pie chart to show spending only
             if (expense.desc && expense.desc.startsWith('Tabungan:')) return;
 
             const category = expense.category || 'Lain-lain';
@@ -373,47 +454,46 @@ const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack, onAnalyz
         });
 
         return Object.entries(expenseByCategory)
-            .map(([name, value]) => ({ name, value }))
-            .sort((a, b) => b.value - a.value);
+            .map(([name, value], index) => ({ 
+                name, 
+                size: value, // Treemap uses 'size' usually, or 'value'
+                fill: COLORS[index % COLORS.length] 
+            }))
+            .sort((a, b) => b.size - a.size);
     }, [filteredExpenses]);
 
-    const handlePieClick = (data: any) => {
+    const handleTreemapClick = (data: any) => {
         if (!data || !data.name) return;
         const category = data.name;
         const transactions = filteredExpenses
             .filter(e => (e.category || 'Lain-lain') === category && (!e.desc || !e.desc.startsWith('Tabungan:')))
-            .sort((a, b) => b.amount - a.amount); // Sort by amount descending
+            .sort((a, b) => b.amount - a.amount);
         setDetailModalData({ category, transactions });
     };
 
     const trendData = useMemo(() => {
-        if (selectedMonth === 'all') return [];
-
+        if (filteredExpenses.length === 0) return [];
+        
+        // Group by date
         const dailyTotals: { [key: string]: number } = {};
         filteredExpenses.forEach(expense => {
-            // Exclude savings
-            if (expense.desc && expense.desc.startsWith('Tabungan:')) return;
-
-            const date = new Date(expense.timestamp).toLocaleDateString('fr-CA'); // YYYY-MM-DD format
-            if (!dailyTotals[date]) {
-                dailyTotals[date] = 0;
-            }
-            dailyTotals[date] += expense.amount;
+             if (expense.desc && expense.desc.startsWith('Tabungan:')) return;
+             const date = new Date(expense.timestamp).toLocaleDateString('fr-CA');
+             dailyTotals[date] = (dailyTotals[date] || 0) + expense.amount;
         });
+        
+        // Sort dates
+        return Object.keys(dailyTotals).sort().map(date => ({
+            day: new Date(date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
+            total: dailyTotals[date]
+        }));
 
-        const daysInMonth = new Date(Number(selectedMonth.slice(0,4)), Number(selectedMonth.slice(5,7)), 0).getDate();
-        const data = [];
-        for (let i = 1; i <= daysInMonth; i++) {
-            const dateStr = `${selectedMonth}-${String(i).padStart(2, '0')}`;
-            data.push({
-                day: String(i),
-                total: dailyTotals[dateStr] || 0,
-            });
-        }
-        return data;
-    }, [filteredExpenses, selectedMonth]);
+    }, [filteredExpenses]);
 
     const budgetComparisonData = useMemo(() => {
+        // Only relevant for 'thisMonth' usually, but we can show totals for range
+        if (filterRange !== 'thisMonth') return []; 
+
         const expenseByCategory: { [key: string]: number } = {};
         filteredExpenses.forEach(expense => {
             const category = expense.category || 'Lain-lain';
@@ -426,24 +506,21 @@ const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack, onAnalyz
             Dianggarkan: budget.totalBudget,
             Terpakai: expenseByCategory[budget.name] || 0
         }));
-    }, [filteredExpenses, state.budgets]);
+    }, [filteredExpenses, state.budgets, filterRange]);
     
-    const titleText = selectedMonth === 'all' 
-                    ? 'Semua Waktu' 
-                    : new Date(selectedMonth + '-02').toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
-
-    // Reset analysis when month changes
+    
+    // Reset analysis when filter changes
     useEffect(() => {
         setTrendExplanation('');
         setBudgetExplanation('');
         setAllocationExplanation('');
-    }, [selectedMonth]);
+    }, [filterRange]);
 
 
     const analyzeTrend = async () => {
         setIsTrendLoading(true);
-        const dataStr = JSON.stringify(trendData.filter(d => d.total > 0));
-        const prompt = `Jelasin grafik Tren Pengeluaran Harian ini dengan pas (tidak kepanjangan, tidak kedekitan). Analisis pola pengeluaran, soroti tanggal dengan lonjakan tinggi, dan berikan kesimpulan tentang kebiasaan belanja. Buat ringkas namun tetap menjelaskan detail penting. Gunakan bahasa teman perempuan yang friendly (panggil 'Kak' atau 'Kamu', jangan 'bro'). Data: ${dataStr}`;
+        const dataStr = JSON.stringify(trendData);
+        const prompt = `Jelasin grafik Tren Pengeluaran Harian ini dengan pas. Analisis pola, lonjakan, dan berikan kesimpulan kebiasaan belanja. Bahasa teman perempuan friendly (panggil 'Kak'/'Kamu'). Data: ${dataStr}`;
         const result = await onAnalyzeChart(prompt);
         setTrendExplanation(result);
         setIsTrendLoading(false);
@@ -452,7 +529,7 @@ const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack, onAnalyz
     const analyzeBudget = async () => {
         setIsBudgetLoading(true);
         const dataStr = JSON.stringify(budgetComparisonData);
-        const prompt = `Jelasin grafik Perbandingan Anggaran ini dengan proporsional (tidak terlalu panjang). Fokus analisis pada perbandingan dana vs terpakai. Sebutkan kategori yang boros dan yang hemat secara spesifik. Berikan detail yang perlu saja agar informatif tapi tidak lelah dibaca. Gunakan bahasa teman perempuan yang friendly (panggil 'Kak' atau 'Kamu', jangan 'bro'). Data: ${dataStr}`;
+        const prompt = `Jelasin grafik Perbandingan Anggaran ini. Fokus dana vs terpakai. Sebut kategori boros/hemat. Bahasa teman perempuan friendly. Data: ${dataStr}`;
         const result = await onAnalyzeChart(prompt);
         setBudgetExplanation(result);
         setIsBudgetLoading(false);
@@ -460,36 +537,32 @@ const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack, onAnalyz
 
     const analyzeAllocation = async () => {
         setIsAllocationLoading(true);
-        const dataStr = JSON.stringify(pieChartData);
-        const prompt = `Jelasin grafik Alokasi Pengeluaran ini dengan seimbang. Identifikasi kategori dominan dan analisis apakah proporsinya sehat. Berikan penjelasan yang padat berisi (insightful) tanpa terlalu panjang lebar. Gunakan bahasa teman perempuan yang friendly (panggil 'Kak' atau 'Kamu', jangan 'bro'). Data: ${dataStr}`;
+        const dataStr = JSON.stringify(treemapData);
+        const prompt = `Jelasin grafik Alokasi Pengeluaran (Treemap) ini. Identifikasi kategori dominan. Bahasa teman perempuan friendly. Data: ${dataStr}`;
         const result = await onAnalyzeChart(prompt);
         setAllocationExplanation(result);
         setIsAllocationLoading(false);
     };
 
+    const rangeOptions = [
+        { label: '7 Hari', value: '7d' },
+        { label: '30 Hari', value: '30d' },
+        { label: 'Bulan Ini', value: 'thisMonth' },
+        { label: 'Bulan Lalu', value: 'lastMonth' },
+        { label: 'Semua', value: 'all' },
+    ];
+
     return (
         <main className="p-4 pb-24 animate-fade-in max-w-4xl mx-auto space-y-6">
-            <style>{`
-                .clickable-pie .recharts-pie-sector {
-                    cursor: pointer;
-                    transition: opacity 0.2s;
-                }
-                .clickable-pie .recharts-pie-sector:hover {
-                    opacity: 0.8;
-                }
-            `}</style>
             
-            <header>
-                <h1 className="text-3xl font-bold text-primary-navy text-center">Visualisasi Pengeluaran</h1>
-                <div className="mt-4 max-w-md mx-auto">
-                    <label htmlFor="month-filter-visual" className="block text-sm font-medium text-secondary-gray mb-1">Pilih Periode Laporan</label>
-                    <select id="month-filter-visual" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md">
-                        {monthOptions.map(month => (
-                            <option key={month} value={month}>
-                                {month === 'all' ? 'Semua Waktu' : new Date(month + '-02').toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}
-                            </option>
-                        ))}
-                    </select>
+            <header className="mb-8">
+                <h1 className="text-3xl font-bold text-primary-navy text-center mb-6">Visualisasi Pengeluaran</h1>
+                <div className="max-w-xl mx-auto">
+                    <SegmentedControl 
+                        options={rangeOptions}
+                        value={filterRange}
+                        onChange={setFilterRange}
+                    />
                 </div>
             </header>
 
@@ -502,50 +575,84 @@ const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack, onAnalyz
                 totalIncome={healthData.totalIncome}
             />
 
-            {selectedMonth !== 'all' && (
-                <section className="bg-white rounded-xl p-6 shadow-md">
-                    <h2 className="text-xl font-bold text-primary-navy text-center mb-4">{`Tren Pengeluaran Harian (${titleText})`}</h2>
-                    <div className="w-full h-80">
-                        {trendData.length > 0 && trendData.some(d => d.total > 0) ? (
-                            <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={trendData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis dataKey="day" />
-                                    <YAxis tickFormatter={formatShortCurrency} />
-                                    <Tooltip content={<CustomTooltip />} />
-                                    <Legend />
-                                    <Line type="monotone" dataKey="total" name="Total Pengeluaran" stroke="#2C3E50" strokeWidth={2} />
-                                </LineChart>
-                            </ResponsiveContainer>
-                        ) : (
-                             <div className="flex items-center justify-center h-full text-secondary-gray">
-                                <p>Tidak ada data pengeluaran pada periode ini.</p>
-                            </div>
-                        )}
-                    </div>
-                     {trendData.length > 0 && trendData.some(d => d.total > 0) && (
-                        <ChartExplanationSection 
-                            onAnalyze={analyzeTrend} 
-                            explanation={trendExplanation} 
-                            isLoading={isTrendLoading} 
-                        />
+            {/* TREND AREA CHART (NEON GLOW) */}
+            <section className="bg-white rounded-xl p-6 shadow-md">
+                <h2 className="text-xl font-bold text-primary-navy text-center mb-4">Tren Pengeluaran</h2>
+                <div className="w-full h-80">
+                    {trendData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={trendData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                                <defs>
+                                    <linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#00f2ff" stopOpacity={0.3}/>
+                                        <stop offset="95%" stopColor="#00f2ff" stopOpacity={0}/>
+                                    </linearGradient>
+                                    <filter id="neonGlow" height="300%" width="300%" x="-75%" y="-75%">
+                                        <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                                        <feMerge>
+                                            <feMergeNode in="coloredBlur"/>
+                                            <feMergeNode in="SourceGraphic"/>
+                                        </feMerge>
+                                    </filter>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                                <XAxis 
+                                    dataKey="day" 
+                                    tick={{fontSize: 11, fill: '#94a3b8'}} 
+                                    axisLine={false}
+                                    tickLine={false}
+                                    dy={10}
+                                />
+                                <YAxis 
+                                    tickFormatter={formatShortCurrency} 
+                                    tick={{fontSize: 11, fill: '#94a3b8'}} 
+                                    axisLine={false}
+                                    tickLine={false}
+                                />
+                                <Tooltip 
+                                    content={<CustomTooltip />} 
+                                    cursor={{ stroke: '#00f2ff', strokeWidth: 1, strokeDasharray: '5 5' }}
+                                />
+                                <Area 
+                                    type="monotone" 
+                                    dataKey="total" 
+                                    stroke="#00f2ff" 
+                                    strokeWidth={3}
+                                    fill="url(#colorTrend)" 
+                                    filter="url(#neonGlow)"
+                                    animationDuration={1500}
+                                />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    ) : (
+                        <div className="flex items-center justify-center h-full text-secondary-gray">
+                            <p>Tidak ada data pengeluaran.</p>
+                        </div>
                     )}
-                </section>
-            )}
+                </div>
+                 {trendData.length > 0 && (
+                    <ChartExplanationSection 
+                        onAnalyze={analyzeTrend} 
+                        explanation={trendExplanation} 
+                        isLoading={isTrendLoading} 
+                    />
+                )}
+            </section>
 
-            {budgetComparisonData.length > 0 && (
+            {/* BUDGET COMPARISON (Only for This Month) */}
+            {filterRange === 'thisMonth' && budgetComparisonData.length > 0 && (
                 <section className="bg-white rounded-xl p-6 shadow-md">
-                    <h2 className="text-xl font-bold text-primary-navy text-center mb-4">{`Perbandingan Anggaran (${titleText})`}</h2>
+                    <h2 className="text-xl font-bold text-primary-navy text-center mb-4">Perbandingan Anggaran</h2>
                     <div className="w-full h-80">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={budgetComparisonData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
                                 <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="name" />
-                                <YAxis tickFormatter={formatShortCurrency} />
+                                <XAxis dataKey="name" tick={{fontSize: 12}} />
+                                <YAxis tickFormatter={formatShortCurrency} tick={{fontSize: 12}} />
                                 <Tooltip content={<CustomTooltip />} />
                                 <Legend />
-                                <Bar dataKey="Dianggarkan" fill="#3498DB" />
-                                <Bar dataKey="Terpakai" fill="#E67E22" />
+                                <Bar dataKey="Dianggarkan" fill="#3498DB" radius={[4, 4, 0, 0]} />
+                                <Bar dataKey="Terpakai" fill="#E67E22" radius={[4, 4, 0, 0]} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
@@ -557,58 +664,43 @@ const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack, onAnalyz
                 </section>
             )}
 
+            {/* INTERACTIVE TREEMAP */}
             <section className="bg-white rounded-xl p-6 shadow-md">
-                <h2 className="text-xl font-bold text-primary-navy text-center mb-4">{`Alokasi Pengeluaran (${titleText})`}</h2>
-                <div className="w-full h-80 mb-6">
-                   {pieChartData.length > 0 ? (
+                <h2 className="text-xl font-bold text-primary-navy text-center mb-2">Peta Pengeluaran (Treemap)</h2>
+                <p className="text-xs text-center text-secondary-gray mb-4">Klik kotak untuk melihat detail transaksi</p>
+                
+                <div className="w-full h-96">
+                   {treemapData.length > 0 ? (
                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart className="clickable-pie">
-                            <Pie
-                                data={pieChartData}
-                                cx="50%"
-                                cy="50%"
-                                labelLine={false}
-                                outerRadius={120}
-                                fill="#8884d8"
-                                dataKey="value"
-                                onClick={handlePieClick}
-                            >
-                                {pieChartData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                ))}
-                            </Pie>
-                            <Tooltip content={<CustomTooltip />} />
-                            <Legend wrapperStyle={{fontSize: '14px'}}/>
-                        </PieChart>
+                        <Treemap
+                            data={treemapData}
+                            dataKey="size"
+                            stroke="#fff"
+                            fill="#8884d8"
+                            content={<CustomizedTreemapContent onClick={handleTreemapClick} />}
+                        >
+                             <Tooltip content={<CustomTooltip />} />
+                        </Treemap>
                     </ResponsiveContainer>
                    ) : (
                     <div className="flex items-center justify-center h-full text-secondary-gray">
-                        <p>Tidak ada data pengeluaran pada periode ini.</p>
+                        <p>Tidak ada data pengeluaran.</p>
                     </div>
                    )}
                 </div>
 
-                <table className="w-full text-sm text-left text-gray-500">
-                    <thead className="text-xs text-gray-700 uppercase bg-gray-50">
-                        <tr>
-                            <th scope="col" className="px-6 py-3">Kategori</th>
-                            <th scope="col" className="px-6 py-3 text-right">Total Terpakai</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {pieChartData.length > 0 ? pieChartData.map((item, index) => (
-                            <tr key={index} className="bg-white border-b">
-                                <td className="px-6 py-4 font-medium text-dark-text whitespace-nowrap">{item.name}</td>
-                                <td className="px-6 py-4 text-right font-semibold text-primary-navy">{formatCurrency(item.value)}</td>
-                            </tr>
-                        )) : (
-                            <tr>
-                                <td colSpan={2} className="text-center py-4">Tidak ada data.</td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
-                 {pieChartData.length > 0 && (
+                {/* Legend/List below treemap for clarity */}
+                <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {treemapData.map((item, index) => (
+                         <div key={index} className="flex items-center gap-2 text-xs">
+                             <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: item.fill }}></div>
+                             <span className="truncate font-medium text-dark-text">{item.name}</span>
+                             <span className="text-secondary-gray">{formatShortCurrency(item.size)}</span>
+                         </div>
+                    ))}
+                </div>
+                
+                 {treemapData.length > 0 && (
                     <ChartExplanationSection 
                         onAnalyze={analyzeAllocation} 
                         explanation={allocationExplanation} 

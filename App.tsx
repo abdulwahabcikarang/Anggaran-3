@@ -12,7 +12,7 @@ import NetWorth from './components/NetWorth';
 import Wishlist from './components/Wishlist';
 import Subscriptions from './components/Subscriptions';
 import { allAchievements } from './data/achievements';
-import { HomeIcon, ChartBarIcon, DocumentTextIcon, ListBulletIcon, Squares2x2Icon, PlusCircleIcon, ArrowDownTrayIcon, ArrowUpTrayIcon, CameraIcon, LightbulbIcon, SparklesIcon, SpeakerWaveIcon, ChatBubbleLeftRightIcon, PaperAirplaneIcon, TrashIcon, BuildingLibraryIcon, BudgetIcon, availableIcons, availableColors, TrophyIcon, Cog6ToothIcon, InformationCircleIcon, ExclamationTriangleIcon, ArchiveBoxIcon, ArrowUturnLeftIcon, ServerStackIcon, FireIcon, CircleStackIcon, LockClosedIcon, CalendarDaysIcon, ChevronRightIcon, HeartIcon, ArrowPathIcon, BellIcon, CreditCardIcon } from './components/Icons';
+import { HomeIcon, ChartBarIcon, DocumentTextIcon, ListBulletIcon, Squares2x2Icon, PlusCircleIcon, ArrowDownTrayIcon, ArrowUpTrayIcon, CameraIcon, LightbulbIcon, SparklesIcon, SpeakerWaveIcon, ChatBubbleLeftRightIcon, PaperAirplaneIcon, TrashIcon, BuildingLibraryIcon, BudgetIcon, availableIcons, availableColors, TrophyIcon, Cog6ToothIcon, InformationCircleIcon, ExclamationTriangleIcon, ArchiveBoxIcon, ArrowUturnLeftIcon, ServerStackIcon, FireIcon, CircleStackIcon, LockClosedIcon, CalendarDaysIcon, ChevronRightIcon, HeartIcon, ArrowPathIcon, BellIcon, CreditCardIcon, ClockIcon } from './components/Icons';
 import { AISkeleton } from './components/UI';
 
 // --- UTILITY FUNCTIONS ---
@@ -181,7 +181,7 @@ const DailyBackupToast: React.FC<{
 }> = ({ backup, onClose }) => {
     return (
         <div 
-            className="fixed top-5 left-1/2 -translate-x-1/2 z-[100] bg-white/90 backdrop-blur-md border border-white/40 rounded-xl shadow-2xl p-4 flex items-center space-x-4 max-w-md w-[90%] animate-fade-in-down"
+            className="fixed top-5 right-4 z-[100] bg-white/90 backdrop-blur-md border border-white/40 rounded-xl shadow-2xl p-4 flex items-center space-x-4 max-w-[calc(100vw-2rem)] md:max-w-md animate-fade-in-down"
         >
             <ArrowDownTrayIcon className="w-10 h-10 text-accent-teal flex-shrink-0" />
             <div>
@@ -210,9 +210,9 @@ const NotificationToast: React.FC<{
 }> = ({ messages, onClose }) => {
     if (messages.length === 0) return null;
     return (
-        <div className="fixed top-5 right-5 z-[110] flex flex-col gap-2 animate-fade-in-left">
+        <div className="fixed top-5 right-4 z-[110] flex flex-col gap-2 animate-fade-in-left max-w-[calc(100vw-2rem)]">
             {messages.map((msg, idx) => (
-                <div key={idx} className="bg-white/90 backdrop-blur-md border-l-4 border-warning-yellow rounded-lg shadow-xl p-4 flex items-start gap-3 max-w-sm">
+                <div key={idx} className="bg-white/90 backdrop-blur-md border-l-4 border-warning-yellow rounded-lg shadow-xl p-4 flex items-start gap-3 w-full">
                     <BellIcon className="w-6 h-6 text-warning-yellow flex-shrink-0" />
                     <div>
                         <p className="text-sm font-semibold text-dark-text">{msg}</p>
@@ -268,7 +268,14 @@ const InputModalContent: React.FC<{
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Total Anggaran</label>
-                        <input value={amount} onChange={e => setAmount(formatNumberInput(e.target.value))} className="mt-1 w-full border p-2 rounded" required />
+                        <input 
+                            type="text"
+                            inputMode="numeric"
+                            value={amount} 
+                            onChange={e => setAmount(formatNumberInput(e.target.value))} 
+                            className="mt-1 w-full border p-2 rounded" 
+                            required 
+                        />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                          <div>
@@ -296,7 +303,15 @@ const InputModalContent: React.FC<{
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Berapa Rupiah?</label>
-                        <input value={amount} onChange={e => setAmount(formatNumberInput(e.target.value))} className="mt-1 w-full border p-2 rounded" required placeholder="0" />
+                        <input 
+                            type="text"
+                            inputMode="numeric"
+                            value={amount} 
+                            onChange={e => setAmount(formatNumberInput(e.target.value))} 
+                            className="mt-1 w-full border p-2 rounded" 
+                            required 
+                            placeholder="0" 
+                        />
                     </div>
                     {mode === 'use-daily' && (
                          <div>
@@ -415,7 +430,13 @@ const AssetModalContent: React.FC<{
                     <label className="block text-sm font-medium text-gray-700">
                         {type === 'custom' ? 'Estimasi Harga Total' : 'Harga Beli Satuan (Opsional)'}
                     </label>
-                    <input value={price} onChange={e => setPrice(formatNumberInput(e.target.value))} className="w-full border p-2 rounded" />
+                    <input 
+                        type="text"
+                        inputMode="numeric"
+                        value={price} 
+                        onChange={e => setPrice(formatNumberInput(e.target.value))} 
+                        className="w-full border p-2 rounded" 
+                    />
                     {type !== 'custom' && <p className="text-xs text-gray-500 mt-1">Harga pasar live akan digunakan di dashboard.</p>}
                 </div>
             </div>
@@ -465,7 +486,19 @@ const AddSavingsGoalModalContent: React.FC<{ onSubmit: (name: string, isInfinite
         <form onSubmit={(e) => { e.preventDefault(); onSubmit(name, isInfinite, isInfinite ? undefined : getRawNumber(target)); }} className="space-y-4">
             <div><label className="block text-sm">Nama Tujuan</label><input value={name} onChange={e => setName(e.target.value)} className="w-full border p-2 rounded" required /></div>
             <div className="flex items-center"><input type="checkbox" checked={isInfinite} onChange={e => setIsInfinite(e.target.checked)} className="mr-2" /> <label>Celengan Tanpa Target (Fleksibel)</label></div>
-            {!isInfinite && <div><label className="block text-sm">Target Dana</label><input value={target} onChange={e => setTarget(formatNumberInput(e.target.value))} className="w-full border p-2 rounded" required /></div>}
+            {!isInfinite && (
+                <div>
+                    <label className="block text-sm">Target Dana</label>
+                    <input 
+                        type="text"
+                        inputMode="numeric"
+                        value={target} 
+                        onChange={e => setTarget(formatNumberInput(e.target.value))} 
+                        className="w-full border p-2 rounded" 
+                        required 
+                    />
+                </div>
+            )}
             <button type="submit" className="w-full py-2 bg-accent-teal text-white font-bold rounded">Buat Celengan</button>
         </form>
     );
@@ -476,7 +509,15 @@ const AddSavingsModalContent: React.FC<{ goal?: SavingsGoal, availableFunds: num
     return (
         <form onSubmit={(e) => { e.preventDefault(); onSubmit(getRawNumber(amount)); }} className="space-y-4">
             <p className="text-sm text-gray-600">Dana tersedia: {formatCurrency(availableFunds)}</p>
-            <input value={amount} onChange={e => setAmount(formatNumberInput(e.target.value))} className="w-full border p-2 rounded" placeholder="Nominal Tabungan" required />
+            <input 
+                type="text"
+                inputMode="numeric"
+                value={amount} 
+                onChange={e => setAmount(formatNumberInput(e.target.value))} 
+                className="w-full border p-2 rounded" 
+                placeholder="Nominal Tabungan" 
+                required 
+            />
             <button type="submit" className="w-full py-2 bg-primary-navy text-white font-bold rounded">Tabung Sekarang</button>
         </form>
     );
@@ -509,7 +550,15 @@ const FundsManagementModalContent: React.FC<{ onSubmit: (type: 'add' | 'remove',
         <div className="space-y-4">
             <div className="flex gap-2"><button onClick={() => setTab('add')} className={`flex-1 py-2 rounded ${tab === 'add' ? 'bg-accent-teal text-white' : 'bg-gray-100'}`}>Pemasukan</button><button onClick={() => setTab('remove')} className={`flex-1 py-2 rounded ${tab === 'remove' ? 'bg-danger-red text-white' : 'bg-gray-100'}`}>Pengeluaran</button></div>
             <input value={desc} onChange={e => setDesc(e.target.value)} className="w-full border p-2 rounded" placeholder="Keterangan (Gaji, Bonus, dll)" required />
-            <input value={amount} onChange={e => setAmount(formatNumberInput(e.target.value))} className="w-full border p-2 rounded" placeholder="Jumlah" required />
+            <input 
+                type="text"
+                inputMode="numeric"
+                value={amount} 
+                onChange={e => setAmount(formatNumberInput(e.target.value))} 
+                className="w-full border p-2 rounded" 
+                placeholder="Jumlah" 
+                required 
+            />
             <button onClick={() => onSubmit(tab, desc, getRawNumber(amount))} className="w-full py-2 bg-primary-navy text-white font-bold rounded">Simpan</button>
             <button onClick={onViewHistory} className="w-full py-2 text-sm text-gray-600 underline">Lihat Riwayat</button>
         </div>
@@ -541,23 +590,123 @@ const EditAssetModalContent: React.FC<{ currentAsset: number, onSubmit: (val: nu
     return (
         <div className="space-y-4">
             <p className="text-sm">Saldo saat ini: {formatCurrency(currentAsset)}</p>
-            <input value={val} onChange={e => setVal(formatNumberInput(e.target.value))} className="w-full border p-2 rounded" placeholder="Masukkan Saldo Sebenarnya" />
+            <input 
+                type="text"
+                inputMode="numeric"
+                value={val} 
+                onChange={e => setVal(formatNumberInput(e.target.value))} 
+                className="w-full border p-2 rounded" 
+                placeholder="Masukkan Saldo Sebenarnya" 
+            />
             <button onClick={() => onSubmit(getRawNumber(val))} className="w-full py-2 bg-accent-teal text-white font-bold rounded">Simpan Koreksi</button>
         </div>
     );
 };
 
-const SettingsModalContent: React.FC<{ onExport: () => void, onImport: () => void, onManageArchived: () => void, onManualBackup: () => void, onManageBackups: () => void, onResetMonthly: () => void, onResetAll: () => void, onManualCloseBook: () => void }> = (props) => (
-    <div className="grid grid-cols-1 gap-3">
-        <button onClick={props.onExport} className="p-3 bg-gray-100 rounded text-left font-semibold">Ekspor Data (JSON)</button>
-        <button onClick={props.onImport} className="p-3 bg-gray-100 rounded text-left font-semibold">Impor Data (JSON)</button>
-        <button onClick={props.onManualBackup} className="p-3 bg-blue-100 text-blue-800 rounded text-left font-semibold">Buat Cadangan Internal Sekarang</button>
-        <button onClick={props.onManageBackups} className="p-3 bg-gray-100 rounded text-left font-semibold">Kelola Cadangan Internal</button>
-        <button onClick={props.onManageArchived} className="p-3 bg-gray-100 rounded text-left font-semibold">Kelola Anggaran Diarsipkan</button>
-        <div className="border-t my-2"></div>
-        <button onClick={props.onManualCloseBook} className="p-3 bg-yellow-100 text-yellow-800 rounded text-left font-bold">Tutup Buku Bulan Ini</button>
-        <button onClick={props.onResetMonthly} className="p-3 bg-red-50 text-red-600 rounded text-left font-semibold">Reset Data Bulan Ini (Debug)</button>
-        <button onClick={props.onResetAll} className="p-3 bg-red-100 text-red-800 rounded text-left font-bold">Reset SEMUA Data (Bahaya)</button>
+const SettingsModalContent: React.FC<{ 
+    onExport: () => void, 
+    onImport: () => void, 
+    onManageArchived: () => void, 
+    onManualBackup: () => void, 
+    onManageBackups: () => void, 
+    onResetMonthly: () => void, 
+    onResetAll: () => void, 
+    onManualCloseBook: () => void,
+    lastImportDate: string | null,
+    lastExportDate: string | null
+}> = (props) => (
+    <div className="space-y-6">
+        {/* GROUP 1: MANAJEMEN DATA */}
+        <section>
+            <h4 className="text-xs font-bold text-secondary-gray uppercase tracking-wider mb-3 flex items-center gap-2">
+                <ServerStackIcon className="w-4 h-4" />
+                Manajemen Data
+            </h4>
+            <div className="grid grid-cols-1 gap-3">
+                <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col">
+                        <button onClick={props.onExport} className="flex flex-col items-center justify-center p-4 bg-gray-50 hover:bg-white hover:shadow-md border border-gray-200 rounded-xl transition-all duration-200 group w-full h-full">
+                            <ArrowUpTrayIcon className="w-6 h-6 text-primary-navy group-hover:scale-110 transition-transform mb-2" />
+                            <span className="text-sm font-bold text-dark-text">Ekspor JSON</span>
+                        </button>
+                        {props.lastExportDate && (
+                            <p className="text-[10px] text-center text-secondary-gray mt-1">
+                                Terakhir: {new Date(props.lastExportDate).toLocaleString('id-ID')}
+                            </p>
+                        )}
+                    </div>
+                    <div className="flex flex-col">
+                         <button onClick={props.onImport} className="flex flex-col items-center justify-center p-4 bg-gray-50 hover:bg-white hover:shadow-md border border-gray-200 rounded-xl transition-all duration-200 group h-full">
+                            <ArrowDownTrayIcon className="w-6 h-6 text-primary-navy group-hover:scale-110 transition-transform mb-2" />
+                            <span className="text-sm font-bold text-dark-text">Impor JSON</span>
+                        </button>
+                        {props.lastImportDate && (
+                            <p className="text-[10px] text-center text-secondary-gray mt-1">
+                                Terakhir: {new Date(props.lastImportDate).toLocaleString('id-ID')}
+                            </p>
+                        )}
+                    </div>
+                </div>
+                
+                <button onClick={props.onManualBackup} className="flex items-center gap-3 p-3 bg-blue-50 hover:bg-blue-100 border border-blue-100 rounded-xl transition-colors text-left group">
+                    <div className="bg-blue-200 p-2 rounded-lg text-blue-700">
+                        <ServerStackIcon className="w-5 h-5" />
+                    </div>
+                    <div>
+                        <p className="text-sm font-bold text-primary-navy">Cadangkan Sekarang</p>
+                        <p className="text-xs text-blue-600">Simpan data ke memori browser</p>
+                    </div>
+                </button>
+
+                <div className="grid grid-cols-2 gap-3">
+                     <button onClick={props.onManageBackups} className="flex items-center justify-center gap-2 p-3 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl transition-colors text-sm font-semibold text-secondary-gray">
+                        <ClockIcon className="w-4 h-4" />
+                        Riwayat Cadangan
+                    </button>
+                    <button onClick={props.onManageArchived} className="flex items-center justify-center gap-2 p-3 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl transition-colors text-sm font-semibold text-secondary-gray">
+                        <ArchiveBoxIcon className="w-4 h-4" />
+                        Arsip Anggaran
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <hr className="border-gray-100" />
+
+        {/* GROUP 2: SIKLUS KEUANGAN */}
+        <section>
+            <h4 className="text-xs font-bold text-secondary-gray uppercase tracking-wider mb-3 flex items-center gap-2">
+                <CalendarDaysIcon className="w-4 h-4" />
+                Siklus Keuangan
+            </h4>
+            <button onClick={props.onManualCloseBook} className="w-full flex items-center gap-3 p-4 bg-yellow-50 hover:bg-yellow-100 border border-yellow-200 rounded-xl transition-colors text-left group">
+                <div className="bg-yellow-200 p-2 rounded-lg text-yellow-800">
+                    <LockClosedIcon className="w-5 h-5" />
+                </div>
+                <div>
+                    <p className="font-bold text-yellow-900">Tutup Buku Bulan Ini</p>
+                    <p className="text-xs text-yellow-700">Arsipkan transaksi & reset anggaran</p>
+                </div>
+            </button>
+        </section>
+
+        {/* GROUP 3: DANGER ZONE */}
+        <section>
+             <h4 className="text-xs font-bold text-danger-red uppercase tracking-wider mb-3 flex items-center gap-2">
+                <ExclamationTriangleIcon className="w-4 h-4" />
+                Zona Bahaya
+            </h4>
+            <div className="bg-red-50 border border-red-100 rounded-xl p-1">
+                <button onClick={props.onResetMonthly} className="w-full text-left p-3 rounded-lg hover:bg-red-100 text-red-600 text-sm font-medium flex items-center gap-2 transition-colors">
+                    <TrashIcon className="w-4 h-4" />
+                    Reset Data Bulan Ini (Debug)
+                </button>
+                <button onClick={props.onResetAll} className="w-full text-left p-3 rounded-lg hover:bg-red-100 text-red-800 text-sm font-bold flex items-center gap-2 transition-colors">
+                    <ExclamationTriangleIcon className="w-4 h-4" />
+                    Reset SEMUA Data (Pabrik)
+                </button>
+            </div>
+        </section>
     </div>
 );
 
@@ -800,7 +949,15 @@ const AddWishlistModalContent: React.FC<{ onSubmit: (name: string, price: number
             </div>
             <div>
                 <label htmlFor="wish-price" className="block text-sm font-medium text-secondary-gray">Harga (Rp)</label>
-                <input type="text" id="wish-price" value={price} onChange={e => setPrice(formatNumberInput(e.target.value))} required inputMode="numeric" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-navy focus:border-primary-navy"/>
+                <input 
+                    type="text"
+                    inputMode="numeric"
+                    id="wish-price" 
+                    value={price} 
+                    onChange={e => setPrice(formatNumberInput(e.target.value))} 
+                    required 
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-navy focus:border-primary-navy"
+                />
             </div>
             <div>
                 <label htmlFor="wish-days" className="block text-sm font-medium text-secondary-gray">Waktu Pendinginan (Hari)</label>
@@ -889,6 +1046,8 @@ const App: React.FC = () => {
     const [dailyBackup, setDailyBackup] = useState<{ url: string; filename: string } | null>(null);
     const [notifications, setNotifications] = useState<string[]>([]);
     const backupCreatedToday = useRef(false);
+    const [lastImportDate, setLastImportDate] = useState<string | null>(() => localStorage.getItem('lastImportDate'));
+    const [lastExportDate, setLastExportDate] = useState<string | null>(() => localStorage.getItem('lastExportDate'));
     
     // Global Click Tracking for Hero Animation
     const lastClickPos = useRef<{x: number, y: number} | null>(null);
@@ -1451,6 +1610,50 @@ const App: React.FC = () => {
         });
         setActiveModal(null);
     }
+
+    const handleEditGlobalTransaction = (timestamp: number, newDesc: string, newAmount: number) => {
+        updateState(prev => {
+            const newState = JSON.parse(JSON.stringify(prev)); // Deep copy
+            
+            // Check Fund History
+            const fundIndex = newState.fundHistory.findIndex((t: FundTransaction) => t.timestamp === timestamp);
+            if (fundIndex !== -1) {
+                newState.fundHistory[fundIndex].desc = newDesc;
+                newState.fundHistory[fundIndex].amount = newAmount;
+                return newState;
+            }
+            
+            // Check Daily Expenses
+            const dailyIndex = newState.dailyExpenses.findIndex((t: Transaction) => t.timestamp === timestamp);
+            if (dailyIndex !== -1) {
+                newState.dailyExpenses[dailyIndex].desc = newDesc;
+                newState.dailyExpenses[dailyIndex].amount = newAmount;
+                return newState;
+            }
+            
+            // Check Budgets
+            for (const budget of newState.budgets) {
+                const histIndex = budget.history.findIndex((t: Transaction) => t.timestamp === timestamp);
+                if (histIndex !== -1) {
+                    budget.history[histIndex].desc = newDesc;
+                    budget.history[histIndex].amount = newAmount;
+                    return newState;
+                }
+            }
+
+            // Check Archives
+            for (const archive of newState.archives) {
+                const archIndex = archive.transactions.findIndex((t: GlobalTransaction) => t.timestamp === timestamp);
+                if (archIndex !== -1) {
+                    archive.transactions[archIndex].desc = newDesc;
+                    archive.transactions[archIndex].amount = newAmount;
+                    return newState;
+                }
+            }
+            
+            return newState;
+        });
+    };
     
     const handleDeleteGlobalTransaction = (timestamp: number) => {
         updateState(prev => {
@@ -1735,6 +1938,12 @@ const App: React.FC = () => {
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
+        
+        // Save last export date
+        const now = new Date().toISOString();
+        localStorage.setItem('lastExportDate', now);
+        setLastExportDate(now);
+        
         setActiveModal(null);
     };
 
@@ -1759,6 +1968,12 @@ const App: React.FC = () => {
                     throw new Error("Format file tidak valid.");
                 }
                 setState({ ...initialState, ...importedState });
+                
+                // Update import timestamp
+                const now = new Date().toISOString();
+                localStorage.setItem('lastImportDate', now);
+                setLastImportDate(now);
+                
                 setCurrentPage('dashboard');
             } catch (err) {
                 openConfirm("Gagal memuat file. Pastikan file cadangan tidak rusak dan berformat .json yang benar.", () => {});
@@ -1824,6 +2039,10 @@ const App: React.FC = () => {
             <><strong>HAPUS SEMUA DATA?</strong><br/>Tindakan ini tidak dapat diurungkan dan akan menghapus semua anggaran, transaksi, dan pencapaian Anda secara permanen.</>,
             () => {
                 localStorage.removeItem(`budgetAppState_v${APP_VERSION}`);
+                localStorage.removeItem('lastImportDate');
+                localStorage.removeItem('lastExportDate');
+                setLastImportDate(null);
+                setLastExportDate(null);
                 // Also remove internal backups
                 Object.keys(localStorage)
                     .filter(key => key.startsWith(BACKUP_PREFIX))
@@ -2362,6 +2581,7 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
                                 'Yakin ingin menghapus transaksi ini secara PERMANEN dari seluruh data?',
                                 () => handleDeleteGlobalTransaction(timestamp)
                             )}
+                            onEditTransaction={handleEditGlobalTransaction}
                             aiSearchResults={aiSearchResults}
                             isSearchingWithAI={isSearchingWithAI}
                             aiSearchError={aiSearchError}
@@ -2594,6 +2814,8 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
                     onResetMonthly={handleResetMonthlyData}
                     onResetAll={handleResetAllData}
                     onManualCloseBook={handleManualCloseBook}
+                    lastImportDate={lastImportDate}
+                    lastExportDate={lastExportDate}
                 />
             </Modal>
             
@@ -2706,24 +2928,30 @@ const BottomNavBar: React.FC<{
     ];
 
     return (
-        <nav className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md shadow-[0_-2px_10px_rgba(0,0,0,0.05)] max-w-3xl mx-auto border-t border-white/20 z-40">
-            <div className="flex justify-around items-center h-16">
-                {navItems.map(item => (
-                    <button 
-                        key={item.page} 
-                        onClick={() => onNavigate(item.page as Page)}
-                        className={`flex flex-col items-center justify-center space-y-1 w-full h-full transition-colors ${currentPage === item.page ? 'text-primary-navy' : 'text-secondary-gray hover:text-primary-navy'}`}
-                    >
-                        <item.icon className="w-6 h-6" />
-                        <span className={`text-xs font-medium ${currentPage === item.page ? 'font-bold' : ''}`}>{item.label}</span>
-                    </button>
-                ))}
+        <nav className="fixed bottom-6 left-1/2 transform -translate-x-1/2 w-[calc(100%-2rem)] max-w-md bg-primary-navy/95 backdrop-blur-xl border border-white/10 shadow-2xl shadow-primary-navy/20 rounded-full z-50 p-2">
+            <div className="flex justify-between items-center h-14 px-2 relative">
+                {navItems.map(item => {
+                    const isActive = currentPage === item.page;
+                    return (
+                        <button 
+                            key={item.page} 
+                            onClick={() => onNavigate(item.page as Page)}
+                            className={`relative flex items-center justify-center h-12 rounded-full transition-all duration-300 group ${isActive ? 'w-auto px-5 bg-white/10' : 'w-16 hover:bg-white/5'}`}
+                        >
+                            <item.icon className={`w-6 h-6 transition-colors duration-300 ${isActive ? 'text-accent-teal' : 'text-gray-400 group-hover:text-white'}`} />
+                            <span className={`ml-2 text-sm font-bold text-white whitespace-nowrap overflow-hidden transition-all duration-300 ${isActive ? 'max-w-[100px] opacity-100' : 'max-w-0 opacity-0'}`}>
+                                {item.label}
+                            </span>
+                        </button>
+                    );
+                })}
+                
+                {/* Menu Button - Distinct Style */}
                 <button
                     onClick={onOpenMenu}
-                    className="flex flex-col items-center justify-center space-y-1 w-full h-full text-secondary-gray hover:text-primary-navy"
+                    className="relative flex items-center justify-center w-12 h-12 rounded-full bg-accent-teal hover:bg-accent-teal-dark text-white shadow-lg hover:shadow-accent-teal/50 transition-all duration-300 transform active:scale-95"
                 >
                     <Squares2x2Icon className="w-6 h-6" />
-                    <span className="text-xs font-medium">Menu</span>
                 </button>
             </div>
         </nav>

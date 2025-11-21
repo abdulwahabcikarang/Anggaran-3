@@ -1,6 +1,7 @@
+
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import type { AppState, GlobalTransaction } from '../types';
-import { SparklesIcon, CalendarDaysIcon, ListBulletIcon, ChevronLeftIcon, ChevronRightIcon, BudgetIcon, TrashIcon, LockClosedIcon, ArrowDownTrayIcon, DocumentTextIcon } from './Icons';
+import { SparklesIcon, CalendarDaysIcon, ListBulletIcon, ChevronLeftIcon, ChevronRightIcon, BudgetIcon, TrashIcon, LockClosedIcon, ArrowDownTrayIcon, DocumentTextIcon, CheckCircleIcon, ArrowUturnLeftIcon } from './Icons';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -9,6 +10,7 @@ interface ReportsProps {
     onBack: () => void;
     onEditAsset: () => void;
     onDeleteTransaction: (timestamp: number) => void;
+    onEditTransaction: (timestamp: number, desc: string, amount: number) => void;
     aiSearchResults: GlobalTransaction[] | null;
     isSearchingWithAI: boolean;
     aiSearchError: string | null;
@@ -17,22 +19,84 @@ interface ReportsProps {
 }
 
 const formatCurrency = (amount: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
+const formatNumberInput = (value: string | number) => {
+    const numString = String(value).replace(/[^0-9]/g, '');
+    if (numString === '') return '';
+    return new Intl.NumberFormat('id-ID').format(Number(numString));
+};
+const getRawNumber = (value: string) => Number(value.replace(/[^0-9]/g, ''));
 const formatShortCurrency = (amount: number) => {
     if (amount >= 1000000) return `${(amount / 1000000).toFixed(1)}jt`;
     if (amount >= 1000) return `${Math.round(amount / 1000)}rb`;
     return amount;
 };
 
+const Chip: React.FC<{ label: string; active: boolean; onClick: () => void }> = ({ label, active, onClick }) => (
+    <button
+        onClick={onClick}
+        className={`px-3 py-1.5 rounded-full text-sm font-semibold whitespace-nowrap transition-all duration-200 border ${
+            active 
+            ? 'bg-primary-navy text-white border-primary-navy shadow-sm' 
+            : 'bg-white/60 text-secondary-gray border-gray-200 hover:bg-white'
+        }`}
+    >
+        {label}
+    </button>
+);
+
+// New Micro-Chart Component
+const SimpleSparkline = ({ data, color, width = 60, height = 20 }: { data: number[], color: string, width?: number, height?: number }) => {
+    if (data.length < 2 || data.every(d => d === 0)) return null;
+
+    const max = Math.max(...data);
+    const min = 0;
+    const range = max - min || 1;
+
+    const points = data.map((val, i) => {
+        const x = (i / (data.length - 1)) * width;
+        const y = height - ((val - min) / range) * height;
+        return `${x},${y}`;
+    }).join(' ');
+
+    return (
+        <div className="flex flex-col items-end" title="Tren pengeluaran 7 hari terakhir">
+             <svg width={width} height={height} className="overflow-visible">
+                <polyline 
+                    points={points} 
+                    fill="none" 
+                    stroke={color} 
+                    strokeWidth="2" 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    className="opacity-80"
+                />
+                {/* Dot at the end */}
+                <circle 
+                    cx={width} 
+                    cy={height - ((data[data.length-1] - min) / range) * height} 
+                    r="2" 
+                    fill={color} 
+                />
+            </svg>
+        </div>
+    );
+};
+
 const Reports: React.FC<ReportsProps> = ({ 
-    state, onBack, onEditAsset, onDeleteTransaction,
+    state, onBack, onEditAsset, onDeleteTransaction, onEditTransaction,
     aiSearchResults, isSearchingWithAI, aiSearchError, onAiSearch, onClearAiSearch 
 }) => {
     const [selectedMonth, setSelectedMonth] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
+    const [filterCategory, setFilterCategory] = useState('Semua');
     const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
     const [calendarDate, setCalendarDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
     const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
+    
+    // Focus Mode State
+    const [expandedTxId, setExpandedTxId] = useState<number | null>(null);
+    
     const monthPickerRef = useRef<HTMLDivElement>(null);
 
     // For hiding header on scroll
@@ -42,14 +106,14 @@ const Reports: React.FC<ReportsProps> = ({
 
 
     useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
+        const handleClick = (event: MouseEvent) => {
             if (monthPickerRef.current && !monthPickerRef.current.contains(event.target as Node)) {
                 setIsMonthPickerOpen(false);
             }
         };
-        document.addEventListener('mousedown', handleClickOutside);
+        document.addEventListener('mousedown', handleClick, true);
         return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('mousedown', handleClick, true);
         };
     }, []);
 
@@ -59,12 +123,12 @@ const Reports: React.FC<ReportsProps> = ({
 
         const handleScroll = () => {
             const currentScrollY = container.scrollTop;
-            if (Math.abs(currentScrollY - lastScrollY.current) < 20) return; // Threshold to prevent flickering
+            if (Math.abs(currentScrollY - lastScrollY.current) < 20) return;
 
             if (currentScrollY > lastScrollY.current && currentScrollY > 50) {
-                setIsHeaderVisible(false); // Scrolling down
+                setIsHeaderVisible(false); 
             } else if (currentScrollY < lastScrollY.current) {
-                setIsHeaderVisible(true); // Scrolling up
+                setIsHeaderVisible(true); 
             }
             lastScrollY.current = currentScrollY <= 0 ? 0 : currentScrollY;
         };
@@ -95,11 +159,31 @@ const Reports: React.FC<ReportsProps> = ({
         return transactions.sort((a, b) => b.timestamp - a.timestamp);
     }, [state]);
 
+    // Create a map of DateString -> TotalExpense for Sparklines
+    const dailyExpenseMap = useMemo(() => {
+        const map: { [date: string]: number } = {};
+        allTransactions.forEach(t => {
+            if (t.type === 'remove') {
+                const date = new Date(t.timestamp).toLocaleDateString('fr-CA');
+                map[date] = (map[date] || 0) + t.amount;
+            }
+        });
+        return map;
+    }, [allTransactions]);
+
     const totalAsset = useMemo(() => allTransactions.reduce((sum, t) => t.type === 'add' ? sum + t.amount : sum - t.amount, 0), [allTransactions]);
 
     const monthOptions = useMemo(() => {
         const options = new Set(allTransactions.map(t => new Date(t.timestamp).toISOString().slice(0, 7)));
         return [...options].sort().reverse();
+    }, [allTransactions]);
+    
+    const categories = useMemo(() => {
+        const cats = new Set<string>();
+        allTransactions.forEach(t => {
+            if (t.category) cats.add(t.category);
+        });
+        return Array.from(cats).sort();
     }, [allTransactions]);
 
     const transactionsToDisplay = useMemo(() => {
@@ -111,6 +195,16 @@ const Reports: React.FC<ReportsProps> = ({
             const monthMatch = selectedMonth === 'all' || new Date(t.timestamp).toISOString().startsWith(selectedMonth);
             return monthMatch;
         });
+        
+        if (filterCategory !== 'Semua') {
+            if (filterCategory === 'Pemasukan') {
+                filtered = filtered.filter(t => t.type === 'add');
+            } else if (filterCategory === 'Pengeluaran') {
+                filtered = filtered.filter(t => t.type === 'remove');
+            } else {
+                filtered = filtered.filter(t => t.category === filterCategory);
+            }
+        }
 
         if (searchQuery.trim()) {
             const lowercasedQuery = searchQuery.trim().toLowerCase();
@@ -121,7 +215,7 @@ const Reports: React.FC<ReportsProps> = ({
         }
 
         return filtered;
-    }, [allTransactions, selectedMonth, aiSearchResults, searchQuery]);
+    }, [allTransactions, selectedMonth, aiSearchResults, searchQuery, filterCategory]);
     
     const summaryExpense = useMemo(() => {
         return transactionsToDisplay.reduce((sum, t) => (t.type === 'remove' ? sum + t.amount : sum), 0);
@@ -130,6 +224,18 @@ const Reports: React.FC<ReportsProps> = ({
     const summaryIncome = useMemo(() => {
         return transactionsToDisplay.reduce((sum, t) => (t.type === 'add' ? sum + t.amount : sum), 0);
     }, [transactionsToDisplay]);
+
+    // AMBIENT BACKGROUND LOGIC
+    const ambientBgClass = useMemo(() => {
+        const balance = summaryIncome - summaryExpense;
+        if (balance >= 0) {
+            // Surplus: Teal to Blue (Calm)
+            return "bg-gradient-to-b from-teal-50 via-blue-50 to-white";
+        } else {
+            // Deficit/High Spend: Orange to Pink (Alert)
+            return "bg-gradient-to-b from-orange-50 via-red-50 to-white";
+        }
+    }, [summaryIncome, summaryExpense]);
 
     const groupedTransactions = useMemo(() => {
         const groups: { [date: string]: { transactions: GlobalTransaction[], dailyTotal: number } } = {};
@@ -171,7 +277,7 @@ const Reports: React.FC<ReportsProps> = ({
     const changeMonth = (offset: number) => {
         setCalendarDate(prev => {
             const newDate = new Date(prev);
-            newDate.setDate(1); // Avoid issues with day overflow
+            newDate.setDate(1); 
             newDate.setMonth(newDate.getMonth() + offset);
             return newDate;
         });
@@ -185,7 +291,7 @@ const Reports: React.FC<ReportsProps> = ({
 
         // --- HEADER ---
         doc.setFontSize(18);
-        doc.setTextColor(44, 62, 80); // Primary Navy
+        doc.setTextColor(44, 62, 80);
         doc.text("Anggaran 3", 14, 20);
         
         doc.setFontSize(14);
@@ -225,17 +331,17 @@ const Reports: React.FC<ReportsProps> = ({
         ]);
 
         autoTable(doc, {
-            // @ts-ignore - jspdf-autotable types might be tricky with lastAutoTable
+            // @ts-ignore 
             startY: doc.lastAutoTable.finalY + 15,
             head: [['Tanggal', 'Keterangan', 'Kategori', 'Pemasukan', 'Pengeluaran']],
             body: tableBody,
             theme: 'striped',
-            headStyles: { fillColor: [26, 188, 156] }, // Accent Teal
+            headStyles: { fillColor: [26, 188, 156] }, 
             styles: { fontSize: 9 },
             columnStyles: {
                 0: { cellWidth: 25 },
-                3: { halign: 'right', textColor: [22, 160, 133] }, // Greenish
-                4: { halign: 'right', textColor: [231, 76, 60] }   // Reddish
+                3: { halign: 'right', textColor: [22, 160, 133] }, 
+                4: { halign: 'right', textColor: [231, 76, 60] }  
             },
              margin: { left: 14, right: 14 }
         });
@@ -243,232 +349,354 @@ const Reports: React.FC<ReportsProps> = ({
         doc.save(`Laporan_${selectedMonth}.pdf`);
     };
 
-    const TransactionItem: React.FC<{t: GlobalTransaction, onDelete: (ts: number) => void}> = ({t, onDelete}) => (
-        <li key={t.timestamp} className="flex justify-between items-center py-3 px-3 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors duration-150">
-            <div className="flex items-center gap-4 flex-1 min-w-0">
-                {t.icon && t.color ? (
-                    <div style={{ backgroundColor: t.color }} className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0">
-                        <BudgetIcon icon={t.icon} className="w-6 h-6 text-white" />
-                    </div>
-                ) : (
-                    <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
-                        <ListBulletIcon className="w-5 h-5 text-gray-500"/>
-                    </div>
-                )}
-                <div className="flex-1 min-w-0">
-                    <p className="font-bold text-dark-text truncate">{t.desc}</p>
-                    <p className="text-xs text-secondary-gray mt-1">
-                        {t.category ? `${t.category} • ` : ''}
-                        {new Date(t.timestamp).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}, {new Date(t.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                    </p>
+    // --- FOCUS MODE ITEM ---
+    const TimelineItem: React.FC<{
+        t: GlobalTransaction, 
+        isLast: boolean, 
+        isExpanded: boolean,
+        onToggle: () => void,
+        onDelete: (ts: number) => void, 
+        onSaveEdit: (ts: number, desc: string, amount: number) => void
+    }> = ({t, isLast, isExpanded, onToggle, onDelete, onSaveEdit}) => {
+         const color = t.color || (t.type === 'add' ? '#1ABC9C' : '#E74C3C');
+         
+         // Edit State
+         const [editDesc, setEditDesc] = useState(t.desc);
+         const [editAmount, setEditAmount] = useState(formatNumberInput(t.amount));
+
+         useEffect(() => {
+             if(isExpanded) {
+                 setEditDesc(t.desc);
+                 setEditAmount(formatNumberInput(t.amount));
+             }
+         }, [isExpanded, t]);
+
+         const handleSave = (e: React.MouseEvent) => {
+             e.stopPropagation();
+             onSaveEdit(t.timestamp, editDesc, getRawNumber(editAmount));
+             onToggle(); // Collapse after save
+         };
+
+         return (
+            <div className="relative pl-4 sm:pl-8 py-2 group">
+                {/* Timeline Dot */}
+                <div 
+                    className={`absolute left-[-5px] top-5 w-3 h-3 rounded-full border-2 border-white ring-2 z-10 transition-all duration-300 ${isExpanded ? 'scale-150 ring-primary-navy' : 'ring-transparent group-hover:scale-125'}`}
+                    style={{ borderColor: color, backgroundColor: color }}
+                />
+                
+                {/* Time Label */}
+                 <div className="absolute left-[-60px] top-4 w-12 text-right text-xs font-medium text-secondary-gray hidden sm:block">
+                    {new Date(t.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                </div>
+    
+                {/* Card */}
+                <div 
+                    onClick={!isExpanded ? onToggle : undefined}
+                    className={`
+                        bg-white rounded-xl border transition-all duration-300 cursor-pointer overflow-hidden
+                        ${isExpanded 
+                            ? 'shadow-xl border-primary-navy ring-1 ring-primary-navy/10 scale-[1.02] z-10' 
+                            : 'shadow-sm border-gray-100 hover:shadow-md hover:border-blue-200'
+                        }
+                    `}
+                >
+                     <div className="p-4">
+                        {isExpanded ? (
+                            <div className="animate-fade-in space-y-3 cursor-default" onClick={e => e.stopPropagation()}>
+                                <div>
+                                    <label className="text-xs font-bold text-secondary-gray uppercase">Keterangan</label>
+                                    <input 
+                                        value={editDesc} 
+                                        onChange={e => setEditDesc(e.target.value)}
+                                        className="w-full border-b border-gray-300 focus:border-primary-navy focus:outline-none py-1 font-semibold text-dark-text"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-secondary-gray uppercase">Jumlah</label>
+                                    <input 
+                                        value={editAmount} 
+                                        onChange={e => setEditAmount(formatNumberInput(e.target.value))}
+                                        inputMode="numeric"
+                                        className="w-full border-b border-gray-300 focus:border-primary-navy focus:outline-none py-1 font-semibold text-dark-text"
+                                    />
+                                </div>
+                                <div className="flex justify-end gap-3 pt-2">
+                                    <button onClick={onToggle} className="px-3 py-1.5 rounded text-sm text-gray-500 hover:bg-gray-100 font-medium">
+                                        Batal
+                                    </button>
+                                    <button onClick={() => onDelete(t.timestamp)} className="px-3 py-1.5 rounded text-sm text-danger-red hover:bg-red-50 font-medium flex items-center gap-1">
+                                        <TrashIcon className="w-4 h-4" /> Hapus
+                                    </button>
+                                    <button onClick={handleSave} className="px-4 py-1.5 rounded bg-primary-navy text-white text-sm font-bold hover:bg-primary-navy-dark flex items-center gap-1">
+                                        <CheckCircleIcon className="w-4 h-4" /> Simpan
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                             <div className="flex justify-between items-start gap-3">
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className="sm:hidden text-[10px] font-bold bg-gray-100 px-1.5 py-0.5 rounded text-secondary-gray">
+                                            {new Date(t.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                        <h4 className="font-bold text-dark-text truncate text-sm sm:text-base">{t.desc}</h4>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs text-secondary-gray">
+                                        {t.icon ? <BudgetIcon icon={t.icon} className="w-3 h-3" /> : <ListBulletIcon className="w-3 h-3"/>}
+                                        <span>{t.category || (t.type === 'add' ? 'Pemasukan' : 'Umum')}</span>
+                                    </div>
+                                </div>
+                                <div className="flex flex-col items-end gap-1">
+                                    <span className={`font-bold text-sm sm:text-base ${t.type === 'add' ? 'text-accent-teal' : 'text-danger-red'}`}>
+                                        {t.type === 'add' ? '+' : '-'} {formatCurrency(t.amount)}
+                                    </span>
+                                </div>
+                             </div>
+                        )}
+                     </div>
                 </div>
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0 ml-4">
-                 <div className="text-right">
-                    <p className={`font-bold text-base ${t.type === 'add' ? 'text-accent-teal' : 'text-danger-red'}`}>{t.type === 'add' ? '+' : '-'} {formatCurrency(t.amount)}</p>
-                </div>
-                <button onClick={() => onDelete(t.timestamp)} className="text-gray-400 hover:text-danger-red p-2">
-                    <TrashIcon className="w-5 h-5" />
-                </button>
-            </div>
-        </li>
-    );
+        );
+    };
 
     const displayMonthText = selectedMonth === 'all' 
         ? 'Semua Waktu' 
         : new Date(selectedMonth + '-02').toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
 
+    const totalAssetSection = (
+        <section className="mt-6 pb-32">
+             <div onClick={onEditAsset} className="bg-white/80 backdrop-blur p-4 rounded-xl shadow-sm border border-gray-200 flex justify-between items-center cursor-pointer hover:bg-white transition-colors">
+                 <div>
+                    <h2 className="text-sm font-bold text-primary-navy">Total Aset Likuid</h2>
+                    <p className="text-xs text-secondary-gray">Dana Umum + Dompet</p>
+                 </div>
+                 <p className="text-xl font-bold text-primary-navy">{formatCurrency(totalAsset)}</p>
+            </div>
+        </section>
+    );
+
     return (
-        <main className="p-4 pb-24 animate-fade-in">
-            <h1 className="text-3xl font-bold text-primary-navy text-center mb-6">Laporan Global</h1>
-
-            <section className="bg-white rounded-xl shadow-md flex flex-col">
-                <div className={`z-30 bg-white p-6 rounded-t-xl transition-transform duration-300 ease-in-out ${isHeaderVisible ? 'translate-y-0' : '-translate-y-full'}`}>
-                    <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-4">
-                        <h2 className="text-xl font-bold text-primary-navy">Riwayat Transaksi</h2>
-                        <div className="flex items-center gap-4 self-start sm:self-center">
-                            <div className="flex-shrink-0 bg-gray-100 p-1 rounded-lg flex space-x-1">
-                                <button onClick={() => setViewMode('list')} className={`flex items-center gap-2 px-3 py-1 text-sm font-semibold rounded-md transition-all ${viewMode === 'list' ? 'bg-white shadow' : 'text-secondary-gray hover:bg-gray-200'}`}><ListBulletIcon className="w-4 h-4" /> Daftar</button>
-                                <button onClick={() => setViewMode('calendar')} className={`flex items-center gap-2 px-3 py-1 text-sm font-semibold rounded-md transition-all ${viewMode === 'calendar' ? 'bg-white shadow' : 'text-secondary-gray hover:bg-gray-200'}`}><CalendarDaysIcon className="w-4 h-4" /> Kalender</button>
-                            </div>
-                            <div className="flex-shrink-0 relative" ref={monthPickerRef}>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-sm font-medium text-secondary-gray">
-                                        {selectedMonth === 'all' 
-                                            ? 'Semua' 
-                                            : new Date(selectedMonth + '-02').toLocaleDateString('id-ID', { month: 'short', year: 'numeric' })
-                                        }
-                                    </span>
-                                    <button
-                                        onClick={() => setIsMonthPickerOpen(prev => !prev)}
-                                        className="p-2 border border-gray-300 rounded-full bg-white hover:bg-gray-100"
-                                    >
-                                        <CalendarDaysIcon className="w-5 h-5 text-primary-navy" />
-                                    </button>
-                                </div>
-                                {isMonthPickerOpen && (
-                                    <div className="absolute z-20 mt-1 right-0 w-48 bg-white rounded-lg shadow-lg border max-h-60 overflow-y-auto">
-                                        <button 
-                                            onClick={() => { setSelectedMonth('all'); setIsMonthPickerOpen(false); }}
-                                            className="w-full text-left px-4 py-2 hover:bg-gray-100"
-                                        >
-                                            Semua Waktu
-                                        </button>
-                                        {monthOptions.map(month => (
-                                            <button 
-                                                key={month} 
-                                                onClick={() => { setSelectedMonth(month); setIsMonthPickerOpen(false); }}
-                                                className="w-full text-left px-4 py-2 hover:bg-gray-100"
-                                            >
-                                                {new Date(month + '-02').toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
+        <main className={`h-full flex flex-col animate-fade-in ${ambientBgClass}`}>
+            {/* Fixed Header */}
+            <div className={`z-40 p-4 sticky top-0 transition-all duration-300 ease-in-out ${isHeaderVisible ? 'bg-transparent' : 'bg-white/90 backdrop-blur-md shadow-sm'}`}>
+                <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-2 gap-4">
+                    <div className="flex items-center gap-3">
+                         <button onClick={onBack} className="p-2 rounded-full bg-white/50 hover:bg-white shadow-sm">
+                            <ArrowUturnLeftIcon className="w-5 h-5 text-primary-navy" />
+                         </button>
+                         <h1 className="text-2xl font-bold text-primary-navy">Laporan</h1>
                     </div>
-                
-                    {viewMode === 'list' && (
-                        <div className="flex flex-col md:flex-row gap-4 items-end">
-                                <div className="flex-grow">
-                                    <label htmlFor="search-filter" className="text-sm font-medium text-secondary-gray mb-1">Cari / Tanya AI</label>
-                                    <div className="flex gap-2">
-                                        <input 
-                                            type="text" 
-                                            id="search-filter"
-                                            value={searchQuery} 
-                                            onChange={e => setSearchQuery(e.target.value)} 
-                                            placeholder="Ketik keterangan atau kategori..." 
-                                            className="w-full p-3 pl-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-navy focus:border-transparent"
-                                            disabled={isSearchingWithAI}
-                                        />
-                                        <button 
-                                            type="button" 
-                                            onClick={handleAiSearchClick}
-                                            className="bg-primary-navy text-white font-bold p-3 rounded-lg hover:bg-primary-navy-dark transition-colors disabled:bg-gray-400 flex items-center justify-center" 
-                                            disabled={isSearchingWithAI || !searchQuery.trim()}
-                                            title="Pencarian Cerdas (AI)"
-                                        >
-                                            <SparklesIcon className="w-6 h-6" />
-                                        </button>
-                                    </div>
-                                    {aiSearchError && <p className="text-sm text-danger-red mt-1">{aiSearchError}</p>}
-                                </div>
-                                {aiSearchResults !== null && (
-                                    <div className="self-end">
-                                        <button onClick={() => { onClearAiSearch(); setSearchQuery(''); }} className="bg-gray-200 text-dark-text font-bold py-3 px-3 rounded-lg hover:bg-gray-300 transition-colors h-full">
-                                            Reset
-                                        </button>
-                                    </div>
-                                )}
+                    
+                    <div className="flex items-center gap-2 self-start sm:self-center">
+                        <div className="bg-white/60 p-1 rounded-lg flex space-x-1 shadow-sm">
+                            <button onClick={() => setViewMode('list')} className={`p-2 rounded-md transition-all ${viewMode === 'list' ? 'bg-primary-navy text-white shadow' : 'text-secondary-gray hover:bg-white'}`}><ListBulletIcon className="w-5 h-5" /></button>
+                            <button onClick={() => setViewMode('calendar')} className={`p-2 rounded-md transition-all ${viewMode === 'calendar' ? 'bg-primary-navy text-white shadow' : 'text-secondary-gray hover:bg-white'}`}><CalendarDaysIcon className="w-5 h-5" /></button>
                         </div>
-                    )}
-                </div>
-                
-                {viewMode === 'list' && (
-                    <div className="flex-grow">
-                        {isSearchingWithAI && (
-                            <div className="text-center py-4">
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-navy mx-auto"></div>
-                                <p className="mt-2 text-secondary-gray">AI sedang mencari...</p>
-                            </div>
-                        )}
-
-                        <div ref={scrollableContainerRef} className="max-h-[65vh] overflow-y-auto space-y-4 px-6 pb-6">
-                            {Object.keys(groupedTransactions).length === 0 && !isSearchingWithAI ? (
-                                <div className="text-center text-secondary-gray py-12 px-6">
-                                    <ListBulletIcon className="w-16 h-16 mx-auto text-gray-300" />
-                                    <h3 className="mt-4 text-lg font-semibold text-dark-text">Tidak Ada Transaksi Ditemukan</h3>
-                                    <p className="mt-1 text-sm text-secondary-gray">
-                                        {aiSearchResults !== null ? 'Pencarian AI tidak menemukan hasil.' : 'Coba ubah kata kunci pencarian atau pilih periode bulan yang berbeda.'}
-                                    </p>
+                        <div className="relative" ref={monthPickerRef}>
+                            <button
+                                onClick={() => setIsMonthPickerOpen(prev => !prev)}
+                                className="flex items-center gap-2 px-4 py-2 bg-white/60 hover:bg-white rounded-lg shadow-sm border border-transparent hover:border-gray-200 transition-all"
+                            >
+                                <span className="text-sm font-bold text-primary-navy">
+                                    {selectedMonth === 'all' 
+                                        ? 'Semua' 
+                                        : new Date(selectedMonth + '-02').toLocaleDateString('id-ID', { month: 'short', year: 'numeric' })
+                                    }
+                                </span>
+                                <CalendarDaysIcon className="w-4 h-4 text-secondary-gray" />
+                            </button>
+                            {isMonthPickerOpen && (
+                                <div className="absolute z-50 mt-2 right-0 w-48 bg-white rounded-xl shadow-xl border border-gray-100 max-h-60 overflow-y-auto animate-fade-in-up">
+                                    <button 
+                                        onClick={() => { setSelectedMonth('all'); setIsMonthPickerOpen(false); }}
+                                        className="w-full text-left px-4 py-3 hover:bg-blue-50 text-sm font-medium border-b border-gray-50"
+                                    >
+                                        Semua Waktu
+                                    </button>
+                                    {monthOptions.map(month => (
+                                        <button 
+                                            key={month} 
+                                            onClick={() => { setSelectedMonth(month); setIsMonthPickerOpen(false); }}
+                                            className="w-full text-left px-4 py-3 hover:bg-blue-50 text-sm text-secondary-gray hover:text-primary-navy"
+                                        >
+                                            {new Date(month + '-02').toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}
+                                        </button>
+                                    ))}
                                 </div>
-                            ) : (
-                                Object.keys(groupedTransactions).map((date) => {
-                                    const group = groupedTransactions[date];
-                                    const aDate = new Date(date + 'T00:00:00');
-                                    return (
-                                    <div key={date}>
-                                        <div className="flex justify-between items-center bg-gray-100 p-3 rounded-t-lg border-b sticky top-0 z-10">
-                                            <div className="flex items-center space-x-3">
-                                                <span className="text-2xl font-bold text-dark-text w-8 text-center">{aDate.getDate().toString().padStart(2, '0')}</span>
-                                                <div>
-                                                    <p className="font-semibold text-dark-text">{aDate.toLocaleDateString('id-ID', { weekday: 'long' })}</p>
-                                                    <p className="text-xs text-secondary-gray">{aDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}</p>
-                                                </div>
-                                            </div>
-                                            {group.dailyTotal > 0 && (
-                                                <p className="font-bold text-danger-red">-{formatCurrency(group.dailyTotal)}</p>
-                                            )}
-                                        </div>
-                                        <ul className="bg-white rounded-b-lg ">
-                                            {group.transactions.map(t => (
-                                                <TransactionItem key={t.timestamp} t={t} onDelete={onDeleteTransaction} />
-                                            ))}
-                                        </ul>
-                                    </div>
-                                )})
                             )}
                         </div>
-                        
-                        <div className="mt-auto p-6 border-t">
-                            <div className="bg-blue-50 border-l-4 border-accent-teal p-4 rounded-md text-center">
-                                <p className="text-lg font-bold text-danger-red">{formatCurrency(summaryExpense)}</p>
-                                <span className="text-sm text-secondary-gray">Total Pengeluaran (sesuai filter)</span>
-                            </div>
-                        </div>
                     </div>
-                )}
-
-                {viewMode === 'calendar' && (
-                   <div className="p-6">
-                       <CalendarView 
-                           currentDate={calendarDate}
-                           transactionsByDate={calendarTransactionsByDate}
-                           selectedDate={selectedDate}
-                           onDateClick={(date) => setSelectedDate(prev => prev === date ? null : date)}
-                           onChangeMonth={changeMonth}
-                           onDeleteTransaction={onDeleteTransaction}
-                           TransactionItem={TransactionItem}
-                       />
-                   </div>
-                )}
-            </section>
-
-             {/* --- DOWNLOAD PDF SECTION --- */}
-             <section className="bg-white rounded-xl p-6 mt-6 shadow-md">
-                <div className="flex items-center gap-3 mb-4">
-                    <DocumentTextIcon className="w-6 h-6 text-primary-navy" />
-                    <h2 className="text-xl font-bold text-primary-navy">Unduh Laporan</h2>
                 </div>
-                
-                <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-light-bg p-4 rounded-lg border border-gray-200">
-                    <div>
-                        <p className="font-semibold text-dark-text">Laporan Bulanan PDF</p>
-                        <p className="text-sm text-secondary-gray">
-                            Periode: <span className="font-bold text-primary-navy">{displayMonthText}</span>
-                        </p>
-                         <p className="text-xs text-secondary-gray mt-1">Data yang diunduh sesuai dengan filter bulan di atas.</p>
-                    </div>
-                    <button 
-                        onClick={handleDownloadPDF}
-                        disabled={transactionsToDisplay.length === 0}
-                        className="flex items-center gap-2 bg-primary-navy text-white font-bold py-2 px-4 rounded-lg hover:bg-primary-navy-dark transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed whitespace-nowrap"
-                    >
-                        <ArrowDownTrayIcon className="w-5 h-5" />
-                        <span>Download PDF</span>
-                    </button>
-                </div>
-            </section>
             
-            <section className="bg-white rounded-xl p-6 mt-6 shadow-md">
-                <div className="flex justify-between items-center">
-                    <h2 className="text-xl font-bold text-primary-navy">Dana Umum (Total Aset)</h2>
-                    <button onClick={onEditAsset} className="text-accent-teal font-semibold hover:underline">Edit</button>
+                {viewMode === 'list' && (
+                    <div className={`transition-all duration-500 ease-in-out overflow-hidden ${isHeaderVisible ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'}`}>
+                        <div className="flex gap-2 overflow-x-auto pb-2 mb-2 no-scrollbar">
+                            <Chip label="Semua" active={filterCategory === 'Semua'} onClick={() => setFilterCategory('Semua')} />
+                            <Chip label="Pemasukan" active={filterCategory === 'Pemasukan'} onClick={() => setFilterCategory('Pemasukan')} />
+                            <Chip label="Pengeluaran" active={filterCategory === 'Pengeluaran'} onClick={() => setFilterCategory('Pengeluaran')} />
+                            {categories.map(cat => (
+                                <Chip key={cat} label={cat} active={filterCategory === cat} onClick={() => setFilterCategory(cat)} />
+                            ))}
+                        </div>
+
+                        <div className="flex gap-2">
+                            <div className="relative flex-grow">
+                                <input 
+                                    type="text" 
+                                    value={searchQuery} 
+                                    onChange={e => setSearchQuery(e.target.value)} 
+                                    placeholder="Cari transaksi..." 
+                                    className="w-full pl-4 pr-10 py-2.5 bg-white/60 border border-transparent focus:bg-white focus:border-primary-navy/30 rounded-xl focus:outline-none focus:ring-0 transition-all shadow-sm text-sm"
+                                    disabled={isSearchingWithAI}
+                                />
+                                {searchQuery && (
+                                    <button onClick={() => {setSearchQuery(''); onClearAiSearch();}} className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600">
+                                        &times;
+                                    </button>
+                                )}
+                            </div>
+                            <button 
+                                type="button" 
+                                onClick={handleAiSearchClick}
+                                className="bg-primary-navy text-white p-2.5 rounded-xl hover:bg-primary-navy-dark transition-colors disabled:opacity-50 shadow-md" 
+                                disabled={isSearchingWithAI || !searchQuery.trim()}
+                            >
+                                <SparklesIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+                        {aiSearchError && <p className="text-xs text-danger-red mt-1">{aiSearchError}</p>}
+                    </div>
+                )}
+            </div>
+            
+            {viewMode === 'list' && (
+                <div className="flex-grow flex flex-col overflow-hidden">
+                    {isSearchingWithAI && (
+                        <div className="text-center py-8">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-navy mx-auto"></div>
+                            <p className="mt-2 text-secondary-gray text-sm">AI sedang mencari...</p>
+                        </div>
+                    )}
+
+                    <div ref={scrollableContainerRef} className="flex-grow overflow-y-auto px-4 no-scrollbar">
+                        {Object.keys(groupedTransactions).length === 0 && !isSearchingWithAI ? (
+                            <div className="flex flex-col items-center justify-center h-64 text-secondary-gray">
+                                <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                                    <ListBulletIcon className="w-10 h-10 opacity-20" />
+                                </div>
+                                <h3 className="text-lg font-semibold text-dark-text">Belum Ada Data</h3>
+                                <p className="text-sm opacity-60">Transaksi Anda akan muncul di sini.</p>
+                            </div>
+                        ) : (
+                            Object.keys(groupedTransactions).map((date) => {
+                                const group = groupedTransactions[date];
+                                const aDate = new Date(date + 'T00:00:00');
+                                
+                                // Generate last 7 days data for sparkline
+                                const sparklineData = [];
+                                for (let i = 6; i >= 0; i--) {
+                                    const d = new Date(aDate);
+                                    d.setDate(d.getDate() - i);
+                                    const dStr = d.toLocaleDateString('fr-CA');
+                                    sparklineData.push(dailyExpenseMap[dStr] || 0);
+                                }
+
+                                return (
+                                <div key={date} className="mb-6">
+                                    {/* Timeline Header (Sticky Date) */}
+                                    <div className="sticky top-0 z-20 py-2 mb-2 flex justify-between items-end bg-gradient-to-b from-white/95 to-white/80 backdrop-blur-sm border-b border-gray-100">
+                                        <div className="flex items-baseline gap-2 pl-2">
+                                            <span className="text-2xl font-bold text-primary-navy">{aDate.getDate()}</span>
+                                            <div>
+                                                <div className="font-bold text-dark-text text-sm leading-none">{aDate.toLocaleDateString('id-ID', { month: 'long' })}</div>
+                                                <div className="text-[10px] text-secondary-gray uppercase tracking-wide">{aDate.toLocaleDateString('id-ID', { weekday: 'long' })}</div>
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Sparkline & Total */}
+                                        <div className="flex items-end gap-4 pr-2">
+                                            <SimpleSparkline data={sparklineData} color="#E74C3C" />
+                                            {group.dailyTotal > 0 && (
+                                                <div className="text-right">
+                                                    <span className="text-[10px] text-secondary-gray block uppercase tracking-wider">Keluar</span>
+                                                    <span className="font-bold text-danger-red text-sm">-{formatShortCurrency(group.dailyTotal)}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Timeline Container */}
+                                    <div className="ml-2 sm:ml-16 border-l-2 border-gray-200/60 space-y-1 pb-2">
+                                        {group.transactions.map((t, idx) => (
+                                            <TimelineItem 
+                                                key={t.timestamp} 
+                                                t={t} 
+                                                isLast={idx === group.transactions.length - 1}
+                                                isExpanded={expandedTxId === t.timestamp}
+                                                onToggle={() => setExpandedTxId(prev => prev === t.timestamp ? null : t.timestamp)}
+                                                onDelete={onDeleteTransaction}
+                                                onSaveEdit={onEditTransaction}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                            )})
+                        )}
+
+                        {/* Footer Summary - Static now */}
+                        <div className="mt-6 p-4 bg-white border border-gray-100 rounded-xl shadow-sm">
+                            <div className="flex justify-between items-center mb-3">
+                                <div>
+                                    <p className="text-xs text-secondary-gray uppercase font-bold">Pengeluaran</p>
+                                    <p className="text-lg font-bold text-danger-red">{formatCurrency(summaryExpense)}</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-xs text-secondary-gray uppercase font-bold">Pemasukan</p>
+                                    <p className="text-lg font-bold text-accent-teal">{formatCurrency(summaryIncome)}</p>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={handleDownloadPDF}
+                                disabled={transactionsToDisplay.length === 0}
+                                className="w-full flex items-center justify-center gap-2 bg-primary-navy text-white font-bold py-3 rounded-xl hover:bg-primary-navy-dark transition-colors disabled:bg-gray-300 text-sm shadow-lg shadow-primary-navy/20"
+                            >
+                                <ArrowDownTrayIcon className="w-5 h-5" />
+                                <span>Unduh PDF Laporan</span>
+                            </button>
+                        </div>
+
+                        {/* Total Asset Section */}
+                        {totalAssetSection}
+                    </div>
                 </div>
-                <p className="text-3xl font-bold text-primary-navy text-center mt-2">{formatCurrency(totalAsset)}</p>
-            </section>
+            )}
+
+            {viewMode === 'calendar' && (
+               <div className="p-6 overflow-y-auto">
+                   <CalendarView 
+                       currentDate={calendarDate}
+                       transactionsByDate={calendarTransactionsByDate}
+                       selectedDate={selectedDate}
+                       onDateClick={(date) => setSelectedDate(prev => prev === date ? null : date)}
+                       onChangeMonth={changeMonth}
+                       onDeleteTransaction={onDeleteTransaction}
+                       onEditTransaction={(t) => onEditTransaction(t.timestamp, t.desc, t.amount)} 
+                       TransactionItem={({t, onDelete}) => (
+                           <TimelineItem 
+                                t={t} 
+                                isLast={false} 
+                                isExpanded={expandedTxId === t.timestamp}
+                                onToggle={() => setExpandedTxId(prev => prev === t.timestamp ? null : t.timestamp)}
+                                onDelete={onDelete} 
+                                onSaveEdit={onEditTransaction}
+                           />
+                       )}
+                   />
+                   {/* Total Asset Section for Calendar View */}
+                   {totalAssetSection}
+               </div>
+            )}
         </main>
     );
 };
@@ -481,8 +709,9 @@ const CalendarView: React.FC<{
     onDateClick: (date: string) => void;
     onChangeMonth: (offset: number) => void;
     onDeleteTransaction: (timestamp: number) => void;
-    TransactionItem: React.FC<{t: GlobalTransaction, onDelete: (ts: number) => void}>;
-}> = ({ currentDate, transactionsByDate, selectedDate, onDateClick, onChangeMonth, onDeleteTransaction, TransactionItem }) => {
+    onEditTransaction: (t: GlobalTransaction) => void;
+    TransactionItem: React.FC<{t: GlobalTransaction, onDelete: (ts: number) => void, onEdit: (t: GlobalTransaction) => void}>;
+}> = ({ currentDate, transactionsByDate, selectedDate, onDateClick, onChangeMonth, onDeleteTransaction, onEditTransaction, TransactionItem }) => {
     const calendarDays = useMemo(() => {
         const year = currentDate.getFullYear();
         const month = currentDate.getMonth();
@@ -490,11 +719,9 @@ const CalendarView: React.FC<{
         const daysInMonth = new Date(year, month + 1, 0).getDate();
         
         const days = [];
-        // Pad with days from previous month
         for (let i = 0; i < firstDayOfMonth; i++) {
             days.push({ key: `prev-${i}`, isCurrentMonth: false });
         }
-        // Add days of current month
         for (let day = 1; day <= daysInMonth; day++) {
             const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             days.push({ 
@@ -510,37 +737,54 @@ const CalendarView: React.FC<{
 
     const today = new Date().toLocaleDateString('fr-CA');
 
+    const getHeatmapColor = (income: number, expense: number) => {
+        if (income === 0 && expense === 0) return 'bg-white border-gray-200';
+        if (income > expense) return 'bg-green-100 border-green-300';
+        const netExpense = expense - income;
+        if (netExpense < 50000) return 'bg-red-50 border-red-200';
+        if (netExpense < 200000) return 'bg-red-100 border-red-300';
+        return 'bg-red-200 border-red-400';
+    };
+
     return (
         <div>
-            <div className="flex justify-between items-center mb-4">
-                <button onClick={() => onChangeMonth(-1)} className="p-2 rounded-full hover:bg-gray-100"><ChevronLeftIcon className="w-6 h-6" /></button>
+            <div className="flex justify-between items-center mb-6 bg-white p-3 rounded-xl shadow-sm border border-gray-100">
+                <button onClick={() => onChangeMonth(-1)} className="p-2 rounded-full hover:bg-gray-100"><ChevronLeftIcon className="w-6 h-6 text-primary-navy" /></button>
                 <h3 className="text-lg font-bold text-primary-navy">{currentDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}</h3>
-                <button onClick={() => onChangeMonth(1)} className="p-2 rounded-full hover:bg-gray-100"><ChevronRightIcon className="w-6 h-6" /></button>
+                <button onClick={() => onChangeMonth(1)} className="p-2 rounded-full hover:bg-gray-100"><ChevronRightIcon className="w-6 h-6 text-primary-navy" /></button>
             </div>
-            <div className="grid grid-cols-7 gap-1 text-center text-xs text-secondary-gray mb-2">
+            
+            <div className="grid grid-cols-7 gap-2 mb-2 text-center text-xs font-bold text-secondary-gray">
                 {['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'].map(day => <div key={day}>{day}</div>)}
             </div>
-            <div className="grid grid-cols-7 gap-1">
+            <div className="grid grid-cols-7 gap-2">
                 {calendarDays.map(dayInfo => {
                     if (!dayInfo.isCurrentMonth) return <div key={dayInfo.key} className="h-20 sm:h-24"></div>;
                     
                     const isSelected = selectedDate === dayInfo.date;
                     const isToday = today === dayInfo.date;
+                    const income = dayInfo.data?.income || 0;
+                    const expense = dayInfo.data?.expense || 0;
+                    
+                    const bgClass = isSelected 
+                        ? 'bg-primary-navy text-white ring-2 ring-primary-navy border-transparent shadow-lg transform scale-105 z-10'
+                        : getHeatmapColor(income, expense);
 
                     return (
                         <div 
                             key={dayInfo.key} 
                             onClick={() => onDateClick(dayInfo.date!)}
-                            className={`relative h-20 sm:h-24 p-1.5 border rounded-lg cursor-pointer transition-all duration-200
-                                ${isSelected ? 'bg-primary-navy-dark text-white ring-2 ring-primary-navy' : 'bg-white hover:bg-gray-50'}
-                                ${isToday && !isSelected ? 'border-primary-navy' : 'border-gray-200'}
+                            className={`relative h-20 sm:h-24 p-1 border rounded-xl cursor-pointer transition-all duration-200 flex flex-col justify-between
+                                ${bgClass}
+                                ${isToday && !isSelected ? 'ring-2 ring-accent-teal border-transparent' : ''}
+                                hover:shadow-md
                             `}
                         >
-                            <span className={`text-sm font-semibold ${isToday && !isSelected ? 'text-primary-navy' : ''}`}>{dayInfo.day}</span>
+                            <span className={`text-sm font-bold ml-1 mt-1 ${isSelected ? 'text-white' : (isToday ? 'text-accent-teal' : 'text-dark-text')}`}>{dayInfo.day}</span>
                             {dayInfo.data && (
-                                <div className="absolute bottom-1.5 right-1.5 text-right">
-                                    {dayInfo.data.income > 0 && <p className="text-xs text-accent-teal font-medium leading-tight">+{formatShortCurrency(dayInfo.data.income)}</p>}
-                                    {dayInfo.data.expense > 0 && <p className="text-xs text-danger-red font-medium leading-tight">-{formatShortCurrency(dayInfo.data.expense)}</p>}
+                                <div className="flex flex-col items-end pr-1 pb-1">
+                                    {income > 0 && <p className={`text-[10px] font-bold leading-tight ${isSelected ? 'text-green-300' : 'text-accent-teal'}`}>+{formatShortCurrency(income)}</p>}
+                                    {expense > 0 && <p className={`text-[10px] font-bold leading-tight ${isSelected ? 'text-red-300' : 'text-danger-red'}`}>-{formatShortCurrency(expense)}</p>}
                                 </div>
                             )}
                         </div>
@@ -549,19 +793,20 @@ const CalendarView: React.FC<{
             </div>
 
             {selectedDate && (
-                <div className="mt-6 animate-fade-in">
-                    <h4 className="font-bold text-primary-navy mb-2 border-b pb-2">
-                        Transaksi pada {new Date(selectedDate + 'T00:00:00').toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}
+                <div className="mt-8 animate-fade-in bg-white rounded-xl p-4 shadow-md border border-gray-100">
+                    <h4 className="font-bold text-primary-navy mb-4 pb-2 border-b flex justify-between items-center">
+                        <span>{new Date(selectedDate + 'T00:00:00').toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+                        <span className="text-xs font-normal text-secondary-gray">Detail Harian</span>
                     </h4>
-                     <ul className="max-h-60 overflow-y-auto">
+                     <div className="max-h-80 overflow-y-auto space-y-2 pl-2">
                         {(transactionsByDate[selectedDate]?.transactions || []).length > 0 ? (
                            [...transactionsByDate[selectedDate].transactions].sort((a,b) => b.timestamp - a.timestamp).map(t => (
-                            <TransactionItem key={t.timestamp} t={t} onDelete={onDeleteTransaction} />
+                            <TransactionItem key={t.timestamp} t={t} onDelete={onDeleteTransaction} onEdit={onEditTransaction} />
                            ))
                         ) : (
-                            <li className="text-center text-secondary-gray py-4">Tidak ada transaksi pada tanggal ini.</li>
+                            <p className="text-center text-secondary-gray py-4">Tidak ada transaksi pada tanggal ini.</p>
                         )}
-                    </ul>
+                    </div>
                 </div>
             )}
         </div>

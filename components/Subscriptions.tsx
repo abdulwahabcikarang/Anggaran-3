@@ -56,6 +56,14 @@ const getNextPaymentDate = (firstBillDate: string, cycle: 'monthly' | 'yearly', 
     return nextDate;
 };
 
+// Duplicated helper for consistent formatting within this component if needed, 
+// though ideally should be shared. Re-implementing simply here to match requested behavior.
+const formatNumberInput = (value: string | number) => {
+    const numString = String(value).replace(/[^0-9]/g, '');
+    if (numString === '') return '';
+    return new Intl.NumberFormat('id-ID').format(Number(numString));
+};
+const getRawNumber = (value: string) => Number(value.replace(/[^0-9]/g, ''));
 
 const Subscriptions: React.FC<SubscriptionsProps> = ({ state, onAddSubscription, onDeleteSubscription, onEditSubscription }) => {
     const [view, setView] = useState<'list' | 'calendar'>('calendar');
@@ -73,7 +81,7 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ state, onAddSubscription,
         if (sub) {
             setEditingSub(sub);
             setName(sub.name);
-            setPrice(sub.price.toString());
+            setPrice(formatNumberInput(sub.price));
             setCycle(sub.cycle);
             setDate(sub.firstBillDate);
             setIcon(sub.icon);
@@ -92,7 +100,7 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ state, onAddSubscription,
         e.preventDefault();
         const subData = {
             name,
-            price: Number(price),
+            price: getRawNumber(price),
             cycle,
             firstBillDate: date,
             icon,
@@ -295,7 +303,15 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ state, onAddSubscription,
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700">Biaya</label>
-                                <input type="number" value={price} onChange={e => setPrice(e.target.value)} className="w-full border p-2 rounded" placeholder="Rp" required />
+                                <input 
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={price} 
+                                    onChange={e => setPrice(formatNumberInput(e.target.value))} 
+                                    className="w-full border p-2 rounded" 
+                                    placeholder="Rp" 
+                                    required 
+                                />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
