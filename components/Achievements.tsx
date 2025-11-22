@@ -1,7 +1,7 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import type { Achievement, AppState } from '../types';
-import { BudgetIcon, LockClosedIcon, ClockIcon, TrophyIcon, FireIcon, CalendarDaysIcon, CheckCircleIcon, SparklesIcon } from './Icons';
+import { BudgetIcon, LockClosedIcon, ClockIcon, TrophyIcon, FireIcon, CalendarDaysIcon, CheckCircleIcon, SparklesIcon, ArrowPathIcon, ShieldCheckIcon, RocketLaunchIcon, HeartIcon, ArchiveBoxIcon } from './Icons';
 
 interface AchievementsProps {
     state: AppState;
@@ -18,7 +18,7 @@ interface AchievementsProps {
 
 const achievementCategories = ['Dasar', 'Kebiasaan Baik', 'Master Anggaran', 'Tantangan', 'Eksplorasi'];
 
-// --- NEW ICONS FOR QUESTS ---
+// --- ICONS & UI HELPERS ---
 const StarIconFilled: React.FC<{ className?: string }> = ({ className }) => (
     <svg className={className} fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
 );
@@ -50,39 +50,204 @@ const QuestItem: React.FC<{ label: string; isCompleted: boolean; points: number;
     </div>
 );
 
+// --- GEM FILTER COMPONENT ---
+const GemFilter: React.FC<{ activeCategory: string, onSelect: (cat: string) => void }> = ({ activeCategory, onSelect }) => {
+    const gems = [
+        { id: 'Dasar', color: 'from-gray-400 to-gray-600', shadow: 'shadow-gray-300', icon: LockClosedIcon, label: 'Dasar' }, // Iron/Stone
+        { id: 'Kebiasaan Baik', color: 'from-blue-400 to-blue-600', shadow: 'shadow-blue-300', icon: CalendarDaysIcon, label: 'Kebiasaan' }, // Sapphire
+        { id: 'Master Anggaran', color: 'from-purple-400 to-purple-600', shadow: 'shadow-purple-300', icon: TrophyIcon, label: 'Master' }, // Amethyst
+        { id: 'Tantangan', color: 'from-red-400 to-red-600', shadow: 'shadow-red-300', icon: FireIcon, label: 'Tantangan' }, // Ruby
+        { id: 'Eksplorasi', color: 'from-emerald-400 to-emerald-600', shadow: 'shadow-emerald-300', icon: RocketLaunchIcon, label: 'Eksplorasi' }, // Emerald
+    ];
+
+    return (
+        <div className="mb-6">
+            <div className="flex justify-between items-center bg-gray-50/50 p-2 rounded-2xl border border-gray-100 overflow-x-auto no-scrollbar">
+                {gems.map((gem) => {
+                    const isActive = activeCategory === gem.id;
+                    return (
+                        <button
+                            key={gem.id}
+                            onClick={() => onSelect(gem.id)}
+                            className={`relative group flex flex-col items-center justify-center w-16 h-16 rounded-xl transition-all duration-300 ${isActive ? 'scale-110 -translate-y-1' : 'hover:bg-white hover:scale-105'}`}
+                        >
+                            {/* Gem Body */}
+                            <div className={`
+                                w-10 h-10 rounded-lg flex items-center justify-center shadow-lg transition-all duration-300
+                                bg-gradient-to-br ${gem.color}
+                                ${isActive ? `ring-2 ring-offset-2 ring-${gem.color.split('-')[1]}-400 ${gem.shadow}` : 'opacity-70 grayscale-[0.5] group-hover:grayscale-0'}
+                            `}>
+                                <gem.icon className="w-5 h-5 text-white drop-shadow-md" />
+                            </div>
+                            
+                            {/* Label */}
+                            <span className={`text-[9px] font-bold mt-1 transition-colors ${isActive ? 'text-primary-navy' : 'text-gray-400 group-hover:text-gray-600'}`}>
+                                {gem.label}
+                            </span>
+
+                            {/* Active Indicator Dot */}
+                            {isActive && (
+                                <div className="absolute -bottom-1 w-1 h-1 bg-primary-navy rounded-full"></div>
+                            )}
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
+
+// --- HOLO CARD COMPONENT ---
+const HoloEffectCard: React.FC<{ children: React.ReactNode; isUnlocked: boolean; onClick: () => void }> = ({ children, isUnlocked, onClick }) => {
+    const cardRef = useRef<HTMLDivElement>(null);
+    const [transform, setTransform] = useState('');
+    const [bgPosition, setBgPosition] = useState('');
+    const [opacity, setOpacity] = useState(0);
+
+    const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+        if (!cardRef.current || !isUnlocked) return;
+
+        const rect = cardRef.current.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
+
+        const rotateX = ((y - centerY) / centerY) * -10;
+        const rotateY = ((x - centerX) / centerX) * 10;
+
+        setTransform(`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.02, 1.02, 1.02)`);
+        
+        const bgX = (x / rect.width) * 100;
+        const bgY = (y / rect.height) * 100;
+        setBgPosition(`${bgX}% ${bgY}%`);
+        setOpacity(1);
+    };
+
+    const handleMouseLeave = () => {
+        setTransform('perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)');
+        setOpacity(0);
+    };
+
+    return (
+        <div 
+            ref={cardRef}
+            onClick={onClick}
+            onMouseMove={handleMouseMove}
+            onMouseLeave={handleMouseLeave}
+            className={`relative rounded-xl transition-all duration-200 ease-out cursor-pointer h-full ${isUnlocked ? 'shadow-md hover:shadow-xl' : ''}`}
+            style={{ transform, transformStyle: 'preserve-3d' }}
+        >
+            {children}
+            {isUnlocked && (
+                <div 
+                    className="absolute inset-0 rounded-xl pointer-events-none z-10 mix-blend-soft-light"
+                    style={{
+                        background: `radial-gradient(circle at ${bgPosition}, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0) 50%)`,
+                        opacity: opacity,
+                        transition: 'opacity 0.2s ease-out'
+                    }}
+                />
+            )}
+            {isUnlocked && (
+                <div 
+                    className="absolute inset-0 rounded-xl pointer-events-none z-0 opacity-10 bg-gradient-to-br from-transparent via-white to-transparent"
+                    style={{
+                        background: `linear-gradient(115deg, transparent 20%, rgba(255,255,255,0.4) 40%, rgba(255,255,255,0.6) ${parseFloat(bgPosition || '0') / 2}%, transparent 80%)`
+                    }}
+                />
+            )}
+        </div>
+    );
+};
+
 const AchievementCard: React.FC<{
     achievement: Achievement;
     isUnlocked: boolean;
     progress?: { current: number; target: number };
     onClick: () => void;
-}> = ({ achievement, isUnlocked, progress, onClick }) => {
+    tierInfo?: { current: number, total: number }; // For stacked view
+}> = ({ achievement, isUnlocked, progress, onClick, tierInfo }) => {
+    
+    // Determine Tier Colors based on current tier index
+    let tierBadgeColor = 'bg-gray-100 text-gray-600';
+    let tierLabel = '';
+    
+    if (tierInfo) {
+        if (tierInfo.current === 1) {
+            tierBadgeColor = 'bg-orange-100 text-orange-700 border-orange-200'; // Bronze-ish
+            tierLabel = 'Perunggu';
+        } else if (tierInfo.current === 2) {
+            tierBadgeColor = 'bg-gray-200 text-gray-700 border-gray-300'; // Silver
+            tierLabel = 'Perak';
+        } else if (tierInfo.current >= 3) {
+            tierBadgeColor = 'bg-yellow-100 text-yellow-700 border-yellow-200'; // Gold
+            tierLabel = 'Emas';
+        }
+    }
+
     return (
-        <div onClick={onClick} className={`flex items-start space-x-4 p-4 rounded-xl transition-all duration-300 cursor-pointer ${isUnlocked ? 'bg-white shadow-md hover:shadow-lg border border-gray-100' : 'bg-gray-50 hover:bg-gray-100 border border-transparent'}`}>
-            <div className={`relative flex-shrink-0 w-16 h-16 rounded-full flex items-center justify-center transition-colors ${isUnlocked ? 'bg-gradient-to-br from-teal-400 to-accent-teal shadow-lg shadow-teal-200' : 'bg-gray-200'}`}>
-                <BudgetIcon 
-                    icon={achievement.icon} 
-                    className={`w-8 h-8 ${isUnlocked ? 'text-white' : 'text-gray-400'}`}
-                />
-                {!isUnlocked && (
-                    <div className="absolute inset-0 bg-black/10 rounded-full flex items-center justify-center">
-                        <LockClosedIcon className="w-6 h-6 text-white/80" />
+        <HoloEffectCard isUnlocked={isUnlocked} onClick={onClick}>
+            <div className={`relative flex items-start space-x-4 p-4 rounded-xl h-full border ${isUnlocked ? 'bg-white border-gray-100' : 'bg-gray-50 border-transparent'}`}>
+                {/* Tier Badge Overlay */}
+                {tierInfo && (
+                    <div className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-[9px] font-bold border uppercase tracking-wider ${tierBadgeColor}`}>
+                        {tierLabel}
                     </div>
                 )}
-            </div>
-            <div className={`flex-grow ${!isUnlocked ? 'opacity-60' : ''}`}>
-                <div className="flex justify-between items-start">
-                    <h3 className="font-bold text-dark-text pr-2">{achievement.name}</h3>
-                    {achievement.isTimeLimited && <ClockIcon className="w-5 h-5 text-secondary-gray flex-shrink-0" title="Lencana Terbatas Waktu"/>}
+
+                <div className={`relative flex-shrink-0 w-16 h-16 rounded-full flex items-center justify-center transition-colors ${isUnlocked ? 'bg-gradient-to-br from-teal-400 to-accent-teal shadow-lg shadow-teal-200' : 'bg-gray-200'}`}>
+                    <BudgetIcon 
+                        icon={achievement.icon} 
+                        className={`w-8 h-8 ${isUnlocked ? 'text-white' : 'text-gray-400'}`}
+                    />
+                    {!isUnlocked && (
+                        <div className="absolute inset-0 bg-black/10 rounded-full flex items-center justify-center">
+                            <LockClosedIcon className="w-6 h-6 text-white/80" />
+                        </div>
+                    )}
                 </div>
-                <p className="text-xs text-secondary-gray mt-1 line-clamp-2">{achievement.description}</p>
-                {!isUnlocked && progress && progress.target > 1 && (
-                     <div className="mt-3">
-                        <ProgressBar current={progress.current} target={progress.target} />
-                        <p className="text-[10px] text-secondary-gray text-right mt-1 font-mono">{progress.current.toLocaleString()} / {progress.target.toLocaleString()}</p>
+                <div className={`flex-grow ${!isUnlocked ? 'opacity-60' : ''} pr-2`}>
+                    <div className="flex justify-between items-start">
+                        <h3 className="font-bold text-dark-text pr-2 text-sm">{achievement.name}</h3>
+                        {achievement.isTimeLimited && !tierInfo && <ClockIcon className="w-4 h-4 text-secondary-gray flex-shrink-0" title="Lencana Terbatas Waktu"/>}
                     </div>
-                )}
+                    <p className="text-xs text-secondary-gray mt-1 line-clamp-2">{achievement.description}</p>
+                    
+                    {/* Stacked View Indicator */}
+                    {tierInfo && (
+                        <div className="mt-2 flex gap-1">
+                            {Array.from({ length: tierInfo.total }).map((_, i) => {
+                                const isPastTier = i < tierInfo.current - 1;
+                                const isCurrentTier = i === tierInfo.current - 1;
+                                
+                                let barColor = 'bg-gray-200';
+                                if (isPastTier) {
+                                    barColor = 'bg-accent-teal'; // Completed previous tiers
+                                } else if (isCurrentTier) {
+                                    barColor = isUnlocked ? 'bg-accent-teal' : 'bg-teal-200'; // Current tier status
+                                }
+                                
+                                return (
+                                    <div 
+                                        key={i} 
+                                        className={`h-1.5 flex-1 rounded-full ${barColor}`}
+                                    />
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    {!isUnlocked && progress && progress.target > 1 && (
+                        <div className="mt-3">
+                            <ProgressBar current={progress.current} target={progress.target} />
+                            <p className="text-[10px] text-secondary-gray text-right mt-1 font-mono">{progress.current.toLocaleString()} / {progress.target.toLocaleString()}</p>
+                        </div>
+                    )}
+                </div>
             </div>
-        </div>
+        </HoloEffectCard>
     );
 };
 
@@ -139,13 +304,199 @@ const AchievementDetailModal: React.FC<{
     );
 }
 
+// --- HALL OF FAME COMPONENT (Suggestion 5) ---
+const HallOfFameModal: React.FC<{
+    unlockedAchievements: { [id: string]: number };
+    allAchievements: Achievement[];
+    onClose: () => void;
+}> = ({ unlockedAchievements, allAchievements, onClose }) => {
+    
+    // Create a sorted list of unlocked achievements
+    const sortedUnlocked = useMemo(() => {
+        return Object.entries(unlockedAchievements)
+            .map(([id, timestamp]) => {
+                const ach = allAchievements.find(a => a.id === id);
+                return ach ? { ...ach, unlockedAt: timestamp } : null;
+            })
+            .filter((a): a is Achievement & { unlockedAt: number } => a !== null)
+            .sort((a, b) => b.unlockedAt - a.unlockedAt); // Newest first
+    }, [unlockedAchievements, allAchievements]);
+
+    return (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md h-[80vh] flex flex-col animate-spring-up overflow-hidden" onClick={e => e.stopPropagation()}>
+                {/* Header */}
+                <div className="bg-primary-navy p-6 text-white relative overflow-hidden flex-shrink-0">
+                    <TrophyIcon className="absolute -right-4 -top-4 w-32 h-32 text-white opacity-10 rotate-12" />
+                    <h2 className="text-2xl font-bold relative z-10">Hall of Fame</h2>
+                    <p className="text-blue-200 text-sm relative z-10">Jurnal sejarah pencapaian legendarismu.</p>
+                    <button onClick={onClose} className="absolute top-4 right-4 text-white/70 hover:text-white z-20 text-2xl">&times;</button>
+                </div>
+
+                {/* Timeline Body */}
+                <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+                    {sortedUnlocked.length === 0 ? (
+                        <div className="text-center py-10 text-gray-400">
+                            <LockClosedIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                            <p>Belum ada lencana yang terbuka.</p>
+                        </div>
+                    ) : (
+                        <div className="relative border-l-2 border-gray-200 ml-4 space-y-8">
+                            {sortedUnlocked.map((ach, index) => (
+                                <div key={index} className="relative pl-8">
+                                    {/* Timeline Dot */}
+                                    <div className="absolute -left-[9px] top-0 bg-white border-2 border-accent-teal w-4 h-4 rounded-full shadow-sm z-10"></div>
+                                    
+                                    {/* Date Label */}
+                                    <span className="text-[10px] font-bold text-secondary-gray uppercase tracking-wider mb-1 block">
+                                        {new Date(ach.unlockedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                                    </span>
+
+                                    {/* Card */}
+                                    <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-teal-50 rounded-full flex items-center justify-center flex-shrink-0 text-accent-teal">
+                                            <BudgetIcon icon={ach.icon} className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-bold text-dark-text text-sm">{ach.name}</h4>
+                                            <p className="text-[10px] text-secondary-gray line-clamp-1">{ach.description}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const FlyingParticles: React.FC<{ trigger: number, targetRef: React.RefObject<HTMLDivElement> }> = ({ trigger, targetRef }) => {
+    const [particles, setParticles] = useState<{id: number, x: number, y: number, tx: number, ty: number}[]>([]);
+    
+    useEffect(() => {
+        if (trigger === 0 || !targetRef.current) return;
+
+        const rect = targetRef.current.getBoundingClientRect();
+        const targetX = rect.left + rect.width / 2;
+        const targetY = rect.top + rect.height / 2;
+        
+        const newParticles = Array.from({ length: 12 }).map((_, i) => ({
+            id: Date.now() + i,
+            x: window.innerWidth / 2 + (Math.random() * 100 - 50), 
+            y: window.innerHeight / 2 + (Math.random() * 100 - 50),
+            tx: targetX,
+            ty: targetY
+        }));
+
+        setParticles(newParticles);
+
+        const timer = setTimeout(() => {
+            setParticles([]);
+        }, 1000); 
+
+        return () => clearTimeout(timer);
+    }, [trigger]);
+
+    if (particles.length === 0) return null;
+
+    return (
+        <div className="fixed inset-0 pointer-events-none z-[200]">
+            {particles.map((p, i) => (
+                <div
+                    key={p.id}
+                    className="absolute w-3 h-3 bg-yellow-400 rounded-full shadow-lg"
+                    style={{
+                        left: 0,
+                        top: 0,
+                        transform: `translate(${p.x}px, ${p.y}px)`,
+                        animation: `flyToTarget 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards`,
+                        animationDelay: `${i * 0.05}s`,
+                        // @ts-ignore 
+                        '--tx': `${p.tx - p.x}px`,
+                        '--ty': `${p.ty - p.y}px`
+                    }}
+                />
+            ))}
+            <style>{`
+                @keyframes flyToTarget {
+                    0% { opacity: 1; transform: translate(var(--start-x), var(--start-y)) scale(1); }
+                    80% { opacity: 1; }
+                    100% { opacity: 0; transform: translate(calc(var(--tx) + 0px), calc(var(--ty) + 0px)) scale(0.2); }
+                }
+            `}</style>
+        </div>
+    );
+};
+
+function usePrevious(value: number) {
+  const ref = useRef<number>(0);
+  useEffect(() => {
+    ref.current = value;
+  });
+  return ref.current;
+}
+
 const Achievements: React.FC<AchievementsProps> = ({ state, allAchievements, unlockedAchievements, achievementData, totalPoints, userLevel }) => {
     const [activeCategory, setActiveCategory] = useState(achievementCategories[0]);
     const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
+    const [showHallOfFame, setShowHallOfFame] = useState(false);
+    
+    const mustikaBadgeRef = useRef<HTMLDivElement>(null);
+    
+    // --- LOGIC FOR TIERED STACKING (SUGGESTION 2) ---
+    // This processes the filtered list to group achievements by 'streakKey'
+    const stackedAchievements = useMemo(() => {
+        // 1. Filter by current category first
+        const categoryAchievements = allAchievements.filter(ach => ach.category === activeCategory);
+        
+        // 2. Group by streakKey
+        const groups: { [key: string]: Achievement[] } = {};
+        const standalone: Achievement[] = [];
 
-    const filteredAchievements = useMemo(() => {
-        return allAchievements.filter(ach => ach.category === activeCategory);
-    }, [allAchievements, activeCategory]);
+        categoryAchievements.forEach(ach => {
+            if (ach.streakKey) {
+                if (!groups[ach.streakKey]) groups[ach.streakKey] = [];
+                groups[ach.streakKey].push(ach);
+            } else {
+                standalone.push(ach);
+            }
+        });
+
+        // 3. Process groups to find which ONE to show
+        const processedGroups: Achievement[] = [];
+
+        Object.values(groups).forEach(group => {
+            // Sort by points (assuming higher points = higher tier) or we could use streakTarget
+            const sortedGroup = group.sort((a, b) => (a.points || 0) - (b.points || 0));
+            
+            // Find the first LOCKED achievement
+            const nextLockedIndex = sortedGroup.findIndex(ach => !unlockedAchievements[ach.id]);
+            
+            if (nextLockedIndex !== -1) {
+                // Case: In progress. Show the next locked one.
+                processedGroups.push({
+                    ...sortedGroup[nextLockedIndex],
+                    tierInfo: { current: nextLockedIndex + 1, total: sortedGroup.length }
+                });
+            } else {
+                // Case: All unlocked. Show the MAX level one (last one).
+                const maxAch = sortedGroup[sortedGroup.length - 1];
+                processedGroups.push({
+                    ...maxAch,
+                    tierInfo: { current: sortedGroup.length, total: sortedGroup.length }
+                });
+            }
+        });
+
+        // 4. Combine standalone and processed groups
+        return [...standalone, ...processedGroups].sort((a,b) => {
+            return (a.points || 0) - (b.points || 0);
+        });
+
+    }, [allAchievements, activeCategory, unlockedAchievements]);
+
 
     // --- QUEST LOGIC ---
     const questStatus = useMemo(() => {
@@ -153,10 +504,7 @@ const Achievements: React.FC<AchievementsProps> = ({ state, allAchievements, unl
         const now = Date.now();
         const oneDay = 24 * 60 * 60 * 1000;
         
-        // Helper: Check if timestamp is today
         const isToday = (ts: number) => new Date(ts).toLocaleDateString('fr-CA') === todayStr;
-        
-        // Helper: Check if timestamp is within last 7 days
         const isThisWeek = (ts: number) => (now - ts) < (7 * oneDay);
 
         // --- DAILY QUESTS ---
@@ -164,7 +512,7 @@ const Achievements: React.FC<AchievementsProps> = ({ state, allAchievements, unl
             {
                 label: "Login & Cek Aplikasi",
                 points: 5,
-                completed: true // Automatically completed if viewing this page
+                completed: true 
             },
             {
                 label: "Catat 1 Transaksi",
@@ -184,28 +532,21 @@ const Achievements: React.FC<AchievementsProps> = ({ state, allAchievements, unl
             {
                 label: "Cek Wishlist",
                 points: 10,
-                completed: state.wishlist.length > 0 // Assumption: engagement with wishlist feature
+                completed: state.wishlist.length > 0 
             }
         ];
 
         // --- WEEKLY CALCS ---
-        // 1. Active Days (Distinct days with transactions in last 7 days)
         const uniqueTransactionDays = new Set();
         state.dailyExpenses.forEach(t => { if(isThisWeek(t.timestamp)) uniqueTransactionDays.add(new Date(t.timestamp).toDateString()) });
         state.fundHistory.forEach(t => { if(isThisWeek(t.timestamp)) uniqueTransactionDays.add(new Date(t.timestamp).toDateString()) });
         state.budgets.forEach(b => b.history.forEach(t => { if(isThisWeek(t.timestamp)) uniqueTransactionDays.add(new Date(t.timestamp).toDateString()) }));
         const activeDaysCount = uniqueTransactionDays.size;
 
-        // 2. Savings Count
         const savingsCount = state.savingsGoals.reduce((count, g) => count + g.history.filter(h => isThisWeek(h.timestamp)).length, 0);
-
-        // 3. Used Budgets Count
         const activeBudgetsCount = state.budgets.filter(b => b.history.some(h => isThisWeek(h.timestamp))).length;
-
-        // 4. Added Wishlist
         const addedWishlist = state.wishlist.some(w => isThisWeek(w.createdAt));
 
-        // 5. Expense < 1/4 Income
         const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
         const monthlyIncome = state.fundHistory
             .filter(t => t.type === 'add' && t.timestamp >= startOfMonth.getTime())
@@ -218,8 +559,6 @@ const Achievements: React.FC<AchievementsProps> = ({ state, allAchievements, unl
         
         const isFinancePositive = monthlyIncome > 0 && weeklyExpense < (monthlyIncome * 0.25);
 
-
-        // --- WEEKLY QUESTS ---
         const weeklyQuests = [
             {
                 label: "4 Hari Catat Transaksi",
@@ -275,48 +614,41 @@ const Achievements: React.FC<AchievementsProps> = ({ state, allAchievements, unl
 
     }, [state, achievementData]);
 
-    // Combined Total Points (Achievements + Quests) = Mustika Balance
     const grandTotalPoints = totalPoints + questStatus.dailyTotalPoints + questStatus.weeklyTotalPoints;
     
-    const levelInfo = (() => {
-        // Recalculate level based on grand total (visual only, logic copied from App.tsx)
-        const levels = [
-            { name: 'Pemula Finansial', points: 0 },
-            { name: 'Pengelola Cerdas', points: 150 },
-            { name: 'Pakar Anggaran', points: 400 },
-            { name: 'Sultan Finansial', points: 750 },
-            { name: 'Master Keuangan', points: 1200 },
-            { name: 'Legenda Anggaran', points: 2000 },
-        ];
-        let currentLevel = levels[0];
-        let currentLevelIndex = 0;
-        let nextLevel = null;
-        for (let i = 0; i < levels.length; i++) {
-            if (grandTotalPoints >= levels[i].points) {
-                currentLevel = levels[i];
-                currentLevelIndex = i;
-                nextLevel = levels[i + 1] || null;
-            } else {
-                if (!nextLevel) nextLevel = levels[i];
-                break;
-            }
+    const prevPoints = usePrevious(grandTotalPoints);
+    const [particleTrigger, setParticleTrigger] = useState(0);
+
+    useEffect(() => {
+        if (grandTotalPoints > prevPoints && prevPoints !== 0) {
+            setParticleTrigger(Date.now());
         }
-        return { 
-            level: currentLevel.name, 
-            levelNumber: currentLevelIndex + 1,
-            currentStart: currentLevel.points, 
-            nextTarget: nextLevel ? nextLevel.points : null 
-        };
+    }, [grandTotalPoints, prevPoints]);
+
+    const levelInfo = (() => {
+        const rankTitles = [
+            "Pemula Finansial", "Pelajar Hemat", "Perencana Cerdas", "Pengelola Aset", 
+            "Juragan Strategi", "Investor Ulung", "Master Anggaran", "Sultan Muda", 
+            "Taipan Global", "Legenda Abadi"
+        ];
+        const levelNumber = Math.floor(Math.sqrt(grandTotalPoints / 50)) + 1;
+        const rankIndex = Math.min(rankTitles.length - 1, Math.floor((levelNumber - 1) / 5));
+        const currentTitle = rankTitles[rankIndex];
+        const currentStart = 50 * Math.pow(levelNumber - 1, 2);
+        const nextTarget = 50 * Math.pow(levelNumber, 2);
+
+        return { level: currentTitle, levelNumber: levelNumber, currentStart: currentStart, nextTarget: nextTarget };
     })();
 
-    // Level Progress Calculation
     const levelProgressCurrent = grandTotalPoints - levelInfo.currentStart;
-    const levelProgressTarget = levelInfo.nextTarget ? levelInfo.nextTarget - levelInfo.currentStart : 1;
-
+    const levelProgressTarget = levelInfo.nextTarget - levelInfo.currentStart;
 
     return (
         <main className="p-4 pb-24 animate-fade-in">
             <h1 className="text-3xl font-bold text-primary-navy text-center mb-6">Pusat Misi & Lencana</h1>
+            
+            {/* Particle System */}
+            <FlyingParticles trigger={particleTrigger} targetRef={mustikaBadgeRef} />
 
             {/* --- LEVEL CARD --- */}
             <section className="bg-white rounded-2xl shadow-lg p-5 mb-8 relative overflow-hidden border border-gray-100">
@@ -333,8 +665,8 @@ const Achievements: React.FC<AchievementsProps> = ({ state, allAchievements, unl
                             </div>
                         </div>
                         <div className="flex flex-col items-end">
-                            {/* MUSTIKA CURRENCY DISPLAY */}
-                            <div className="flex items-center gap-2 bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-100 shadow-sm mb-1">
+                            {/* MUSTIKA CURRENCY DISPLAY WITH REF */}
+                            <div ref={mustikaBadgeRef} className="flex items-center gap-2 bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-100 shadow-sm mb-1 z-20 relative">
                                 <div className="bg-indigo-500 rounded-full p-1 shadow-inner">
                                     <SparklesIcon className="w-3 h-3 text-white" />
                                 </div>
@@ -347,7 +679,7 @@ const Achievements: React.FC<AchievementsProps> = ({ state, allAchievements, unl
                     <div className="mt-4">
                         <div className="flex justify-between text-xs font-bold text-secondary-gray mb-1">
                             <span>{levelInfo.currentStart} XP</span>
-                            {levelInfo.nextTarget ? <span>Target: {levelInfo.nextTarget} XP</span> : <span>Max Level</span>}
+                            <span>Target: {levelInfo.nextTarget} XP</span>
                         </div>
                         <ProgressBar 
                             current={levelProgressCurrent} 
@@ -357,9 +689,7 @@ const Achievements: React.FC<AchievementsProps> = ({ state, allAchievements, unl
                         />
                         <div className="text-center mt-2">
                             <p className="text-[10px] text-secondary-gray font-medium bg-gray-100 inline-block px-2 py-0.5 rounded-full">
-                                {levelInfo.nextTarget 
-                                    ? `Kurang ${levelInfo.nextTarget - grandTotalPoints} XP lagi untuk naik level` 
-                                    : 'Kamu sudah mencapai level maksimal!'}
+                                Kurang {levelInfo.nextTarget - grandTotalPoints} XP lagi untuk naik level
                             </p>
                         </div>
                     </div>
@@ -429,23 +759,25 @@ const Achievements: React.FC<AchievementsProps> = ({ state, allAchievements, unl
                 </section>
             </div>
 
-            {/* --- ACHIEVEMENT LIST --- */}
-            <h2 className="text-xl font-bold text-primary-navy mb-4 px-2 border-l-4 border-primary-navy pl-3">Koleksi Lencana</h2>
-            
-            <div className="flex space-x-2 overflow-x-auto pb-2 mb-4 -mx-4 px-4 no-scrollbar">
-                {achievementCategories.map(category => (
-                    <button 
-                        key={category}
-                        onClick={() => setActiveCategory(category)}
-                        className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-full whitespace-nowrap transition-all duration-300 ${activeCategory === category ? 'bg-primary-navy text-white shadow-md transform scale-105' : 'bg-white text-secondary-gray hover:bg-gray-50 border border-gray-200'}`}
-                    >
-                        {category}
-                    </button>
-                ))}
+            {/* --- ACHIEVEMENT SECTION --- */}
+            <div className="flex justify-between items-center mb-4 px-2 border-l-4 border-primary-navy pl-3">
+                <h2 className="text-xl font-bold text-primary-navy">Koleksi Lencana</h2>
+                
+                {/* HALL OF FAME BUTTON (SUGGESTION 5) */}
+                <button 
+                    onClick={() => setShowHallOfFame(true)}
+                    className="flex items-center gap-2 bg-white border border-gray-200 text-secondary-gray hover:text-primary-navy hover:border-primary-navy px-3 py-1.5 rounded-full text-xs font-bold transition-colors shadow-sm"
+                >
+                    <ArchiveBoxIcon className="w-4 h-4" />
+                    Hall of Fame
+                </button>
             </div>
             
+            {/* GEM FILTER */}
+            <GemFilter activeCategory={activeCategory} onSelect={setActiveCategory} />
+            
             <div className="grid md:grid-cols-2 gap-4">
-                {filteredAchievements.map(ach => {
+                {stackedAchievements.map(ach => {
                     let progress: { current: number; target: number } | undefined = undefined;
                     if (ach.progress) {
                         progress = ach.progress(state);
@@ -453,13 +785,17 @@ const Achievements: React.FC<AchievementsProps> = ({ state, allAchievements, unl
                         progress = { current: achievementData?.[ach.streakKey] || 0, target: ach.streakTarget };
                     }
                     
+                    // Only check unlocked status for THIS specific tier card
+                    const isUnlocked = !!unlockedAchievements[ach.id];
+                    
                     return (
                         <AchievementCard 
                             key={ach.id}
                             achievement={ach}
-                            isUnlocked={!!unlockedAchievements[ach.id]}
+                            isUnlocked={isUnlocked}
                             progress={progress}
                             onClick={() => setSelectedAchievement(ach)}
+                            tierInfo={ach.tierInfo}
                         />
                     );
                 })}
@@ -475,6 +811,15 @@ const Achievements: React.FC<AchievementsProps> = ({ state, allAchievements, unl
                         (selectedAchievement.streakKey && selectedAchievement.streakTarget ? { current: achievementData?.[selectedAchievement.streakKey] || 0, target: selectedAchievement.streakTarget } : undefined)
                     }
                     onClose={() => setSelectedAchievement(null)}
+                />
+            )}
+
+            {/* HALL OF FAME MODAL (SUGGESTION 5) */}
+            {showHallOfFame && (
+                <HallOfFameModal 
+                    unlockedAchievements={unlockedAchievements}
+                    allAchievements={allAchievements}
+                    onClose={() => setShowHallOfFame(false)}
                 />
             )}
         </main>

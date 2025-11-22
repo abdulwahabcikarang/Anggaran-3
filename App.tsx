@@ -11,8 +11,9 @@ import PersonalBest from './components/PersonalBest';
 import NetWorth from './components/NetWorth';
 import Wishlist from './components/Wishlist';
 import Subscriptions from './components/Subscriptions';
+import Profile from './components/Profile';
 import { allAchievements } from './data/achievements';
-import { HomeIcon, ChartBarIcon, DocumentTextIcon, ListBulletIcon, Squares2x2Icon, PlusCircleIcon, ArrowDownTrayIcon, ArrowUpTrayIcon, CameraIcon, LightbulbIcon, SparklesIcon, SpeakerWaveIcon, ChatBubbleLeftRightIcon, PaperAirplaneIcon, TrashIcon, BuildingLibraryIcon, BudgetIcon, availableIcons, availableColors, TrophyIcon, Cog6ToothIcon, InformationCircleIcon, ExclamationTriangleIcon, ArchiveBoxIcon, ArrowUturnLeftIcon, ServerStackIcon, FireIcon, CircleStackIcon, LockClosedIcon, CalendarDaysIcon, ChevronRightIcon, HeartIcon, ArrowPathIcon, BellIcon, CreditCardIcon, ClockIcon } from './components/Icons';
+import { HomeIcon, ChartBarIcon, DocumentTextIcon, ListBulletIcon, Squares2x2Icon, PlusCircleIcon, ArrowDownTrayIcon, ArrowUpTrayIcon, CameraIcon, LightbulbIcon, SparklesIcon, SpeakerWaveIcon, ChatBubbleLeftRightIcon, PaperAirplaneIcon, TrashIcon, BuildingLibraryIcon, BudgetIcon, availableIcons, availableColors, TrophyIcon, Cog6ToothIcon, InformationCircleIcon, ExclamationTriangleIcon, ArchiveBoxIcon, ArrowUturnLeftIcon, ServerStackIcon, FireIcon, CircleStackIcon, LockClosedIcon, CalendarDaysIcon, ChevronRightIcon, HeartIcon, ArrowPathIcon, BellIcon, CreditCardIcon, ClockIcon, ShoppingBagIcon, UserIcon } from './components/Icons';
 import { AISkeleton } from './components/UI';
 
 // --- UTILITY FUNCTIONS ---
@@ -1009,7 +1010,7 @@ const AchievementUnlockedToast: React.FC<{ achievement: Achievement | null }> = 
 };
 
 // --- APP COMPONENT ---
-type Page = 'dashboard' | 'reports' | 'visualizations' | 'savings' | 'achievements' | 'personalBest' | 'netWorth' | 'wishlist' | 'subscriptions';
+type Page = 'dashboard' | 'reports' | 'visualizations' | 'savings' | 'achievements' | 'personalBest' | 'netWorth' | 'wishlist' | 'subscriptions' | 'profile';
 type ModalType = 'input' | 'funds' | 'addBudget' | 'history' | 'info' | 'menu' | 'editAsset' | 'confirm' | 'scanResult' | 'aiAdvice' | 'smartInput' | 'aiChat' | 'voiceAssistant' | 'voiceResult' | 'addSavingsGoal' | 'addSavings' | 'savingsDetail' | 'settings' | 'archivedBudgets' | 'backupRestore' | 'asset' | 'batchInput' | 'addWishlist';
 
 const APP_VERSION = '3.14.0';
@@ -1017,6 +1018,9 @@ const BACKUP_PREFIX = 'budgetAppBackup_';
 const MAX_BACKUPS = 4;
 
 const initialState: AppState = {
+    userProfile: {
+        name: 'Pengguna',
+    },
     budgets: [],
     dailyExpenses: [],
     fundHistory: [],
@@ -1193,9 +1197,11 @@ const App: React.FC = () => {
                     parsed.unlockedAchievements = migrated;
                 }
                 parsed.achievementData = { ...initialState.achievementData, ...parsed.achievementData };
-                // Ensure wishlist/subscriptions is initialized
+                // Ensure wishlist/subscriptions/userProfile is initialized
                 parsed.wishlist = parsed.wishlist || [];
                 parsed.subscriptions = parsed.subscriptions || [];
+                parsed.userProfile = parsed.userProfile || { name: 'Pengguna' };
+                
                 loadedState = { ...initialState, ...parsed };
             } catch (error) { console.error("Failed to parse state from localStorage", error); }
         }
@@ -1927,6 +1933,14 @@ const App: React.FC = () => {
         });
     };
 
+    // --- USER PROFILE HANDLERS ---
+    const handleUpdateProfile = (name: string, avatar: string) => {
+        updateState(prev => ({
+            ...prev,
+            userProfile: { ...prev.userProfile, name, avatar }
+        }));
+    };
+
     const handleExportData = () => {
         const dataStr = JSON.stringify(state, null, 2);
         const dataBlob = new Blob([dataStr], {type: "application/json"});
@@ -2541,34 +2555,78 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
     const openBatchInput = () => setActiveModal('batchInput');
     
     // --- RENDER LOGIC ---
-    const calculateUserLevel = (points: number): { level: string; currentLevelPoints: number; nextLevelPoints: number | null; } => {
-        const levels = [
-            { name: 'Pemula Finansial', points: 0 },
-            { name: 'Pengelola Cerdas', points: 150 },
-            { name: 'Pakar Anggaran', points: 400 },
-            { name: 'Sultan Finansial', points: 750 },
-            { name: 'Master Keuangan', points: 1200 },
-        ];
-        let currentLevel = levels[0];
-        let nextLevel: { name: string; points: number; } | null = null;
     
-        for (let i = 0; i < levels.length; i++) {
-            if (points >= levels[i].points) {
-                currentLevel = levels[i];
-                if (i + 1 < levels.length) {
-                    nextLevel = levels[i + 1];
-                } else {
-                    nextLevel = null;
-                }
-            } else {
-                if (!nextLevel) {
-                    nextLevel = levels[i];
-                }
-                break;
-            }
-        }
-        return { level: currentLevel.name, currentLevelPoints: currentLevel.points, nextLevelPoints: nextLevel ? nextLevel.points : null };
+    const calculateQuestPoints = (state: AppState) => {
+        const todayStr = new Date().toLocaleDateString('fr-CA');
+        const now = Date.now();
+        const oneDay = 24 * 60 * 60 * 1000;
+        const isToday = (ts: number) => new Date(ts).toLocaleDateString('fr-CA') === todayStr;
+        const isThisWeek = (ts: number) => (now - ts) < (7 * oneDay);
+
+        // Daily Logic
+        const dailyQuests = [
+            { completed: true, points: 5 }, // Login
+            { completed: state.dailyExpenses.some(t => isToday(t.timestamp)) || state.fundHistory.some(t => isToday(t.timestamp)) || state.budgets.some(b => b.history.some(h => isToday(h.timestamp))), points: 10 },
+            { completed: state.dailyExpenses.filter(t => isToday(t.timestamp)).reduce((sum, t) => sum + t.amount, 0) < 50000, points: 15 },
+            { completed: state.savingsGoals.some(g => g.history.some(h => isToday(h.timestamp))), points: 20 },
+            { completed: state.wishlist.length > 0, points: 10 }
+        ];
+        const dailyCount = dailyQuests.filter(q => q.completed).length;
+        const dailyPoints = dailyQuests.reduce((sum, q) => q.completed ? sum + q.points : sum, 0) + (dailyCount >= 3 ? 50 : 0);
+
+        // Weekly Logic
+        const uniqueTransactionDays = new Set();
+        state.dailyExpenses.forEach(t => { if(isThisWeek(t.timestamp)) uniqueTransactionDays.add(new Date(t.timestamp).toDateString()) });
+        state.fundHistory.forEach(t => { if(isThisWeek(t.timestamp)) uniqueTransactionDays.add(new Date(t.timestamp).toDateString()) });
+        state.budgets.forEach(b => b.history.forEach(t => { if(isThisWeek(t.timestamp)) uniqueTransactionDays.add(new Date(t.timestamp).toDateString()) }));
+        
+        const savingsCount = state.savingsGoals.reduce((count, g) => count + g.history.filter(h => isThisWeek(h.timestamp)).length, 0);
+        const activeBudgetsCount = state.budgets.filter(b => b.history.some(h => isThisWeek(h.timestamp))).length;
+        const addedWishlist = state.wishlist.some(w => isThisWeek(w.createdAt));
+        
+        const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+        const monthlyIncome = state.fundHistory.filter(t => t.type === 'add' && t.timestamp >= startOfMonth.getTime()).reduce((sum, t) => sum + t.amount, 0);
+        const weeklyExpense = state.dailyExpenses.filter(t => isThisWeek(t.timestamp)).reduce((s, t) => s + t.amount, 0) +
+            state.fundHistory.filter(t => t.type === 'remove' && isThisWeek(t.timestamp)).reduce((s, t) => s + t.amount, 0) +
+            state.budgets.reduce((s, b) => s + b.history.filter(h => isThisWeek(h.timestamp)).reduce((bs, h) => bs + h.amount, 0), 0);
+            
+        const weeklyQuests = [
+            { completed: uniqueTransactionDays.size >= 4, points: 30 },
+            { completed: savingsCount >= 3, points: 40 },
+            { completed: addedWishlist, points: 20 },
+            { completed: activeBudgetsCount >= 4, points: 25 },
+            { completed: monthlyIncome > 0 && weeklyExpense < (monthlyIncome * 0.25), points: 50 }
+        ];
+        const weeklyCount = weeklyQuests.filter(q => q.completed).length;
+        const weeklyPoints = weeklyQuests.reduce((sum, q) => q.completed ? sum + q.points : sum, 0) + (weeklyCount >= 5 ? 150 : 0);
+
+        return dailyPoints + weeklyPoints;
     };
+
+    const calculateUserLevel = (totalPoints: number) => {
+        const rankTitles = [
+            "Pemula Finansial", "Pelajar Hemat", "Perencana Cerdas", "Pengelola Aset", 
+            "Juragan Strategi", "Investor Ulung", "Master Anggaran", "Sultan Muda", 
+            "Taipan Global", "Legenda Abadi"
+        ];
+        const levelNumber = Math.floor(Math.sqrt(totalPoints / 50)) + 1;
+        const rankIndex = Math.min(rankTitles.length - 1, Math.floor((levelNumber - 1) / 5));
+        const currentTitle = rankTitles[rankIndex];
+        const currentStart = 50 * Math.pow(levelNumber - 1, 2);
+        const nextTarget = 50 * Math.pow(levelNumber, 2);
+
+        return { level: currentTitle, levelNumber: levelNumber, currentLevelPoints: currentStart, nextLevelPoints: nextTarget };
+    };
+
+    // Calculate level and points for profile and achievements page
+    const unlockedAchIds = Object.keys(state.unlockedAchievements);
+    const achievementPoints = allAchievements
+        .filter(ach => unlockedAchIds.includes(ach.id))
+        .reduce((sum, ach) => sum + (ach.points || 0), 0);
+    
+    const questPoints = calculateQuestPoints(state);
+    const grandTotalPoints = achievementPoints + questPoints;
+    const levelInfo = calculateUserLevel(grandTotalPoints);
 
     const renderPage = () => {
         switch (currentPage) {
@@ -2603,17 +2661,12 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
                             onOpenSavingsGoal={handleOpenSavingsGoal}
                         />;
             case 'achievements':
-                const unlockedAchIds = Object.keys(state.unlockedAchievements);
-                const totalPoints = allAchievements
-                    .filter(ach => unlockedAchIds.includes(ach.id))
-                    .reduce((sum, ach) => sum + (ach.points || 0), 0);
-                const levelInfo = calculateUserLevel(totalPoints);
                 return <Achievements 
                     state={state}
                     allAchievements={allAchievements} 
                     unlockedAchievements={state.unlockedAchievements} 
                     achievementData={state.achievementData}
-                    totalPoints={totalPoints}
+                    totalPoints={achievementPoints} // Achievement component calculates quests internally for display, so pass base points
                     userLevel={levelInfo}
                 />;
             case 'personalBest':
@@ -2640,6 +2693,15 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
                     onAddSubscription={handleAddSubscription}
                     onDeleteSubscription={handleDeleteSubscription}
                     onEditSubscription={handleEditSubscription}
+                />;
+            case 'profile': // New Case
+                return <Profile 
+                    state={state}
+                    onUpdateProfile={handleUpdateProfile}
+                    onBack={() => setCurrentPage('dashboard')}
+                    totalPoints={grandTotalPoints}
+                    totalBadges={unlockedAchIds.length}
+                    userLevel={levelInfo}
                 />;
             case 'dashboard':
             default:
@@ -2970,11 +3032,13 @@ const MainMenu: React.FC<{
     onOpenSettings: () => void 
 }> = (props) => {
     const menuItems = [
+        { icon: UserIcon, label: 'Profil', action: () => props.onNavigate('profile'), disabled: false }, // NEW: Profile Button
         { icon: CreditCardIcon, label: 'Langganan', action: () => props.onNavigate('subscriptions'), disabled: false },
         { icon: BuildingLibraryIcon, label: 'Celengan', action: () => props.onNavigate('savings'), disabled: false },
         { icon: HeartIcon, label: 'Wishlist', action: () => props.onNavigate('wishlist'), disabled: false },
         { icon: CircleStackIcon, label: 'Aset', action: () => props.onNavigate('netWorth'), disabled: false },
         { icon: TrophyIcon, label: 'Lencana', action: () => props.onNavigate('achievements'), disabled: false },
+        { icon: ShoppingBagIcon, label: 'Toko', action: () => alert("Toko Mustika segera hadir!"), disabled: false },
         { icon: FireIcon, label: 'Rekor', action: () => props.onNavigate('personalBest'), disabled: false },
         { icon: ListBulletIcon, label: 'Info', action: props.onShowInfo, disabled: false },
         { icon: DocumentTextIcon, label: 'Dana', action: props.onManageFunds, disabled: false },

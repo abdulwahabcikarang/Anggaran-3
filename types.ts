@@ -87,6 +87,7 @@ export interface Achievement {
   streakTarget?: number;
   progress?: (state: AppState) => { current: number; target: number };
   isTimeLimited?: boolean;
+  tierInfo?: { current: number; total: number }; // For tiered/stacked display
 }
 
 export interface Asset {
@@ -98,7 +99,14 @@ export interface Asset {
   symbol?: string; // NEW: Simbol ticker (misal: 'BTC', 'ANTAM')
 }
 
+export interface UserProfile {
+    name: string;
+    avatar?: string; // base64 image
+    customTitle?: string; // If user wants to override level title (optional)
+}
+
 export interface AppState {
+  userProfile: UserProfile;
   budgets: Budget[];
   dailyExpenses: Transaction[];
   fundHistory: FundTransaction[];
