@@ -53,7 +53,7 @@ const OverviewCard: React.FC<{
     const dailyPercentageUsed = dailyBudgetMax > 0 ? (totalDailySpentToday / dailyBudgetMax) * 100 : 100;
 
     return (
-        <section className="bg-white rounded-xl p-6 mb-6 shadow-md relative z-10 mt-4">
+        <section className="bg-white/90 backdrop-blur-sm rounded-xl p-6 mb-6 shadow-md relative z-10 mt-4 border border-white/20">
             <div className="text-center mb-4">
                 <h3 className="text-sm font-medium text-secondary-gray">Sisa Dana Bulan Ini</h3>
                 <div className={`font-bold text-4xl ${totalRemaining < 0 ? 'text-danger-red' : 'text-primary-navy'}`}>
@@ -76,7 +76,7 @@ const OverviewCard: React.FC<{
                 </div>
             </div>
 
-            <div className="space-y-3 border-t pt-4">
+            <div className="space-y-3 border-t border-gray-100 pt-4">
                 <h3 className="font-semibold text-dark-text text-center">Anggaran Harian (Dana Tersedia)</h3>
                  <div onClick={onViewDailyHistory} className="cursor-pointer group">
                     <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden my-2">
@@ -111,7 +111,7 @@ const AIInsightCard: React.FC<{
     onRefresh: () => void;
 }> = ({ insight, isLoading, onRefresh }) => {
     return (
-        <section className="bg-white rounded-xl p-6 mb-6 shadow-md">
+        <section className="bg-white/90 backdrop-blur-sm rounded-xl p-6 mb-6 shadow-md border border-white/20">
             <div className="flex justify-between items-center mb-2">
                 <div className="flex items-center space-x-2">
                     <LightbulbIcon className="w-6 h-6 text-warning-yellow" />
@@ -351,7 +351,7 @@ const Dashboard: React.FC<DashboardProps> = (props) => {
     return (
         <div 
             id="dashboard-page" 
-            className="h-screen overflow-y-auto no-scrollbar relative bg-light-bg pb-24" 
+            className="h-screen overflow-y-auto no-scrollbar relative bg-transparent pb-24" 
             onScroll={handleScroll}
             ref={scrollContainerRef}
             onDragEnd={handleDragEnd}
@@ -412,7 +412,7 @@ const Dashboard: React.FC<DashboardProps> = (props) => {
                         onDragOver={(e) => { e.preventDefault(); setDragOverZone('fixed'); }}
                         onDragLeave={() => setDragOverZone(null)}
                         onDrop={() => handleDropOnZone('fixed')}
-                        className={`p-4 rounded-xl transition-colors duration-300 ${dragOverZone === 'fixed' ? 'bg-blue-100' : ''}`}
+                        className={`p-4 rounded-xl transition-colors duration-300 ${dragOverZone === 'fixed' ? 'bg-blue-100/80 backdrop-blur-sm' : ''}`}
                     >
                         <h2 className="text-2xl font-bold text-primary-navy mb-4">Anggaran Tetap</h2>
                         <div className="grid md:grid-cols-2 gap-6">
@@ -425,7 +425,7 @@ const Dashboard: React.FC<DashboardProps> = (props) => {
                         onDragOver={(e) => { e.preventDefault(); setDragOverZone('temporary'); }}
                         onDragLeave={() => setDragOverZone(null)}
                         onDrop={() => handleDropOnZone('temporary')}
-                        className={`p-4 rounded-xl transition-colors duration-300 border-2 border-dashed ${dragOverZone === 'temporary' ? 'bg-green-100 border-accent-teal' : 'border-secondary-gray'}`}
+                        className={`p-4 rounded-xl transition-colors duration-300 border-2 border-dashed ${dragOverZone === 'temporary' ? 'bg-green-100/80 backdrop-blur-sm border-accent-teal' : 'border-secondary-gray/30'}`}
                     >
                         <h2 className="text-2xl font-bold text-primary-navy mb-2">Anggaran Sementara (Bulan Ini Saja)</h2>
                         <p className="text-sm text-secondary-gray mb-4">Seret pos dari atas ke sini untuk menjadikannya sementara. Anggaran di sini akan otomatis diarsipkan di akhir bulan.</p>
@@ -443,7 +443,7 @@ const Dashboard: React.FC<DashboardProps> = (props) => {
                      <div className="mt-6 pb-8">
                         <button 
                             onClick={props.onAddBudget} 
-                            className="w-full flex items-center justify-center gap-2 bg-white border-2 border-dashed border-secondary-gray text-secondary-gray font-bold py-3 px-4 rounded-lg hover:bg-gray-50 hover:text-dark-text hover:border-dark-text transition-colors"
+                            className="w-full flex items-center justify-center gap-2 bg-white/80 backdrop-blur-sm border-2 border-dashed border-secondary-gray text-secondary-gray font-bold py-3 px-4 rounded-lg hover:bg-white hover:text-dark-text hover:border-dark-text transition-colors"
                         >
                             <PlusCircleIcon className="w-6 h-6" />
                             <span>Tambah Pos Anggaran Baru</span>

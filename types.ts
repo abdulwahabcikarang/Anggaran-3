@@ -102,7 +102,42 @@ export interface Asset {
 export interface UserProfile {
     name: string;
     avatar?: string; // base64 image
-    customTitle?: string; // If user wants to override level title (optional)
+    customTitle?: string; // Title bought from shop
+    frameId?: string; // Frame bought from shop
+    activePersona?: string; // NEW: AI Persona
+    activeBanner?: string; // NEW: Profile Banner
+}
+
+// NEW: Interface untuk Barang Toko
+export interface ShopItem {
+    id: string;
+    name: string;
+    description: string;
+    price: number;
+    type: 'theme' | 'title' | 'frame' | 'persona' | 'banner' | 'special';
+    value: string; // CSS class, ID, or config value
+    icon: string;
+}
+
+// NEW: Interface untuk Tema Kustom
+export interface CustomTheme {
+    id: string;
+    name: string;
+    colors: {
+        '--color-primary-navy': string;
+        '--color-primary-navy-dark': string;
+        '--color-accent-teal': string;
+        '--color-accent-teal-dark': string;
+        '--color-light-bg': string;
+        '--color-dark-text': string;
+        '--color-secondary-gray': string;
+        '--app-background': string;
+        // System Colors Overrides for Dark Mode compatibility
+        '--color-white': string;
+        '--color-gray-50': string;
+        '--color-gray-100': string;
+        '--color-gray-200': string;
+    };
 }
 
 export interface AppState {
@@ -126,6 +161,12 @@ export interface AppState {
     lastStreakCheck?: string; 
   };
   assets: Asset[];
+  // NEW: Shop State
+  spentPoints: number; // Total points spent in shop
+  inventory: string[]; // List of purchased item IDs
+  activeTheme: string; // Current active theme ID
+  bonusPoints?: number; // Points added manually (e.g. for trials)
+  customThemes: CustomTheme[]; // NEW: List of user-generated themes
 }
 
 export interface ScannedItem {

@@ -11,6 +11,7 @@ interface VisualizationsProps {
     state: AppState;
     onBack: () => void;
     onAnalyzeChart: (prompt: string) => Promise<string>;
+    activePersona?: string;
 }
 
 const formatCurrency = (amount: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
@@ -313,7 +314,7 @@ const FinancialHealthCard: React.FC<{
 };
 
 
-const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack, onAnalyzeChart }) => {
+const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack, onAnalyzeChart, activePersona }) => {
     type RangeType = '7d' | '30d' | 'thisMonth' | 'lastMonth' | 'all';
     const [filterRange, setFilterRange] = useState<RangeType>('thisMonth');
     const [detailModalData, setDetailModalData] = useState<{ category: string; transactions: GlobalTransaction[] } | null>(null);
@@ -520,7 +521,7 @@ const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack, onAnalyz
     const analyzeTrend = async () => {
         setIsTrendLoading(true);
         const dataStr = JSON.stringify(trendData);
-        const prompt = `Jelasin grafik Tren Pengeluaran Harian ini dengan pas. Analisis pola, lonjakan, dan berikan kesimpulan kebiasaan belanja. Bahasa teman perempuan friendly (panggil 'Kak'/'Kamu'). Data: ${dataStr}`;
+        const prompt = `Jelasin grafik Tren Pengeluaran Harian ini. Analisis pola, lonjakan, dan berikan kesimpulan. Data: ${dataStr}`;
         const result = await onAnalyzeChart(prompt);
         setTrendExplanation(result);
         setIsTrendLoading(false);
@@ -529,7 +530,7 @@ const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack, onAnalyz
     const analyzeBudget = async () => {
         setIsBudgetLoading(true);
         const dataStr = JSON.stringify(budgetComparisonData);
-        const prompt = `Jelasin grafik Perbandingan Anggaran ini. Fokus dana vs terpakai. Sebut kategori boros/hemat. Bahasa teman perempuan friendly. Data: ${dataStr}`;
+        const prompt = `Jelasin grafik Perbandingan Anggaran ini. Fokus dana vs terpakai. Data: ${dataStr}`;
         const result = await onAnalyzeChart(prompt);
         setBudgetExplanation(result);
         setIsBudgetLoading(false);
@@ -538,7 +539,7 @@ const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack, onAnalyz
     const analyzeAllocation = async () => {
         setIsAllocationLoading(true);
         const dataStr = JSON.stringify(treemapData);
-        const prompt = `Jelasin grafik Alokasi Pengeluaran (Treemap) ini. Identifikasi kategori dominan. Bahasa teman perempuan friendly. Data: ${dataStr}`;
+        const prompt = `Jelasin grafik Alokasi Pengeluaran (Treemap) ini. Identifikasi kategori dominan. Data: ${dataStr}`;
         const result = await onAnalyzeChart(prompt);
         setAllocationExplanation(result);
         setIsAllocationLoading(false);

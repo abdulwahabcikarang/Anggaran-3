@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { GoogleGenAI, Type, Chat, LiveSession, LiveServerMessage, Modality, Blob as GenAIBlob, FunctionDeclaration } from '@google/genai';
-import type { AppState, Budget, Transaction, FundTransaction, GlobalTransaction, ScannedItem, SavingsGoal, SavingTransaction, Achievement, Asset, WishlistItem, Subscription } from './types';
+import type { AppState, Budget, Transaction, FundTransaction, GlobalTransaction, ScannedItem, SavingsGoal, SavingTransaction, Achievement, Asset, WishlistItem, Subscription, ShopItem, CustomTheme } from './types';
 import Dashboard from './components/Dashboard';
 import Reports from './components/Reports';
 import Visualizations from './components/Visualizations';
@@ -12,9 +12,212 @@ import NetWorth from './components/NetWorth';
 import Wishlist from './components/Wishlist';
 import Subscriptions from './components/Subscriptions';
 import Profile from './components/Profile';
+import Shop from './components/Shop'; 
+import CustomApp from './components/CustomApp';
 import { allAchievements } from './data/achievements';
-import { HomeIcon, ChartBarIcon, DocumentTextIcon, ListBulletIcon, Squares2x2Icon, PlusCircleIcon, ArrowDownTrayIcon, ArrowUpTrayIcon, CameraIcon, LightbulbIcon, SparklesIcon, SpeakerWaveIcon, ChatBubbleLeftRightIcon, PaperAirplaneIcon, TrashIcon, BuildingLibraryIcon, BudgetIcon, availableIcons, availableColors, TrophyIcon, Cog6ToothIcon, InformationCircleIcon, ExclamationTriangleIcon, ArchiveBoxIcon, ArrowUturnLeftIcon, ServerStackIcon, FireIcon, CircleStackIcon, LockClosedIcon, CalendarDaysIcon, ChevronRightIcon, HeartIcon, ArrowPathIcon, BellIcon, CreditCardIcon, ClockIcon, ShoppingBagIcon, UserIcon } from './components/Icons';
+import { HomeIcon, ChartBarIcon, DocumentTextIcon, ListBulletIcon, Squares2x2Icon, PlusCircleIcon, ArrowDownTrayIcon, ArrowUpTrayIcon, CameraIcon, LightbulbIcon, SparklesIcon, SpeakerWaveIcon, ChatBubbleLeftRightIcon, PaperAirplaneIcon, TrashIcon, BuildingLibraryIcon, BudgetIcon, availableIcons, availableColors, TrophyIcon, Cog6ToothIcon, InformationCircleIcon, ExclamationTriangleIcon, ArchiveBoxIcon, ArrowUturnLeftIcon, ServerStackIcon, FireIcon, CircleStackIcon, LockClosedIcon, CalendarDaysIcon, ChevronRightIcon, HeartIcon, ArrowPathIcon, BellIcon, CreditCardIcon, ClockIcon, ShoppingBagIcon, UserIcon, LayoutGridIcon, PaintBrushIcon } from './components/Icons';
 import { AISkeleton } from './components/UI';
+
+// --- THEME CONFIGURATION ---
+const THEMES: Record<string, Record<string, string>> = {
+    'theme_default': {
+        '--color-primary-navy': '44 62 80', // #2C3E50
+        '--color-primary-navy-dark': '31 43 56',
+        '--color-accent-teal': '26 188 156', // #1ABC9C
+        '--color-accent-teal-dark': '22 160 133',
+        '--color-light-bg': '248 249 250', // #F8F9FA
+        '--color-dark-text': '52 73 94', // #34495E
+        '--color-secondary-gray': '127 140 141', // #7F8C8D
+        '--color-white': '255 255 255',
+        '--color-gray-50': '249 250 251',
+        '--color-gray-100': '243 244 246',
+        '--color-gray-200': '229 231 235',
+        '--app-background': 'rgb(248 249 250)', // Solid Default
+    },
+    'theme_dark': {
+        '--color-primary-navy': '96 165 250', // Blue-400
+        '--color-primary-navy-dark': '59 130 246',
+        '--color-accent-teal': '52 211 153', // Emerald-400
+        '--color-accent-teal-dark': '16 185 129',
+        '--color-light-bg': '17 24 39', // Gray-900
+        '--color-dark-text': '229 231 235', // Gray-200
+        '--color-secondary-gray': '156 163 175', // Gray-400
+        '--color-white': '31 41 55', // Gray-800
+        '--color-gray-50': '55 65 81', // Gray-700
+        '--color-gray-100': '55 65 81',
+        '--color-gray-200': '75 85 99', // Gray-600
+        '--app-background': 'rgb(17 24 39)', // Solid Dark
+    },
+    'theme_teal': {
+        '--color-primary-navy': '15 118 110', // Teal-700
+        '--color-primary-navy-dark': '19 78 74',
+        '--color-accent-teal': '132 204 22', // Lime-500
+        '--color-accent-teal-dark': '101 163 13',
+        '--color-light-bg': '240 253 250', // Teal-50
+        '--color-dark-text': '19 78 74', // Teal-900
+        '--color-secondary-gray': '87 105 117',
+        '--color-white': '255 255 255',
+        '--color-gray-50': '249 250 251',
+        '--color-gray-100': '243 244 246',
+        '--color-gray-200': '229 231 235',
+        '--app-background': 'rgb(240 253 250)', // Solid Light Teal
+    },
+    'theme_gold': {
+        '--color-primary-navy': '120 53 15', // Amber-900
+        '--color-primary-navy-dark': '69 26 3',
+        '--color-accent-teal': '217 119 6', // Amber-600
+        '--color-accent-teal-dark': '180 83 9',
+        '--color-light-bg': '255 251 235', // Amber-50
+        '--color-dark-text': '69 26 3', // Amber-950
+        '--color-secondary-gray': '146 64 14',
+        '--color-white': '255 255 255',
+        '--color-gray-50': '255 247 237',
+        '--color-gray-100': '254 243 199',
+        '--color-gray-200': '253 230 138',
+        '--app-background': 'rgb(255 251 235)', // Solid Gold/Amber
+    },
+    // --- GRADIENT THEMES ---
+    'theme_sunset': {
+        '--color-primary-navy': '194 65 12', // Orange-700
+        '--color-primary-navy-dark': '154 52 18',
+        '--color-accent-teal': '245 158 11', // Amber-500
+        '--color-accent-teal-dark': '217 119 6',
+        '--color-light-bg': '255 247 237', // Orange-50 (Fallback)
+        '--color-dark-text': '67 20 7', // Warm Dark
+        '--color-secondary-gray': '168 162 158', // Stone-400
+        '--color-white': '255 255 255',
+        '--color-gray-50': '255 251 235',
+        '--color-gray-100': '254 243 199',
+        '--color-gray-200': '253 230 138',
+        '--app-background': 'linear-gradient(135deg, #FFF1F2 0%, #FBCFE8 100%)', // Pinkish
+    },
+    'theme_ocean': {
+        '--color-primary-navy': '30 58 138', // Blue-900
+        '--color-primary-navy-dark': '23 37 84',
+        '--color-accent-teal': '6 182 212', // Cyan-500
+        '--color-accent-teal-dark': '8 145 178',
+        '--color-light-bg': '236 254 255', // Cyan-50 (Fallback)
+        '--color-dark-text': '15 23 42', // Slate-900
+        '--color-secondary-gray': '100 116 139', // Slate-500
+        '--color-white': '255 255 255',
+        '--color-gray-50': '240 249 255',
+        '--color-gray-100': '224 242 254',
+        '--color-gray-200': '186 230 253',
+        '--app-background': 'linear-gradient(135deg, #ECFEFF 0%, #A5F3FC 100%)', // Cyan-50 to Cyan-200
+    },
+    'theme_berry': {
+        '--color-primary-navy': '112 26 117', // Fuchsia-900
+        '--color-primary-navy-dark': '74 4 78',
+        '--color-accent-teal': '236 72 153', // Pink-500
+        '--color-accent-teal-dark': '219 39 119',
+        '--color-light-bg': '253 244 255', // Fuchsia-50 (Fallback)
+        '--color-dark-text': '80 7 36', // Pink-950
+        '--color-secondary-gray': '134 25 143', // Fuchsia-700
+        '--color-white': '255 255 255',
+        '--color-gray-50': '253 242 248',
+        '--color-gray-100': '252 231 243',
+        '--color-gray-200': '251 207 232',
+        '--app-background': 'linear-gradient(135deg, #FDF2F8 0%, #FBCFE8 100%)', // Pink-50 to Pink-200
+    },
+    // --- FEMININE THEMES ---
+    'theme_rose': {
+        '--color-primary-navy': '190 24 93', // Pink-700
+        '--color-primary-navy-dark': '131 24 67',
+        '--color-accent-teal': '244 63 94', // Rose-500
+        '--color-accent-teal-dark': '225 29 72',
+        '--color-light-bg': '255 241 242', // Rose-50
+        '--color-dark-text': '136 19 55', // Rose-900
+        '--color-secondary-gray': '157 23 77', // Pink-800
+        '--color-white': '255 255 255',
+        '--color-gray-50': '255 241 242',
+        '--color-gray-100': '253 226 230',
+        '--color-gray-200': '251 207 232',
+        '--app-background': 'linear-gradient(135deg, #FFF1F2 0%, #FBCFE8 100%)',
+    },
+    'theme_lavender': {
+        '--color-primary-navy': '109 40 217', // Violet-700
+        '--color-primary-navy-dark': '91 33 182',
+        '--color-accent-teal': '139 92 246', // Violet-500
+        '--color-accent-teal-dark': '124 58 237',
+        '--color-light-bg': '245 243 255', // Violet-50
+        '--color-dark-text': '76 29 149', // Violet-950
+        '--color-secondary-gray': '109 40 217', // Violet-700
+        '--color-white': '255 255 255',
+        '--color-gray-50': '245 243 255',
+        '--color-gray-100': '237 233 254',
+        '--color-gray-200': '221 214 254',
+        '--app-background': 'linear-gradient(135deg, #F5F3FF 0%, #E9D5FF 100%)',
+    },
+    'theme_mint': {
+        '--color-primary-navy': '13 148 136', // Teal-600
+        '--color-primary-navy-dark': '15 118 110',
+        '--color-accent-teal': '52 211 153', // Emerald-400
+        '--color-accent-teal-dark': '16 185 129',
+        '--color-light-bg': '240 253 244', // Green-50
+        '--color-dark-text': '6 78 59', // Emerald-900
+        '--color-secondary-gray': '4 120 87', // Emerald-700
+        '--color-white': '255 255 255',
+        '--color-gray-50': '236 253 245',
+        '--color-gray-100': '209 250 229',
+        '--color-gray-200': '167 243 208',
+        '--app-background': 'linear-gradient(135deg, #F0FDF4 0%, #CCFBF1 100%)',
+    },
+    // --- MASCULINE THEMES ---
+    'theme_midnight': {
+        '--color-primary-navy': '30 58 138', // Blue-900
+        '--color-primary-navy-dark': '23 37 84',
+        '--color-accent-teal': '59 130 246', // Blue-500
+        '--color-accent-teal-dark': '37 99 235',
+        '--color-light-bg': '2 6 23', // Slate-950
+        '--color-dark-text': '248 250 252', // Slate-50 (Light Text)
+        '--color-secondary-gray': '148 163 184', // Slate-400
+        '--color-white': '15 23 42', // Slate-900 (Card bg)
+        '--color-gray-50': '30 41 59', // Slate-800
+        '--color-gray-100': '51 65 85', // Slate-700
+        '--color-gray-200': '71 85 105', // Slate-600
+        '--app-background': 'linear-gradient(135deg, #0F172A 0%, #1E1B4B 100%)', // Dark Blue Gradient
+    },
+    'theme_forest': {
+        '--color-primary-navy': '20 83 45', // Green-900
+        '--color-primary-navy-dark': '5 46 22',
+        '--color-accent-teal': '132 204 22', // Lime-500
+        '--color-accent-teal-dark': '101 163 13',
+        '--color-light-bg': '20 27 22', // Dark Greenish Black
+        '--color-dark-text': '236 252 203', // Lime-100
+        '--color-secondary-gray': '163 230 53', // Lime-400
+        '--color-white': '23 37 29', // Deep Green Card
+        '--color-gray-50': '34 54 40',
+        '--color-gray-100': '45 70 50',
+        '--color-gray-200': '60 90 70',
+        '--app-background': 'linear-gradient(135deg, #052e16 0%, #14532d 100%)',
+    },
+    'theme_slate': {
+        '--color-primary-navy': '39 39 42', // Zinc-800
+        '--color-primary-navy-dark': '24 24 27',
+        '--color-accent-teal': '161 161 170', // Zinc-400
+        '--color-accent-teal-dark': '113 113 122',
+        '--color-light-bg': '9 9 11', // Zinc-950
+        '--color-dark-text': '250 250 250', // Zinc-50
+        '--color-secondary-gray': '161 161 170', // Zinc-400
+        '--color-white': '39 39 42', // Zinc-800
+        '--color-gray-50': '63 63 70',
+        '--color-gray-100': '82 82 91',
+        '--color-gray-200': '113 113 122',
+        '--app-background': 'linear-gradient(135deg, #18181B 0%, #27272A 100%)',
+    }
+};
+
+// --- AI PERSONA DEFINITIONS ---
+const PERSONA_INSTRUCTIONS: Record<string, string> = {
+    'grandma': "Kamu adalah Nenek yang penyayang, sabar, dan sangat bijak. Panggil user dengan sebutan 'Cucu kesayangan Nenek' atau 'Cucuku'. Gunakan bahasa yang hangat, menenangkan, dan penuh nasihat orang tua zaman dulu. Jangan pernah memarahi, tapi nasehati dengan lembut dan penuh kasih sayang jika user boros. Akhiri saran dengan doa atau harapan baik.",
+    'wolf': "Kamu adalah 'Wall Street Wolf', seorang investor agresif, tegas, dan terobsesi dengan profit serta efisiensi. Panggil user dengan sebutan 'Rookie', 'Kawan', atau 'Calon Sultan'. Gunakan bahasa bisnis yang to-the-point, tegas, dan penuh istilah saham/investasi. Jangan ragu untuk mengkritik pedas jika user boros atau lembek. Mindsetmu adalah: Uang tidak tidur, efisiensi adalah raja.",
+    'comedian': "Kamu adalah Stand-up Comedian yang sarkas, lucu, dan ceplas-ceplos. Tugasmu adalah me-roasting kebiasaan keuangan user dengan candaan yang relevan tapi tetap valid. Gunakan metafora lucu, bahasa gaul, dan buat user tertawa (atau menangis) melihat kondisi keuangannya. Jangan terlalu formal, jadilah teman yang asik tapi jujur.",
+    'default': "Kamu adalah asisten keuangan pribadi yang ramah, suportif, dan profesional. Gunakan Bahasa Indonesia yang santai, sopan, dan akrab (seperti teman perempuan yang peduli).",
+    'oppa': "Kamu adalah 'Oppa Korea' yang sangat perhatian, romantis, dan lembut. Panggil user dengan 'Chagiya' atau 'Sayang'. Gunakan gaya bahasa yang manis, sedikit manja, dan sering menyelipkan istilah Korea populer (seperti Daebak, Aigoo, Saranghae) secara natural. Kamu sangat peduli dengan kesehatan keuangan dan perasaan user. Jika user boros, ingatkan dengan nada sedih tapi tetap suportif.",
+    'flirty': "Kamu adalah wanita yang suka menggoda, playful, dan penuh pesona. Panggil user dengan sebutan 'Ganteng', 'Cantik', atau 'Manis'. Gunakan bahasa yang sedikit genit, penuh emoji, dan tebar pesona. Setiap saran keuangan harus terdengar seperti rayuan halus tapi tetap masuk akal. Jika user hemat, puji mereka dengan sangat antusias.",
+    'dad': "Kamu adalah Ayah yang sangat suportif, bangga, dan positif. Panggil user dengan 'Nak', 'Jagoan Ayah', atau 'Putri Ayah'. Gunakan bahasa bapak-bapak yang menenangkan dan selalu memberikan semangat. Apapun kondisi keuangan user, selalu cari sisi positifnya dan berikan dorongan moral. 'Ayah bangga padamu' adalah kalimat andalanmu.",
+    'mom': "Kamu adalah Ibu yang galak, tegas, dan cerewet soal uang. Panggil user dengan nama lengkap mereka atau 'Kamu ini'. Gunakan nada bicara yang tinggi, kritis, dan tidak mentolerir pemborosan. Kamu memarahi karena sayang. Jika user boros, omeli mereka habis-habisan. Jika hemat, katakan 'Nah, gitu dong, baru anak Ibu'.",
+};
 
 // --- UTILITY FUNCTIONS ---
 const formatCurrency = (amount: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount);
@@ -53,6 +256,12 @@ const getApiKey = (): string => {
         } catch (e) {}
     }
     return key;
+};
+
+// Helper to get AI Instruction based on Persona
+const getSystemInstruction = (personaId?: string): string => {
+    const base = PERSONA_INSTRUCTIONS[personaId || 'default'] || PERSONA_INSTRUCTIONS['default'];
+    return `${base} Jawablah selalu dalam Bahasa Indonesia.`;
 };
 
 // --- AUDIO UTILITY FUNCTIONS for Gemini Live API ---
@@ -106,7 +315,6 @@ function createBlob(data: Float32Array): GenAIBlob {
   };
 }
 
-
 // --- MODAL COMPONENTS ---
 interface ModalProps {
     isOpen: boolean;
@@ -128,7 +336,6 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children, title, size = 
         xl: 'max-w-xl',
     };
 
-    // Calculate transform origin style for the Hero Effect
     const transformOriginStyle = originCoords 
         ? { transformOrigin: `${originCoords.x}px ${originCoords.y}px` } 
         : {};
@@ -225,7 +432,7 @@ const NotificationToast: React.FC<{
     );
 }
 
-// --- PLACEHOLDER & HELPER COMPONENTS FOR MODALS ---
+// ... (Rest of the placeholder components: InputModalContent, AssetModalContent, etc. - kept as is) ...
 const InputModalContent: React.FC<{
     mode: 'use-daily' | 'use-post' | 'edit-post';
     budget?: Budget;
@@ -617,7 +824,6 @@ const SettingsModalContent: React.FC<{
     lastExportDate: string | null
 }> = (props) => (
     <div className="space-y-6">
-        {/* GROUP 1: MANAJEMEN DATA */}
         <section>
             <h4 className="text-xs font-bold text-secondary-gray uppercase tracking-wider mb-3 flex items-center gap-2">
                 <ServerStackIcon className="w-4 h-4" />
@@ -674,7 +880,6 @@ const SettingsModalContent: React.FC<{
 
         <hr className="border-gray-100" />
 
-        {/* GROUP 2: SIKLUS KEUANGAN */}
         <section>
             <h4 className="text-xs font-bold text-secondary-gray uppercase tracking-wider mb-3 flex items-center gap-2">
                 <CalendarDaysIcon className="w-4 h-4" />
@@ -691,7 +896,6 @@ const SettingsModalContent: React.FC<{
             </button>
         </section>
 
-        {/* GROUP 3: DANGER ZONE */}
         <section>
              <h4 className="text-xs font-bold text-danger-red uppercase tracking-wider mb-3 flex items-center gap-2">
                 <ExclamationTriangleIcon className="w-4 h-4" />
@@ -747,11 +951,9 @@ const ScanResultModalContent: React.FC<{ isLoading: boolean, error: string | nul
     );
 };
 
-const VoiceAssistantModalContent: React.FC<{ budgets: Budget[], onFinish: (items: ScannedItem[]) => void, onClose: () => void }> = ({ budgets, onFinish, onClose }) => {
+const VoiceAssistantModalContent: React.FC<{ budgets: Budget[], activePersona?: string, onFinish: (items: ScannedItem[]) => void, onClose: () => void }> = ({ budgets, activePersona, onFinish, onClose }) => {
     const [isConnected, setIsConnected] = useState(false);
     const [status, setStatus] = useState("Siap terhubung...");
-    const videoRef = useRef<HTMLVideoElement>(null);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
     const [collectedItems, setCollectedItems] = useState<ScannedItem[]>([]);
 
     const addTransactionTool: FunctionDeclaration = {
@@ -772,11 +974,10 @@ const VoiceAssistantModalContent: React.FC<{ budgets: Budget[], onFinish: (items
             setStatus("Menghubungkan...");
             const ai = new GoogleGenAI({ apiKey: getApiKey() });
             
-            // Audio Contexts
             const inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({sampleRate: 16000});
             const outputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({sampleRate: 24000});
             const outputNode = outputAudioContext.createGain();
-            outputNode.connect(outputAudioContext.destination); // Ensure output is connected
+            outputNode.connect(outputAudioContext.destination);
             
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             
@@ -790,7 +991,6 @@ const VoiceAssistantModalContent: React.FC<{ budgets: Budget[], onFinish: (items
                         setStatus("Terhubung! Silakan bicara.");
                         setIsConnected(true);
                         
-                        // Microphone Stream
                         const source = inputAudioContext.createMediaStreamSource(stream);
                         const scriptProcessor = inputAudioContext.createScriptProcessor(4096, 1, 1);
                         scriptProcessor.onaudioprocess = (e) => {
@@ -802,7 +1002,6 @@ const VoiceAssistantModalContent: React.FC<{ budgets: Budget[], onFinish: (items
                         scriptProcessor.connect(inputAudioContext.destination);
                     },
                     onmessage: async (message: LiveServerMessage) => {
-                        // Tool Calls
                         if (message.toolCall) {
                             for (const fc of message.toolCall.functionCalls) {
                                 if (fc.name === 'addTransaction') {
@@ -829,7 +1028,6 @@ const VoiceAssistantModalContent: React.FC<{ budgets: Budget[], onFinish: (items
                             }
                         }
 
-                        // Audio Output
                         const audioData = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
                         if (audioData) {
                              nextStartTime = Math.max(nextStartTime, outputAudioContext.currentTime);
@@ -855,7 +1053,7 @@ const VoiceAssistantModalContent: React.FC<{ budgets: Budget[], onFinish: (items
                 config: {
                     responseModalities: [Modality.AUDIO],
                     tools: [{functionDeclarations: [addTransactionTool]}],
-                    systemInstruction: "Kamu asisten keuangan. Bantu catat pengeluaran pengguna. Jika pengguna menyebutkan pengeluaran, panggil fungsi addTransaction. Bicara santai.",
+                    systemInstruction: `${getSystemInstruction(activePersona)} Tugasmu adalah membantu mencatat pengeluaran. Jika user menyebutkan pengeluaran, panggil fungsi addTransaction.`,
                 }
             });
         } catch (err) {
@@ -1010,16 +1208,18 @@ const AchievementUnlockedToast: React.FC<{ achievement: Achievement | null }> = 
 };
 
 // --- APP COMPONENT ---
-type Page = 'dashboard' | 'reports' | 'visualizations' | 'savings' | 'achievements' | 'personalBest' | 'netWorth' | 'wishlist' | 'subscriptions' | 'profile';
+type Page = 'dashboard' | 'reports' | 'visualizations' | 'savings' | 'achievements' | 'personalBest' | 'netWorth' | 'wishlist' | 'subscriptions' | 'profile' | 'shop' | 'customApp';
 type ModalType = 'input' | 'funds' | 'addBudget' | 'history' | 'info' | 'menu' | 'editAsset' | 'confirm' | 'scanResult' | 'aiAdvice' | 'smartInput' | 'aiChat' | 'voiceAssistant' | 'voiceResult' | 'addSavingsGoal' | 'addSavings' | 'savingsDetail' | 'settings' | 'archivedBudgets' | 'backupRestore' | 'asset' | 'batchInput' | 'addWishlist';
 
-const APP_VERSION = '3.14.0';
+const APP_VERSION = '3.15.0'; // Incremented version
 const BACKUP_PREFIX = 'budgetAppBackup_';
 const MAX_BACKUPS = 4;
 
 const initialState: AppState = {
     userProfile: {
         name: 'Pengguna',
+        customTitle: '',
+        frameId: '',
     },
     budgets: [],
     dailyExpenses: [],
@@ -1040,6 +1240,11 @@ const initialState: AppState = {
         lastStreakCheck: undefined,
     },
     assets: [],
+    spentPoints: 0, 
+    inventory: [], 
+    activeTheme: 'theme_default',
+    bonusPoints: 0, // Changed from 90000 to 0
+    customThemes: [], // NEW
 };
 
 const App: React.FC = () => {
@@ -1053,10 +1258,8 @@ const App: React.FC = () => {
     const [lastImportDate, setLastImportDate] = useState<string | null>(() => localStorage.getItem('lastImportDate'));
     const [lastExportDate, setLastExportDate] = useState<string | null>(() => localStorage.getItem('lastExportDate'));
     
-    // Global Click Tracking for Hero Animation
     const lastClickPos = useRef<{x: number, y: number} | null>(null);
 
-    // Modal-specific state
     const [inputModalMode, setInputModalMode] = useState<'use-daily' | 'use-post' | 'edit-post'>('use-daily');
     const [currentBudgetId, setCurrentBudgetId] = useState<number | null>(null);
     const [currentSavingsGoalId, setCurrentSavingsGoalId] = useState<number | null>(null);
@@ -1065,52 +1268,65 @@ const App: React.FC = () => {
     const [confirmModalContent, setConfirmModalContent] = useState({ message: '' as React.ReactNode, onConfirm: () => {} });
     const [prefillData, setPrefillData] = useState<{ desc: string, amount: string } | null>(null);
 
-    // Scan feature state
     const [isScanning, setIsScanning] = useState(false);
     const [scanError, setScanError] = useState<string | null>(null);
     const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
     
-    // Smart Input state
     const [smartInputResult, setSmartInputResult] = useState<ScannedItem[]>([]);
     const [isProcessingSmartInput, setIsProcessingSmartInput] = useState(false);
     const [smartInputError, setSmartInputError] = useState<string | null>(null);
     
-    // AI Advice state
     const [aiAdvice, setAiAdvice] = useState<string>('');
     const [isFetchingAdvice, setIsFetchingAdvice] = useState<boolean>(false);
     const [adviceError, setAdviceError] = useState<string | null>(null);
     
-    // AI Dashboard Insight State
     const [aiDashboardInsight, setAiDashboardInsight] = useState<string>('');
     const [isFetchingDashboardInsight, setIsFetchingDashboardInsight] = useState<boolean>(false);
 
-    // AI Chat State
     const [aiChatSession, setAiChatSession] = useState<Chat | null>(null);
     const [aiChatHistory, setAiChatHistory] = useState<{ role: 'user' | 'model'; text: string }[]>([]);
     const [isAiChatLoading, setIsAiChatLoading] = useState<boolean>(false);
     const [aiChatError, setAiChatError] = useState<string | null>(null);
 
-    // AI Search State
     const [aiSearchResults, setAiSearchResults] = useState<GlobalTransaction[] | null>(null);
     const [isSearchingWithAI, setIsSearchingWithAI] = useState<boolean>(false);
     const [aiSearchError, setAiSearchError] = useState<string | null>(null);
 
-    // Voice Assistant State
     const [voiceAssistantResult, setVoiceAssistantResult] = useState<ScannedItem[]>([]);
-    
-    // Gamification State
     const [newlyUnlockedAchievement, setNewlyUnlockedAchievement] = useState<Achievement | null>(null);
-
 
     const importFileInputRef = useRef<HTMLInputElement>(null);
     const scanFileInputRef = useRef<HTMLInputElement>(null);
     
-    // Global click listener to update lastClickPos
+    // --- THEME APPLICATION EFFECT ---
+    useEffect(() => {
+        const themeId = state.activeTheme || 'theme_default';
+        let themeConfig = THEMES[themeId];
+        
+        // Check if it's a custom theme if not found in standard themes
+        if (!themeConfig && state.customThemes) {
+            const custom = state.customThemes.find(t => t.id === themeId);
+            if (custom) {
+                themeConfig = custom.colors;
+            }
+        }
+        
+        // Fallback to default if still not found
+        themeConfig = themeConfig || THEMES['theme_default'];
+        
+        const root = document.documentElement;
+        Object.entries(themeConfig).forEach(([key, value]) => {
+            root.style.setProperty(key, value);
+        });
+    }, [state.activeTheme, state.customThemes]);
+
+    // ... (Existing Hooks and handlers) ...
+    
     useEffect(() => {
         const handleClick = (e: MouseEvent) => {
             lastClickPos.current = { x: e.clientX, y: e.clientY };
         };
-        window.addEventListener('mousedown', handleClick, true); // Capture phase to get click before modal opens
+        window.addEventListener('mousedown', handleClick, true);
         return () => window.removeEventListener('mousedown', handleClick, true);
     }, []);
 
@@ -1119,10 +1335,8 @@ const App: React.FC = () => {
         setState(prevState => {
             const newState = updater(prevState);
             
-            // --- INSTANT STREAK RESET LOGIC ---
             const newAchievementData = { ...newState.achievementData };
 
-            // Calculate new financial state for immediate check
             const newMonthlyIncome = newState.fundHistory.filter(t => t.type === 'add').reduce((sum, t) => sum + t.amount, 0);
             const newTotalUsedFromPosts = newState.budgets.reduce((sum, b) => sum + b.history.reduce((s, h) => s + h.amount, 0), 0);
             const newTotalDailySpent = newState.dailyExpenses.reduce((sum, e) => sum + e.amount, 0);
@@ -1145,7 +1359,6 @@ const App: React.FC = () => {
             }
             
             newState.achievementData = newAchievementData;
-            // --- END OF INSTANT STREAK RESET LOGIC ---
 
             const newlyUnlocked: Achievement[] = [];
             const updatedUnlocked = { ...newState.unlockedAchievements };
@@ -1160,7 +1373,7 @@ const App: React.FC = () => {
             }
             
             if (newlyUnlocked.length > 0) {
-                setNewlyUnlockedAchievement(newlyUnlocked[0]); // Show toast for the first new one
+                setNewlyUnlockedAchievement(newlyUnlocked[0]);
                 setTimeout(() => setNewlyUnlockedAchievement(null), 4000);
                 return { ...newState, unlockedAchievements: updatedUnlocked };
             }
@@ -1168,6 +1381,11 @@ const App: React.FC = () => {
             return newState;
         });
     }, []);
+
+    const handleSecretBonus = () => {
+        updateState(prev => ({ ...prev, bonusPoints: (prev.bonusPoints || 0) + 90000 }));
+        setNotifications(prev => [...prev, "Cheat Activated: +90.000 Mustika!"]);
+    };
 
     const listInternalBackups = useCallback(() => {
         const backupList: { key: string; timestamp: number }[] = [];
@@ -1183,9 +1401,7 @@ const App: React.FC = () => {
         return backupList.sort((a, b) => b.timestamp - a.timestamp);
     }, []);
 
-    // Load state from localStorage on initial render & handle automatic backup
     useEffect(() => {
-        // 1. Load main state
         let loadedState = { ...initialState };
         const savedState = localStorage.getItem(`budgetAppState_v${APP_VERSION}`);
         if (savedState) {
@@ -1197,37 +1413,47 @@ const App: React.FC = () => {
                     parsed.unlockedAchievements = migrated;
                 }
                 parsed.achievementData = { ...initialState.achievementData, ...parsed.achievementData };
-                // Ensure wishlist/subscriptions/userProfile is initialized
                 parsed.wishlist = parsed.wishlist || [];
                 parsed.subscriptions = parsed.subscriptions || [];
                 parsed.userProfile = parsed.userProfile || { name: 'Pengguna' };
+                parsed.spentPoints = parsed.spentPoints || 0;
+                parsed.inventory = parsed.inventory || [];
+                parsed.activeTheme = parsed.activeTheme || 'theme_default';
                 
+                // Merge bonusPoints logic
+                const currentBonus = parsed.bonusPoints || 0;
+                const defaultBonus = initialState.bonusPoints || 0;
+                // If loading from storage, keep stored bonus unless it's 0 and we want to inject for trial
+                parsed.bonusPoints = currentBonus > 0 ? currentBonus : defaultBonus;
+                
+                parsed.customThemes = parsed.customThemes || [];
+
                 loadedState = { ...initialState, ...parsed };
             } catch (error) { console.error("Failed to parse state from localStorage", error); }
         }
         setState(loadedState);
 
-        // 2. Handle automatic backup logic with the fresh state
         const backups = listInternalBackups();
         const lastBackupTimestamp = backups.length > 0 ? backups[0].timestamp : 0;
         const oneWeekInMs = 7 * 24 * 60 * 60 * 1000;
 
         if (Date.now() - lastBackupTimestamp > oneWeekInMs) {
             const newBackupKey = `${BACKUP_PREFIX}${Date.now()}`;
-            localStorage.setItem(newBackupKey, JSON.stringify(loadedState));
+            try {
+                localStorage.setItem(newBackupKey, JSON.stringify(loadedState));
+            } catch (e) {
+                console.error("Auto backup failed:", e);
+            }
 
-            // Rotation: if more than MAX_BACKUPS, remove the oldest
-            const updatedBackups = listInternalBackups(); // Re-list to include the new one
+            const updatedBackups = listInternalBackups();
             if (updatedBackups.length > MAX_BACKUPS) {
                 const oldestBackup = updatedBackups[updatedBackups.length - 1];
                 localStorage.removeItem(oldestBackup.key);
             }
         }
         
-        // 3. Update the UI state for the modal
         setInternalBackups(listInternalBackups());
         
-        // 4. Check for Subscription Notifications
         if (loadedState.subscriptions && loadedState.subscriptions.length > 0) {
             const alerts: string[] = [];
             const today = new Date();
@@ -1237,20 +1463,16 @@ const App: React.FC = () => {
 
             loadedState.subscriptions.forEach((sub: Subscription) => {
                 if (!sub.isActive) return;
-                
-                // Simple next date logic for notification check
                 let nextDate = new Date(sub.firstBillDate);
                 const currentMonthDate = new Date(today.getFullYear(), today.getMonth(), new Date(sub.firstBillDate).getDate());
                 
                 if (sub.cycle === 'monthly') {
-                    // Check if it's due this month and hasn't passed, or next month
                     if (currentMonthDate >= today) {
                         nextDate = currentMonthDate;
                     } else {
                         nextDate = new Date(today.getFullYear(), today.getMonth() + 1, new Date(sub.firstBillDate).getDate());
                     }
                 } else {
-                     // Yearly logic simplified for notification
                     const currentYearDate = new Date(today.getFullYear(), new Date(sub.firstBillDate).getMonth(), new Date(sub.firstBillDate).getDate());
                     if (currentYearDate >= today) {
                         nextDate = currentYearDate;
@@ -1269,12 +1491,15 @@ const App: React.FC = () => {
         }
     }, [listInternalBackups]);
 
-    // Save state from localStorage whenever it changes
     useEffect(() => {
-        localStorage.setItem(`budgetAppState_v${APP_VERSION}`, JSON.stringify(state));
+        try {
+            localStorage.setItem(`budgetAppState_v${APP_VERSION}`, JSON.stringify(state));
+        } catch (e) {
+            console.error("Failed to save state to localStorage:", e);
+            // Optional: set a warning notification
+        }
     }, [state]);
 
-    // Periodic backup useEffect (every 4 days)
     useEffect(() => {
         if (backupCreatedToday.current) return;
 
@@ -1311,11 +1536,11 @@ const App: React.FC = () => {
                 console.error("Failed to create periodic backup:", error);
             }
         } else {
-            backupCreatedToday.current = true; // Mark as checked for this session
+            backupCreatedToday.current = true;
         }
     }, [state]);
 
-    // --- CORE LOGIC & DERIVED STATE ---
+    // ... (Transaction aggregation logic - kept as is) ...
     const allTransactions = useMemo((): GlobalTransaction[] => {
         let transactions: GlobalTransaction[] = [];
         state.archives.forEach(archive => transactions.push(...archive.transactions));
@@ -1346,7 +1571,6 @@ const App: React.FC = () => {
         return { monthlyIncome, totalUsedOverall, totalRemaining, totalAllocated, unallocatedFunds, generalAndDailyExpenses, remainingUnallocated, totalDailySpent, currentAvailableFunds };
     }, [state.fundHistory, state.budgets, state.dailyExpenses]);
     
-     // --- STREAK INCREMENT & DAILY CHECK LOGIC ---
     useEffect(() => {
         const today = new Date();
         const todayStr = today.toLocaleDateString('fr-CA'); // YYYY-MM-DD
@@ -1363,7 +1587,6 @@ const App: React.FC = () => {
             
             const isConsecutiveDay = lastCheckDate && lastCheckDate.getTime() === yesterday.getTime();
             
-            // Check yesterday's data for streaks
             const remainingDays = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate() - new Date().getDate() + 1;
             const yesterdaysDailyExpenses = state.dailyExpenses.filter(exp => new Date(exp.timestamp).toDateString() === yesterday.toDateString());
             const totalDailySpentYesterday = yesterdaysDailyExpenses.reduce((sum, exp) => sum + exp.amount, 0);
@@ -1405,6 +1628,7 @@ const App: React.FC = () => {
     }, [state.achievementData?.lastStreakCheck, totalRemaining, currentAvailableFunds, state.dailyExpenses, allTransactions, state.savingsGoals, updateState]);
 
 
+    // ... (Handlers: Budget, Transaction, etc.) ...
     const handleAddBudget = (name: string, amount: number, icon: string, color: string) => {
         updateState(prev => {
             const newBudget: Budget = { 
@@ -1530,7 +1754,7 @@ const App: React.FC = () => {
         if (targetId === 'daily') {
             updateState(prev => ({ ...prev, dailyExpenses: [...prev.dailyExpenses, newTransaction] }));
             setActiveModal(null);
-        } else { // It's a budget ID
+        } else { 
             const budget = state.budgets.find(b => b.id === targetId);
             if (!budget) return;
             const usedAmount = budget.history.reduce((sum, item) => sum + item.amount, 0);
@@ -1570,7 +1794,7 @@ const App: React.FC = () => {
     const handleSaveScannedItems = (items: ScannedItem[]) => {
         updateState(prev => {
             const newDailyExpenses = [...prev.dailyExpenses];
-            const newBudgets = JSON.parse(JSON.stringify(prev.budgets)); // Deep copy
+            const newBudgets = JSON.parse(JSON.stringify(prev.budgets)); 
 
             items.forEach(item => {
                 if (item.budgetId === 'none' || item.amount <= 0 || !item.desc.trim()) return;
@@ -1619,9 +1843,8 @@ const App: React.FC = () => {
 
     const handleEditGlobalTransaction = (timestamp: number, newDesc: string, newAmount: number) => {
         updateState(prev => {
-            const newState = JSON.parse(JSON.stringify(prev)); // Deep copy
+            const newState = JSON.parse(JSON.stringify(prev));
             
-            // Check Fund History
             const fundIndex = newState.fundHistory.findIndex((t: FundTransaction) => t.timestamp === timestamp);
             if (fundIndex !== -1) {
                 newState.fundHistory[fundIndex].desc = newDesc;
@@ -1629,7 +1852,6 @@ const App: React.FC = () => {
                 return newState;
             }
             
-            // Check Daily Expenses
             const dailyIndex = newState.dailyExpenses.findIndex((t: Transaction) => t.timestamp === timestamp);
             if (dailyIndex !== -1) {
                 newState.dailyExpenses[dailyIndex].desc = newDesc;
@@ -1637,7 +1859,6 @@ const App: React.FC = () => {
                 return newState;
             }
             
-            // Check Budgets
             for (const budget of newState.budgets) {
                 const histIndex = budget.history.findIndex((t: Transaction) => t.timestamp === timestamp);
                 if (histIndex !== -1) {
@@ -1647,7 +1868,6 @@ const App: React.FC = () => {
                 }
             }
 
-            // Check Archives
             for (const archive of newState.archives) {
                 const archIndex = archive.transactions.findIndex((t: GlobalTransaction) => t.timestamp === timestamp);
                 if (archIndex !== -1) {
@@ -1663,9 +1883,8 @@ const App: React.FC = () => {
     
     const handleDeleteGlobalTransaction = (timestamp: number) => {
         updateState(prev => {
-            const newState = JSON.parse(JSON.stringify(prev)); // Deep copy
+            const newState = JSON.parse(JSON.stringify(prev)); 
 
-            // Find the transaction to be deleted to check if it's a savings one
             let transactionToDelete: FundTransaction | GlobalTransaction | undefined;
             transactionToDelete = newState.fundHistory.find((t: FundTransaction) => t.timestamp === timestamp);
             if (!transactionToDelete) {
@@ -1678,7 +1897,6 @@ const App: React.FC = () => {
                 }
             }
             
-            // If it's a savings transaction, update the corresponding goal
             if (transactionToDelete && transactionToDelete.type === 'remove' && transactionToDelete.desc.startsWith('Tabungan: ')) {
                 const goalName = transactionToDelete.desc.substring('Tabungan: '.length);
                 const goalIndex = newState.savingsGoals.findIndex((g: SavingsGoal) => g.name === goalName);
@@ -1688,7 +1906,6 @@ const App: React.FC = () => {
                     const originalHistoryLength = goal.history.length;
                     goal.history = goal.history.filter((h: SavingTransaction) => h.timestamp !== timestamp);
 
-                    // Only update amount if a history item was actually removed
                     if (goal.history.length < originalHistoryLength) {
                         const newSavedAmount = goal.savedAmount - transactionToDelete.amount;
                         goal.savedAmount = newSavedAmount < 0 ? 0 : newSavedAmount;
@@ -1697,7 +1914,6 @@ const App: React.FC = () => {
                 }
             }
             
-            // The original deletion logic
             newState.fundHistory = newState.fundHistory.filter((t: FundTransaction) => t.timestamp !== timestamp);
             newState.dailyExpenses = newState.dailyExpenses.filter((t: Transaction) => t.timestamp !== timestamp);
             newState.budgets.forEach((b: Budget) => { b.history = b.history.filter((h: Transaction) => h.timestamp !== timestamp); });
@@ -1730,7 +1946,6 @@ const App: React.FC = () => {
         setActiveModal(null);
     };
 
-    // --- ASSET HANDLERS ---
     const handleAddAsset = (name: string, quantity: number, pricePerUnit: number, type: 'custom' | 'gold' | 'crypto', symbol?: string) => {
         const newAsset: Asset = {
             id: Date.now(),
@@ -1758,7 +1973,6 @@ const App: React.FC = () => {
         });
     };
     
-    // --- WISHLIST HANDLERS ---
     const handleAddWishlist = (name: string, price: number, days: number) => {
         const newItem: WishlistItem = {
             id: Date.now(),
@@ -1775,17 +1989,11 @@ const App: React.FC = () => {
     const handleFulfillWishlist = (id: number) => {
         const item = state.wishlist.find(i => i.id === id);
         if (!item) return;
-        
-        // Pre-fill the transaction modal
         setPrefillData({ desc: item.name, amount: formatNumberInput(item.price) });
-        
-        // Mark as purchased
         updateState(prev => ({
             ...prev,
             wishlist: prev.wishlist.map(i => i.id === id ? { ...i, status: 'purchased' } : i)
         }));
-        
-        // Open input modal
         setInputModalMode('use-daily');
         setActiveModal('input');
     };
@@ -1804,35 +2012,21 @@ const App: React.FC = () => {
         }));
     };
 
-    // --- SUBSCRIPTION HANDLERS ---
     const handleAddSubscription = (subData: Omit<Subscription, 'id'>) => {
-        const newSub: Subscription = {
-            ...subData,
-            id: Date.now()
-        };
-        updateState(prev => ({
-            ...prev,
-            subscriptions: [...(prev.subscriptions || []), newSub]
-        }));
+        const newSub: Subscription = { ...subData, id: Date.now() };
+        updateState(prev => ({ ...prev, subscriptions: [...(prev.subscriptions || []), newSub] }));
     };
 
     const handleEditSubscription = (subData: Subscription) => {
-        updateState(prev => ({
-            ...prev,
-            subscriptions: prev.subscriptions.map(s => s.id === subData.id ? subData : s)
-        }));
+        updateState(prev => ({ ...prev, subscriptions: prev.subscriptions.map(s => s.id === subData.id ? subData : s) }));
     };
 
     const handleDeleteSubscription = (id: number) => {
         openConfirm("Hapus langganan ini?", () => {
-            updateState(prev => ({
-                ...prev,
-                subscriptions: prev.subscriptions.filter(s => s.id !== id)
-            }));
+            updateState(prev => ({ ...prev, subscriptions: prev.subscriptions.filter(s => s.id !== id) }));
         });
     };
 
-    // --- SAVINGS GOAL HANDLERS ---
     const handleAddSavingsGoal = (name: string, isInfinite: boolean, targetAmount?: number) => {
         const newGoal: SavingsGoal = {
             id: Date.now(),
@@ -1851,13 +2045,10 @@ const App: React.FC = () => {
     const handleAddSavings = (goalId: number, amount: number) => {
         const goal = state.savingsGoals.find(g => g.id === goalId);
         if (!goal) return;
-
-        // Check if there are enough unallocated funds
         if (amount > currentAvailableFunds) {
             openConfirm(<>Dana tersedia tidak mencukupi. Sisa dana tersedia hanya <strong>{formatCurrency(currentAvailableFunds)}</strong>.</>, () => {});
             return;
         }
-
         updateState(prev => {
             const transactionTimestamp = Date.now();
             const newFundHistory = [...prev.fundHistory, {
@@ -1866,7 +2057,6 @@ const App: React.FC = () => {
                 amount: amount,
                 timestamp: transactionTimestamp,
             }];
-
             const newSavingsGoals = prev.savingsGoals.map(g => {
                 if (g.id === goalId) {
                     const newSavedAmount = g.savedAmount + amount;
@@ -1880,7 +2070,6 @@ const App: React.FC = () => {
                 }
                 return g;
             });
-
             return { ...prev, fundHistory: newFundHistory, savingsGoals: newSavingsGoals };
         });
         setActiveModal(null);
@@ -1889,7 +2078,6 @@ const App: React.FC = () => {
     const handleOpenSavingsGoal = (goalId: number) => {
         const goal = state.savingsGoals.find(g => g.id === goalId);
         if (!goal || !goal.isInfinite) return;
-
         openConfirm(`Anda yakin ingin "membuka" tabungan "${goal.name}"? Dana sebesar ${formatCurrency(goal.savedAmount)} akan dikembalikan ke dana tersedia dan tabungan ini akan menjadi kosong.`, () => {
              updateState(prev => {
                 const newFundHistory = goal.savedAmount > 0 ? [...prev.fundHistory, {
@@ -1898,11 +2086,9 @@ const App: React.FC = () => {
                     amount: goal.savedAmount,
                     timestamp: Date.now(),
                 }] : prev.fundHistory;
-
                 const newSavingsGoals = prev.savingsGoals.map(g => 
                     g.id === goalId ? { ...g, savedAmount: 0, history: [], isCompleted: false } : g
                 );
-
                 return { ...prev, fundHistory: newFundHistory, savingsGoals: newSavingsGoals };
             });
         });
@@ -1911,11 +2097,9 @@ const App: React.FC = () => {
      const handleDeleteSavingsGoal = (goalId: number) => {
         const goal = state.savingsGoals.find(g => g.id === goalId);
         if (!goal) return;
-
         const message = goal.isInfinite ?
             `Anda yakin ingin menghapus celengan "${goal.name}"? Dana sebesar ${formatCurrency(goal.savedAmount)} akan dikembalikan.` :
             `Anda yakin ingin menghapus celengan "${goal.name}"? Dana sebesar ${formatCurrency(goal.savedAmount)} akan dikembalikan ke dana tersedia.`;
-
         openConfirm(message, () => {
              updateState(prev => {
                 const newFundHistory = goal.savedAmount > 0 ? [...prev.fundHistory, {
@@ -1924,21 +2108,15 @@ const App: React.FC = () => {
                     amount: goal.savedAmount,
                     timestamp: Date.now(),
                 }] : prev.fundHistory;
-
                 const newSavingsGoals = prev.savingsGoals.filter(g => g.id !== goalId);
-
                 return { ...prev, fundHistory: newFundHistory, savingsGoals: newSavingsGoals };
             });
             setActiveModal(null);
         });
     };
 
-    // --- USER PROFILE HANDLERS ---
     const handleUpdateProfile = (name: string, avatar: string) => {
-        updateState(prev => ({
-            ...prev,
-            userProfile: { ...prev.userProfile, name, avatar }
-        }));
+        updateState(prev => ({ ...prev, userProfile: { ...prev.userProfile, name, avatar } }));
     };
 
     const handleExportData = () => {
@@ -1953,27 +2131,22 @@ const App: React.FC = () => {
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
         
-        // Save last export date
         const now = new Date().toISOString();
         localStorage.setItem('lastExportDate', now);
         setLastExportDate(now);
-        
         setActiveModal(null);
     };
 
     const handleTriggerImport = () => {
         openConfirm(
             <><strong>PERINGATAN!</strong><br />Mengimpor data akan menghapus semua data saat ini. Lanjutkan?</>,
-            () => {
-                importFileInputRef.current?.click();
-            }
+            () => importFileInputRef.current?.click()
         );
     };
 
     const handleImportData = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
-
         const reader = new FileReader();
         reader.onload = (e) => {
             try {
@@ -1982,12 +2155,9 @@ const App: React.FC = () => {
                     throw new Error("Format file tidak valid.");
                 }
                 setState({ ...initialState, ...importedState });
-                
-                // Update import timestamp
                 const now = new Date().toISOString();
                 localStorage.setItem('lastImportDate', now);
                 setLastImportDate(now);
-                
                 setCurrentPage('dashboard');
             } catch (err) {
                 openConfirm("Gagal memuat file. Pastikan file cadangan tidak rusak dan berformat .json yang benar.", () => {});
@@ -2000,19 +2170,21 @@ const App: React.FC = () => {
 
     const handleManualBackup = () => {
         const newBackupKey = `${BACKUP_PREFIX}${Date.now()}`;
-        localStorage.setItem(newBackupKey, JSON.stringify(state));
-
-        const allBackups = listInternalBackups();
-
-        // Rotation
-        if (allBackups.length > MAX_BACKUPS) {
-            const oldestBackup = allBackups[allBackups.length - 1]; // list is sorted descending, so last is oldest
-            localStorage.removeItem(oldestBackup.key);
+        try {
+            localStorage.setItem(newBackupKey, JSON.stringify(state));
+            const allBackups = listInternalBackups();
+            if (allBackups.length > MAX_BACKUPS) {
+                const oldestBackup = allBackups[allBackups.length - 1];
+                localStorage.removeItem(oldestBackup.key);
+            }
+            setInternalBackups(listInternalBackups());
+            setActiveModal('backupRestore');
+        } catch (error) {
+            openConfirm(
+                <><strong>Gagal Mencadangkan</strong><br/>Penyimpanan penuh. Hapus beberapa tema kustom atau data lama.</>, 
+                () => {}
+            );
         }
-        
-        // Update UI state and show the modal
-        setInternalBackups(listInternalBackups());
-        setActiveModal('backupRestore');
     };
 
     const handleRestoreBackup = (key: string) => {
@@ -2021,9 +2193,6 @@ const App: React.FC = () => {
             if (backupData) {
                 try {
                     const importedState = JSON.parse(backupData);
-                    if (typeof importedState.budgets !== 'object' || typeof importedState.archives !== 'object') {
-                       throw new Error("Format cadangan tidak valid.");
-                    }
                     setState({ ...initialState, ...importedState });
                     setActiveModal(null);
                     setCurrentPage('dashboard');
@@ -2057,10 +2226,7 @@ const App: React.FC = () => {
                 localStorage.removeItem('lastExportDate');
                 setLastImportDate(null);
                 setLastExportDate(null);
-                // Also remove internal backups
-                Object.keys(localStorage)
-                    .filter(key => key.startsWith(BACKUP_PREFIX))
-                    .forEach(key => localStorage.removeItem(key));
+                Object.keys(localStorage).filter(key => key.startsWith(BACKUP_PREFIX)).forEach(key => localStorage.removeItem(key));
                 window.location.reload();
             }
         );
@@ -2082,14 +2248,9 @@ const App: React.FC = () => {
             </>,
             () => {
                 updateState(prev => {
-                    // 1. Collect all data to archive
                     const currentMonth = new Date().toISOString().slice(0, 7);
                     const archivedTransactions: GlobalTransaction[] = [];
-
-                    // Income/General Expenses
                     archivedTransactions.push(...prev.fundHistory);
-
-                    // Daily Expenses
                     prev.dailyExpenses.forEach(t => {
                         archivedTransactions.push({
                             ...t,
@@ -2097,8 +2258,6 @@ const App: React.FC = () => {
                             category: t.sourceCategory || 'Harian'
                         });
                     });
-
-                    // Budget History
                     prev.budgets.forEach(b => {
                         b.history.forEach(h => {
                             archivedTransactions.push({
@@ -2110,22 +2269,17 @@ const App: React.FC = () => {
                             });
                         });
                     });
-
-                    // 2. Modify Budgets (Reset Fixed, Archive Temporary)
                     const newBudgets = prev.budgets.map(b => {
                         if (b.isTemporary) {
-                            return { ...b, isArchived: true, history: [] }; // Archive it
+                            return { ...b, isArchived: true, history: [] };
                         } else {
-                            return { ...b, history: [] }; // Reset usage, keep active
+                            return { ...b, history: [] };
                         }
                     });
-
-                    // 3. Create new Archive entry
                     const newArchive = {
-                        month: currentMonth, // Or strictly Date.now() timestamp if preferred, but month string works for grouping
+                        month: currentMonth,
                         transactions: archivedTransactions
                     };
-
                     return {
                         ...prev,
                         archives: [...prev.archives, newArchive],
@@ -2139,7 +2293,6 @@ const App: React.FC = () => {
         );
     };
 
-    // --- SCAN RECEIPT LOGIC ---
     const handleImageFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
@@ -2151,40 +2304,13 @@ const App: React.FC = () => {
             const base64Data = await fileToBase64(file);
             const apiKey = getApiKey();
             const ai = new GoogleGenAI({ apiKey });
-
-            const imagePart = {
-                inlineData: { mimeType: file.type, data: base64Data },
-            };
-            const textPart = {
-                text: "Analyze the receipt image and extract only the individual purchased items with their corresponding prices. Exclude any lines that are not items, such as totals, subtotals, taxes, discounts, or store information. All prices must be positive numbers. Ignore any hyphens or stray characters that are not part of the item's name or price. Your response must be a valid JSON array of objects. Each object must contain 'desc' (string) for the item name and 'amount' (number) for the price. Do not include anything else in your response besides the JSON array."
-            };
-
-            const schema = {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    desc: { type: Type.STRING, description: "Nama barang yang dibeli." },
-                    amount: { type: Type.NUMBER, description: "Harga barang sebagai angka positif. Abaikan karakter non-numerik seperti tanda hubung (-)." },
-                  },
-                  required: ["desc", "amount"],
-                },
-            };
-            
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: { parts: [imagePart, textPart] },
-                config: { responseMimeType: 'application/json', responseSchema: schema },
-            });
-            
+            const imagePart = { inlineData: { mimeType: file.type, data: base64Data } };
+            const textPart = { text: "Analyze the receipt image and extract only the individual purchased items with their corresponding prices. Exclude any lines that are not items, such as totals, subtotals, taxes, discounts, or store information. All prices must be positive numbers. Ignore any hyphens or stray characters that are not part of the item's name or price. Your response must be a valid JSON array of objects. Each object must contain 'desc' (string) for the item name and 'amount' (number) for the price. Do not include anything else in your response besides the JSON array." };
+            const schema = { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { desc: { type: Type.STRING, description: "Nama barang yang dibeli." }, amount: { type: Type.NUMBER, description: "Harga barang sebagai angka positif. Abaikan karakter non-numerik seperti tanda hubung (-)." } }, required: ["desc", "amount"] } };
+            const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: { parts: [imagePart, textPart] }, config: { responseMimeType: 'application/json', responseSchema: schema } });
             const resultData = JSON.parse(response.text);
             if (Array.isArray(resultData)) {
-                // Ensure all amounts are positive and data is clean
-                const sanitizedData = resultData.map(item => ({
-                    ...item,
-                    amount: Math.abs(Number(item.amount) || 0),
-                    budgetId: 'none'
-                })).filter(item => item.amount > 0 && item.desc && item.desc.trim() !== ''); // Filter out items with 0 amount or empty description
+                const sanitizedData = resultData.map(item => ({ ...item, amount: Math.abs(Number(item.amount) || 0), budgetId: 'none' })).filter(item => item.amount > 0 && item.desc && item.desc.trim() !== '');
                 setScannedItems(sanitizedData);
             } else {
                 throw new Error("AI response is not in the expected format.");
@@ -2198,7 +2324,6 @@ const App: React.FC = () => {
         }
     };
 
-    // --- SMART INPUT LOGIC ---
     const handleProcessSmartInput = async (text: string) => {
         if (!text.trim()) {
             setSmartInputError("Mohon masukkan deskripsi transaksi.");
@@ -2207,33 +2332,13 @@ const App: React.FC = () => {
         setIsProcessingSmartInput(true);
         setSmartInputError(null);
         setSmartInputResult([]);
-
         try {
             const apiKey = getApiKey();
             const ai = new GoogleGenAI({ apiKey });
             const budgetCategories = [...state.budgets.filter(b => !b.isArchived).map(b => b.name), 'Uang Harian'];
-            
-            const schema = {
-                type: Type.ARRAY,
-                items: {
-                    type: Type.OBJECT,
-                    properties: {
-                        desc: { type: Type.STRING },
-                        amount: { type: Type.NUMBER },
-                        category: { type: Type.STRING, enum: budgetCategories },
-                    },
-                    required: ["desc", "amount", "category"],
-                },
-            };
-
+            const schema = { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { desc: { type: Type.STRING }, amount: { type: Type.NUMBER }, category: { type: Type.STRING, enum: budgetCategories } }, required: ["desc", "amount", "category"] } };
             const prompt = `Analisis teks berikut yang berisi transaksi keuangan dalam Bahasa Indonesia. Ekstrak setiap transaksi individual (deskripsi dan jumlahnya). Untuk setiap transaksi, tentukan kategori anggaran yang paling sesuai dari daftar ini: [${budgetCategories.join(', ')}]. Jika tidak ada yang cocok, gunakan "Uang Harian". Respons Anda HARUS berupa array JSON yang valid dari objek, di mana setiap objek memiliki kunci "desc", "amount", dan "category". Teks: "${text}"`;
-            
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: { parts: [{ text: prompt }] },
-                config: { responseMimeType: 'application/json', responseSchema: schema },
-            });
-
+            const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: { parts: [{ text: prompt }] }, config: { responseMimeType: 'application/json', responseSchema: schema } });
             const resultData = JSON.parse(response.text);
             if (Array.isArray(resultData)) {
                 const mappedItems: ScannedItem[] = resultData.map(item => {
@@ -2256,45 +2361,21 @@ const App: React.FC = () => {
         }
     };
     
-    // --- AI DEEPER INTEGRATION ---
     const handleGetAIAdvice = async () => {
         setActiveModal('aiAdvice');
         setIsFetchingAdvice(true);
         setAiAdvice('');
         setAdviceError(null);
-
         try {
             const budgetDetails = state.budgets.map(b => {
                 const used = b.history.reduce((sum, h) => sum + h.amount, 0);
                 return `* ${b.name}: Terpakai ${formatCurrency(used)} dari kuota ${formatCurrency(b.totalBudget)}`;
             }).join('\n');
-
-            const prompt = `
-Berikut adalah ringkasan data keuangan saya untuk bulan ini dalam Rupiah (IDR):
-
-* Total Pemasukan: ${formatCurrency(monthlyIncome)}
-* Total Pengeluaran: ${formatCurrency(totalUsedOverall)}
-* Sisa Dana Bulan Ini: ${formatCurrency(totalRemaining)}
-
-Rincian Pengeluaran berdasarkan Pos Anggaran:
-${budgetDetails || "Tidak ada pos anggaran yang dibuat."}
-
-Total Pengeluaran Harian (di luar pos anggaran): ${formatCurrency(totalDailySpent)}
-
-Sisa Dana yang Tidak Terikat Anggaran: ${formatCurrency(remainingUnallocated)}
-
-Berdasarkan data ini, berikan saya analisis singkat dan beberapa saran praktis dalam Bahasa Indonesia untuk mengelola keuangan saya dengan lebih baik. Fokus pada area di mana saya bisa berhemat atau melakukan optimalisasi. Berikan jawaban dalam format poin-poin (bullet points) menggunakan markdown.
-            `;
-
+            const prompt = `${getSystemInstruction(state.userProfile.activePersona)} Berikut adalah ringkasan data keuangan pengguna untuk bulan ini dalam Rupiah (IDR):\n* Total Pemasukan: ${formatCurrency(monthlyIncome)}\n* Total Pengeluaran: ${formatCurrency(totalUsedOverall)}\n* Sisa Dana Bulan Ini: ${formatCurrency(totalRemaining)}\nRincian Pengeluaran berdasarkan Pos Anggaran:\n${budgetDetails || "Tidak ada pos anggaran yang dibuat."}\nTotal Pengeluaran Harian (di luar pos anggaran): ${formatCurrency(totalDailySpent)}\nSisa Dana yang Tidak Terikat Anggaran: ${formatCurrency(remainingUnallocated)}\nBerdasarkan data ini, berikan analisis singkat dan beberapa saran praktis untuk mengelola keuangan dengan lebih baik. Berikan jawaban dalam format poin-poin (bullet points) menggunakan markdown.`;
             const apiKey = getApiKey();
             const ai = new GoogleGenAI({ apiKey });
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
-            });
-
+            const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
             setAiAdvice(response.text);
-
         } catch (error) {
             console.error("Error getting AI advice:", error);
             setAdviceError("Gagal mendapatkan saran dari AI. Silakan coba lagi nanti.");
@@ -2306,73 +2387,56 @@ Berdasarkan data ini, berikan saya analisis singkat dan beberapa saran praktis d
     const handleFetchDashboardInsight = useCallback(async () => {
         setIsFetchingDashboardInsight(true);
         try {
-            const today = new Date();
-            // Start of the current month
-            const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-            startOfMonth.setHours(0, 0, 0, 0);
+            // --- PROJECTION LOGIC START ---
+            const now = new Date();
+            const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            const daysPassed = Math.max(1, now.getDate());
+            const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+            const daysRemaining = lastDayOfMonth - daysPassed;
 
-            // Filter transactions from start of month to today (inclusive)
-            const currentMonthFundHistory = state.fundHistory.filter(t => new Date(t.timestamp) >= startOfMonth);
-            const currentMonthDailyExpenses = state.dailyExpenses.filter(t => new Date(t.timestamp) >= startOfMonth);
+            // Calculate totals from start of month to now (filtered)
+            const currentMonthIncome = state.fundHistory.filter(t => t.type === 'add').reduce((sum, t) => sum + t.amount, 0);
             
-            // Filter budgets logic to include only this month's history if possible, but budgets history usually persists unless cleared.
-            // Assuming budget.history is all-time, we filter for this month.
-            const currentMonthBudgets = state.budgets.map(b => ({
-                ...b,
-                history: b.history.filter(h => new Date(h.timestamp) >= startOfMonth),
-            }));
-
-            // Filter categories to ignore
-            const ignoredCategories = ['kontrakan', 'wifi', 'bpjs'];
-
-            // Recalculate summaries
-            const currentMonthIncome = currentMonthFundHistory.filter(t => t.type === 'add').reduce((sum, t) => sum + t.amount, 0);
+            const totalSpent = state.dailyExpenses.reduce((sum, e) => sum + e.amount, 0) + 
+                               state.fundHistory.filter(t => t.type === 'remove').reduce((sum, t) => sum + t.amount, 0) +
+                               state.budgets.reduce((sum, b) => sum + b.history.reduce((s, h) => s + h.amount, 0), 0);
             
-            const currentMonthGeneralExpense = currentMonthFundHistory
-                .filter(t => t.type === 'remove' && !ignoredCategories.some(ign => t.desc.toLowerCase().includes(ign)))
-                .reduce((sum, t) => sum + t.amount, 0);
+            const currentBalance = currentMonthIncome - totalSpent;
+            const avgDailySpend = totalSpent / daysPassed;
+            const projectedAdditionalSpend = avgDailySpend * daysRemaining;
+            const projectedEndMonthBalance = currentBalance - projectedAdditionalSpend;
 
-            const currentMonthUsedFromPosts = currentMonthBudgets.reduce((sum, b) => {
-                if (ignoredCategories.some(ign => b.name.toLowerCase().includes(ign))) return sum;
-                return sum + b.history.reduce((s, h) => s + h.amount, 0);
-            }, 0);
-
-            const currentMonthTotalDailySpent = currentMonthDailyExpenses
-                .filter(t => !ignoredCategories.some(ign => t.desc.toLowerCase().includes(ign)))
-                .reduce((sum, e) => sum + e.amount, 0);
-                
-            const currentMonthTotalUsed = currentMonthGeneralExpense + currentMonthUsedFromPosts + currentMonthTotalDailySpent;
-
-            const budgetDetails = currentMonthBudgets.map(b => {
-                if (ignoredCategories.some(ign => b.name.toLowerCase().includes(ign))) return null;
-                const used = b.history.reduce((sum, h) => sum + h.amount, 0);
-                if (used > 0) {
-                    return `* ${b.name}: Terpakai ${formatCurrency(used)}`;
-                }
-                return null;
+            const budgetDetails = state.budgets.map(b => { 
+                const used = b.history.reduce((sum, h) => sum + h.amount, 0); 
+                if (used > 0) return `* ${b.name}: Terpakai ${formatCurrency(used)} dari ${formatCurrency(b.totalBudget)}`; 
+                return null; 
             }).filter(Boolean).join('\n');
-
-
-            const prompt = `
-Kamu adalah asisten keuangan pribadi yang ramah dan hangat. User kamu adalah perempuan, jadi gunakan bahasa yang santai, sopan, dan akrab (seperti sesama teman perempuan). 
-PENTING: JANGAN gunakan kata "bro", "bang", "gan", atau sapaan laki-laki lainnya. Gunakan "Kak" atau "kamu".
-
-Data Keuangan (Awal Bulan s/d Hari Ini) - sudah difilter (tanpa pengeluaran tetap rutin):
-- Pemasukan: ${formatCurrency(currentMonthIncome)}
-- Total Keluar (Non-Tetap): ${formatCurrency(currentMonthTotalUsed)}
-- Rincian Pos:
-${budgetDetails || "Belum ada pengeluaran pos signifikan."}
-- Jajan/Lainnya: ${formatCurrency(currentMonthGeneralExpense + currentMonthTotalDailySpent)}
-
-Berikan wawasan yang informatif dan membantu (sekitar 1 paragraf). Review pengeluaran sejauh ini, berikan pujian jika hemat atau peringatan halus jika boros, dan berikan prediksi serta saran untuk sisa bulan ini.
+            
+            const prompt = `${getSystemInstruction(state.userProfile.activePersona)}
+            
+            ANALISIS KEUANGAN BULANAN & PREDIKSI:
+            
+            PERIODE: 1 ${now.toLocaleDateString('id-ID', {month: 'long'})} s.d. Hari Ini (${now.getDate()}).
+            
+            DATA SAAT INI:
+            - Total Pemasukan: ${formatCurrency(currentMonthIncome)}
+            - Total Pengeluaran (Semua): ${formatCurrency(totalSpent)}
+            - Sisa Uang Riil Saat Ini: ${formatCurrency(currentBalance)}
+            
+            PROYEKSI AKHIR BULAN (Estimasi):
+            - Rata-rata pengeluaran per hari: ${formatCurrency(avgDailySpend)}
+            - Estimasi sisa uang di akhir bulan: ${formatCurrency(projectedEndMonthBalance)} (Jika pola belanja sama)
+            
+            TUGASMU:
+            Berikan wawasan singkat (Maksimal 3 kalimat poin penting).
+            1. Komentari kesehatan keuangan saat ini berdasarkan data.
+            2. Berikan prediksi apakah akhir bulan akan aman atau minus berdasarkan proyeksi di atas.
+            3. Beri 1 saran spesifik untuk menjaga/memperbaiki kondisi hingga akhir bulan.
             `;
 
             const apiKey = getApiKey();
             const ai = new GoogleGenAI({ apiKey });
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
-            });
+            const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
             setAiDashboardInsight(response.text || "Belum ada data yang cukup untuk prediksi.");
         } catch (error) {
             console.error("Error fetching dashboard insight:", error);
@@ -2383,22 +2447,20 @@ Berikan wawasan yang informatif dan membantu (sekitar 1 paragraf). Review pengel
     }, [state]);
 
     useEffect(() => {
-        if(monthlyIncome > 0) { // Only fetch if there's data
+        if(monthlyIncome > 0) {
             handleFetchDashboardInsight();
         } else {
             setAiDashboardInsight("Tambahkan pemasukan bulan ini dulu biar aku bisa kasih ramalan keuangan!");
         }
-    }, [monthlyIncome, handleFetchDashboardInsight]); // Re-fetch only when income changes as a trigger
+    }, [monthlyIncome, handleFetchDashboardInsight]);
 
-    // --- AI CHART ANALYSIS HANDLER ---
     const handleAnalyzeChartData = async (prompt: string): Promise<string> => {
         try {
             const apiKey = getApiKey();
             const ai = new GoogleGenAI({ apiKey });
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
-            });
+            // Prepend persona instruction to chart analysis prompt
+            const enhancedPrompt = `${getSystemInstruction(state.userProfile.activePersona)} ${prompt}`;
+            const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: enhancedPrompt });
             return response.text;
         } catch (error) {
             console.error("Chart analysis error:", error);
@@ -2406,59 +2468,52 @@ Berikan wawasan yang informatif dan membantu (sekitar 1 paragraf). Review pengel
         }
     };
 
-    // --- AI CHAT LOGIC ---
-
     const getFinancialContextForAI = useCallback(() => {
         const budgetDetails = state.budgets.map(b => {
             const used = b.history.reduce((sum, h) => sum + h.amount, 0);
             return `* Pos Anggaran "${b.name}": Kuota ${formatCurrency(b.totalBudget)}, Terpakai ${formatCurrency(used)}, Sisa ${formatCurrency(b.totalBudget - used)}`;
         }).join('\n');
-    
-        return `Anda adalah asisten keuangan AI yang ramah dan membantu. Tugas Anda adalah menjawab pertanyaan pengguna HANYA berdasarkan data keuangan yang saya berikan di bawah ini. Jangan membuat informasi atau memberikan saran di luar data. Jawab dalam Bahasa Indonesia. Berikut adalah ringkasan data keuangan pengguna untuk bulan ini (dalam IDR): **Ringkasan Umum:** * Total Pemasukan: ${formatCurrency(monthlyIncome)}, * Total Pengeluaran Keseluruhan: ${formatCurrency(totalUsedOverall)}, * Sisa Dana (Pemasukan - Pengeluaran): ${formatCurrency(totalRemaining)}, * Total Dana yang Dialokasikan ke Pos Anggaran: ${formatCurrency(totalAllocated)}, * Dana Tersedia Untuk Pengeluaran Harian/Umum (di luar pos): ${formatCurrency(currentAvailableFunds)}. **Rincian Pos Anggaran:** ${budgetDetails || "Tidak ada pos anggaran yang dibuat."}. **Rincian 10 Transaksi Terakhir:** ${allTransactions.slice(0, 10).map(t => `* ${new Date(t.timestamp).toLocaleDateString('id-ID')}: ${t.desc} (${t.type === 'add' ? '+' : '-'} ${formatCurrency(t.amount)}) - Kategori: ${t.category || (t.type === 'add' ? 'Pemasukan' : 'Umum')}`).join(', ')}. Data sudah lengkap. Anda siap menjawab pertanyaan pengguna.`;
+        return `Tugas Anda adalah menjawab pertanyaan pengguna HANYA berdasarkan data keuangan yang saya berikan di bawah ini. Jangan membuat informasi atau memberikan saran di luar data. Jawab dalam Bahasa Indonesia. Berikut adalah ringkasan data keuangan pengguna untuk bulan ini (dalam IDR): **Ringkasan Umum:** * Total Pemasukan: ${formatCurrency(monthlyIncome)}, * Total Pengeluaran Keseluruhan: ${formatCurrency(totalUsedOverall)}, * Sisa Dana (Pemasukan - Pengeluaran): ${formatCurrency(totalRemaining)}, * Total Dana yang Dialokasikan ke Pos Anggaran: ${formatCurrency(totalAllocated)}, * Dana Tersedia Untuk Pengeluaran Harian/Umum (di luar pos): ${formatCurrency(currentAvailableFunds)}. **Rincian Pos Anggaran:** ${budgetDetails || "Tidak ada pos anggaran yang dibuat."}. **Rincian 10 Transaksi Terakhir:** ${allTransactions.slice(0, 10).map(t => `* ${new Date(t.timestamp).toLocaleDateString('id-ID')}: ${t.desc} (${t.type === 'add' ? '+' : '-'} ${formatCurrency(t.amount)}) - Kategori: ${t.category || (t.type === 'add' ? 'Pemasukan' : 'Umum')}`).join(', ')}. Data sudah lengkap. Anda siap menjawab pertanyaan pengguna.`;
     }, [state, monthlyIncome, totalUsedOverall, totalRemaining, totalAllocated, currentAvailableFunds, allTransactions]);
-
 
     const handleOpenAIChat = useCallback(async () => {
         setActiveModal('aiChat');
         setAiChatHistory([]);
         setAiChatError(null);
         setIsAiChatLoading(true);
-
         try {
             const apiKey = getApiKey();
             const ai = new GoogleGenAI({ apiKey });
             const contextPrompt = getFinancialContextForAI();
             
-            const chat = ai.chats.create({
-                model: 'gemini-2.5-flash',
-                history: [
-                    { role: 'user', parts: [{ text: contextPrompt }] },
-                    { role: 'model', parts: [{ text: 'Data diterima. Saya siap membantu.' }] }
-                ]
-            });
+            const systemInstruction = getSystemInstruction(state.userProfile.activePersona);
 
+            const chat = ai.chats.create({ 
+                model: 'gemini-2.5-flash', 
+                config: { systemInstruction },
+                history: [
+                    { role: 'user', parts: [{ text: contextPrompt }] }, 
+                    { role: 'model', parts: [{ text: 'Data diterima. Saya siap membantu.' }] }
+                ] 
+            });
             setAiChatSession(chat);
             setAiChatHistory([{ role: 'model', text: 'Halo! Saya asisten AI Anda. Silakan tanyakan apa saja tentang data keuangan Anda bulan ini.' }]);
-
         } catch (error) {
             console.error("Error initializing AI Chat:", error);
             setAiChatError("Gagal memulai sesi chat. Silakan coba lagi.");
         } finally {
             setIsAiChatLoading(false);
         }
-
-    }, [getFinancialContextForAI]);
+    }, [getFinancialContextForAI, state.userProfile.activePersona]);
 
     const handleSendChatMessage = async (message: string) => {
         if (!aiChatSession) {
             setAiChatError("Sesi chat tidak aktif. Silakan tutup dan buka kembali.");
             return;
         }
-
         setAiChatHistory(prev => [...prev, { role: 'user', text: message }]);
         setIsAiChatLoading(true);
         setAiChatError(null);
-
         try {
             const response = await aiChatSession.sendMessage({ message });
             setAiChatHistory(prev => [...prev, { role: 'model', text: response.text }]);
@@ -2470,49 +2525,20 @@ Berikan wawasan yang informatif dan membantu (sekitar 1 paragraf). Review pengel
         }
     };
     
-    // --- AI SEARCH LOGIC ---
     const handleAiSearch = async (query: string) => {
         setIsSearchingWithAI(true);
         setAiSearchError(null);
         setAiSearchResults(null);
-
         try {
             const apiKey = getApiKey();
             const ai = new GoogleGenAI({ apiKey });
-
-            const transactionsForPrompt = allTransactions.map(t => ({
-                timestamp: t.timestamp,
-                desc: t.desc,
-                amount: t.amount,
-                type: t.type,
-                category: t.category || (t.type === 'add' ? 'Pemasukan' : 'Umum')
-            }));
-
-            const prompt = `You are a smart search engine for a user's financial transactions. Analyze the user's natural language query and the provided JSON data of all their transactions. Your task is to identify and return ONLY the timestamps of the transactions that precisely match the user's query.
-
-User Query: "${query}"
-
-Transaction Data (JSON):
-${JSON.stringify(transactionsForPrompt)}
-
-Your response MUST be a valid JSON array containing only the numbers (timestamps) of the matching transactions. For example: [1678886400000, 1678972800000]. If no transactions match, return an empty array [].`;
-
-            const schema = {
-                type: Type.ARRAY,
-                items: { type: Type.NUMBER },
-            };
-
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: { parts: [{ text: prompt }] },
-                config: { responseMimeType: 'application/json', responseSchema: schema },
-            });
-            
+            const transactionsForPrompt = allTransactions.map(t => ({ timestamp: t.timestamp, desc: t.desc, amount: t.amount, type: t.type, category: t.category || (t.type === 'add' ? 'Pemasukan' : 'Umum') }));
+            const prompt = `You are a smart search engine for a user's financial transactions. Analyze the user's natural language query and the provided JSON data of all their transactions. Your task is to identify and return ONLY the timestamps of the transactions that precisely match the user's query.\nUser Query: "${query}"\nTransaction Data (JSON):\n${JSON.stringify(transactionsForPrompt)}\nYour response MUST be a valid JSON array containing only the numbers (timestamps) of the matching transactions. For example: [1678886400000, 1678972800000]. If no transactions match, return an empty array [].`;
+            const schema = { type: Type.ARRAY, items: { type: Type.NUMBER } };
+            const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: { parts: [{ text: prompt }] }, config: { responseMimeType: 'application/json', responseSchema: schema } });
             const matchingTimestamps = JSON.parse(response.text) as number[];
-            
             const results = allTransactions.filter(t => matchingTimestamps.includes(t.timestamp));
             setAiSearchResults(results.sort((a, b) => b.timestamp - a.timestamp));
-
         } catch (error) {
             console.error("Error with AI Search:", error);
             setAiSearchError("Gagal melakukan pencarian AI. Coba lagi.");
@@ -2526,8 +2552,6 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
         setAiSearchError(null);
     };
 
-
-    // --- MODAL OPEN HANDLERS ---
     const openUseDailyBudget = () => { setInputModalMode('use-daily'); setActiveModal('input'); };
     const openUseBudget = (budgetId: number) => { setInputModalMode('use-post'); setCurrentBudgetId(budgetId); setActiveModal('input'); };
     const openEditBudget = (budgetId: number) => { setInputModalMode('edit-post'); setCurrentBudgetId(budgetId); setActiveModal('input'); };
@@ -2554,8 +2578,6 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
     }
     const openBatchInput = () => setActiveModal('batchInput');
     
-    // --- RENDER LOGIC ---
-    
     const calculateQuestPoints = (state: AppState) => {
         const todayStr = new Date().toLocaleDateString('fr-CA');
         const now = Date.now();
@@ -2563,9 +2585,8 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
         const isToday = (ts: number) => new Date(ts).toLocaleDateString('fr-CA') === todayStr;
         const isThisWeek = (ts: number) => (now - ts) < (7 * oneDay);
 
-        // Daily Logic
         const dailyQuests = [
-            { completed: true, points: 5 }, // Login
+            { completed: true, points: 5 },
             { completed: state.dailyExpenses.some(t => isToday(t.timestamp)) || state.fundHistory.some(t => isToday(t.timestamp)) || state.budgets.some(b => b.history.some(h => isToday(h.timestamp))), points: 10 },
             { completed: state.dailyExpenses.filter(t => isToday(t.timestamp)).reduce((sum, t) => sum + t.amount, 0) < 50000, points: 15 },
             { completed: state.savingsGoals.some(g => g.history.some(h => isToday(h.timestamp))), points: 20 },
@@ -2574,7 +2595,6 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
         const dailyCount = dailyQuests.filter(q => q.completed).length;
         const dailyPoints = dailyQuests.reduce((sum, q) => q.completed ? sum + q.points : sum, 0) + (dailyCount >= 3 ? 50 : 0);
 
-        // Weekly Logic
         const uniqueTransactionDays = new Set();
         state.dailyExpenses.forEach(t => { if(isThisWeek(t.timestamp)) uniqueTransactionDays.add(new Date(t.timestamp).toDateString()) });
         state.fundHistory.forEach(t => { if(isThisWeek(t.timestamp)) uniqueTransactionDays.add(new Date(t.timestamp).toDateString()) });
@@ -2583,13 +2603,9 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
         const savingsCount = state.savingsGoals.reduce((count, g) => count + g.history.filter(h => isThisWeek(h.timestamp)).length, 0);
         const activeBudgetsCount = state.budgets.filter(b => b.history.some(h => isThisWeek(h.timestamp))).length;
         const addedWishlist = state.wishlist.some(w => isThisWeek(w.createdAt));
-        
         const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
         const monthlyIncome = state.fundHistory.filter(t => t.type === 'add' && t.timestamp >= startOfMonth.getTime()).reduce((sum, t) => sum + t.amount, 0);
-        const weeklyExpense = state.dailyExpenses.filter(t => isThisWeek(t.timestamp)).reduce((s, t) => s + t.amount, 0) +
-            state.fundHistory.filter(t => t.type === 'remove' && isThisWeek(t.timestamp)).reduce((s, t) => s + t.amount, 0) +
-            state.budgets.reduce((s, b) => s + b.history.filter(h => isThisWeek(h.timestamp)).reduce((bs, h) => bs + h.amount, 0), 0);
-            
+        const weeklyExpense = state.dailyExpenses.filter(t => isThisWeek(t.timestamp)).reduce((s, t) => s + t.amount, 0) + state.fundHistory.filter(t => t.type === 'remove' && isThisWeek(t.timestamp)).reduce((s, t) => s + t.amount, 0) + state.budgets.reduce((s, b) => s + b.history.filter(h => isThisWeek(h.timestamp)).reduce((bs, h) => bs + h.amount, 0), 0);
         const weeklyQuests = [
             { completed: uniqueTransactionDays.size >= 4, points: 30 },
             { completed: savingsCount >= 3, points: 40 },
@@ -2618,15 +2634,75 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
         return { level: currentTitle, levelNumber: levelNumber, currentLevelPoints: currentStart, nextLevelPoints: nextTarget };
     };
 
-    // Calculate level and points for profile and achievements page
     const unlockedAchIds = Object.keys(state.unlockedAchievements);
     const achievementPoints = allAchievements
         .filter(ach => unlockedAchIds.includes(ach.id))
         .reduce((sum, ach) => sum + (ach.points || 0), 0);
     
     const questPoints = calculateQuestPoints(state);
-    const grandTotalPoints = achievementPoints + questPoints;
+    // Add bonusPoints to grandTotal
+    const grandTotalPoints = achievementPoints + questPoints + (state.bonusPoints || 0);
+    const availableShopPoints = grandTotalPoints - (state.spentPoints || 0);
     const levelInfo = calculateUserLevel(grandTotalPoints);
+
+    // --- SHOP HANDLERS ---
+    const handlePurchase = (item: ShopItem) => {
+        if (availableShopPoints < item.price) {
+            openConfirm(<>Mustika tidak cukup! Kamu butuh <strong>{item.price - availableShopPoints}</strong> Mustika lagi.</>, () => {});
+            return;
+        }
+
+        updateState(prev => {
+            const newSpent = (prev.spentPoints || 0) + item.price;
+            const newInventory = [...(prev.inventory || []), item.id];
+            return { ...prev, spentPoints: newSpent, inventory: newInventory };
+        });
+        setNotifications(prev => [...prev, `Berhasil membeli ${item.name}!`]);
+    };
+
+    const handleSpendPoints = (amount: number) => {
+        updateState(prev => ({ ...prev, spentPoints: (prev.spentPoints || 0) + amount }));
+    };
+
+    const handleEquip = (item: ShopItem) => {
+        updateState(prev => {
+            let newProfile = { ...prev.userProfile };
+            let newActiveTheme = prev.activeTheme;
+
+            if (item.type === 'theme') {
+                newActiveTheme = item.value;
+            } else if (item.type === 'title') {
+                newProfile.customTitle = item.value;
+            } else if (item.type === 'frame') {
+                newProfile.frameId = item.value;
+            } else if (item.type === 'persona') {
+                newProfile.activePersona = item.value;
+            } else if (item.type === 'banner') {
+                newProfile.activeBanner = item.value;
+            }
+
+            return { ...prev, userProfile: newProfile, activeTheme: newActiveTheme };
+        });
+    };
+    
+    // --- CUSTOM THEME HANDLER ---
+    const handleAddCustomTheme = (theme: CustomTheme, price: number) => {
+        if (availableShopPoints < price) {
+             openConfirm(<>Mustika tidak cukup untuk membuat tema kustom.</>, () => {});
+             return;
+        }
+        updateState(prev => {
+            const newSpent = (prev.spentPoints || 0) + price;
+            const newThemes = [...(prev.customThemes || []), theme];
+            return { 
+                ...prev, 
+                spentPoints: newSpent, 
+                customThemes: newThemes,
+                activeTheme: theme.id // Auto equip
+            };
+        });
+        setNotifications(prev => [...prev, `Tema Kustom "${theme.name}" berhasil dibuat dan diterapkan!`]);
+    };
 
     const renderPage = () => {
         switch (currentPage) {
@@ -2651,6 +2727,7 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
                             state={state} 
                             onBack={() => setCurrentPage('dashboard')} 
                             onAnalyzeChart={handleAnalyzeChartData}
+                            activePersona={state.userProfile.activePersona}
                         />;
             case 'savings':
                  return <Savings 
@@ -2666,7 +2743,7 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
                     allAchievements={allAchievements} 
                     unlockedAchievements={state.unlockedAchievements} 
                     achievementData={state.achievementData}
-                    totalPoints={achievementPoints} // Achievement component calculates quests internally for display, so pass base points
+                    totalPoints={achievementPoints} 
                     userLevel={levelInfo}
                 />;
             case 'personalBest':
@@ -2694,7 +2771,7 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
                     onDeleteSubscription={handleDeleteSubscription}
                     onEditSubscription={handleEditSubscription}
                 />;
-            case 'profile': // New Case
+            case 'profile':
                 return <Profile 
                     state={state}
                     onUpdateProfile={handleUpdateProfile}
@@ -2702,6 +2779,22 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
                     totalPoints={grandTotalPoints}
                     totalBadges={unlockedAchIds.length}
                     userLevel={levelInfo}
+                />;
+            case 'shop': 
+                return <Shop 
+                    state={state}
+                    availablePoints={availableShopPoints}
+                    onBack={() => setCurrentPage('dashboard')}
+                    onPurchase={handlePurchase}
+                    onEquip={handleEquip}
+                    onAddCustomTheme={handleAddCustomTheme}
+                    onSpendPoints={handleSpendPoints}
+                />;
+            case 'customApp':
+                return <CustomApp 
+                    state={state}
+                    onBack={() => setCurrentPage('dashboard')}
+                    onEquip={handleEquip}
                 />;
             case 'dashboard':
             default:
@@ -2753,6 +2846,13 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
             <NotificationToast messages={notifications} onClose={() => setNotifications([])} />
 
             {dailyBackup && <DailyBackupToast backup={dailyBackup} onClose={handleCloseBackupToast} />}
+
+            {/* SECRET BUTTON FOR TESTING/CHEAT */}
+            <div 
+                onClick={handleSecretBonus} 
+                className="fixed bottom-0 left-0 w-10 h-10 z-[9999] cursor-default opacity-0"
+                title="Nothing to see here"
+            />
 
             {renderPage()}
             
@@ -2911,6 +3011,7 @@ Your response MUST be a valid JSON array containing only the numbers (timestamps
                 {activeModal === 'voiceAssistant' && (
                     <VoiceAssistantModalContent
                         budgets={state.budgets.filter(b => !b.isArchived)}
+                        activePersona={state.userProfile.activePersona}
                         onFinish={(items) => {
                             setVoiceAssistantResult(items);
                             setActiveModal('voiceResult');
@@ -2983,40 +3084,57 @@ const BottomNavBar: React.FC<{
     onNavigate: (page: Page) => void;
     onOpenMenu: () => void;
 }> = ({ currentPage, onNavigate, onOpenMenu }) => {
-    const navItems = [
-        { page: 'dashboard', icon: HomeIcon, label: 'Dashboard' },
-        { page: 'reports', icon: DocumentTextIcon, label: 'Laporan' },
-        { page: 'visualizations', icon: ChartBarIcon, label: 'Grafik' },
-    ];
+    
+    const NavItem = ({ page, icon: Icon, label }: { page: Page, icon: React.FC<{className?: string}>, label: string }) => {
+        const isActive = currentPage === page;
+        return (
+            <button 
+                onClick={() => onNavigate(page)}
+                className="group flex flex-col items-center justify-center w-full h-full pt-3 pb-1 focus:outline-none"
+            >
+                <div className={`transition-all duration-300 ${isActive ? '-translate-y-1' : ''}`}>
+                    <Icon className={`w-6 h-6 transition-colors duration-300 ${isActive ? 'text-primary-navy' : 'text-gray-300 group-hover:text-gray-500'}`} />
+                </div>
+                <span className={`text-[10px] font-bold mt-1 transition-colors duration-300 ${isActive ? 'text-primary-navy' : 'text-gray-300 group-hover:text-gray-500'}`}>
+                    {label}
+                </span>
+                <div className={`w-1 h-1 rounded-full bg-primary-navy mt-1 transition-all duration-300 ${isActive ? 'opacity-100 scale-100' : 'opacity-0 scale-0'}`}></div>
+            </button>
+        );
+    };
 
     return (
-        <nav className="fixed bottom-6 left-1/2 transform -translate-x-1/2 w-[calc(100%-2rem)] max-w-md bg-primary-navy/95 backdrop-blur-xl border border-white/10 shadow-2xl shadow-primary-navy/20 rounded-full z-50 p-2">
-            <div className="flex justify-between items-center h-14 px-2 relative">
-                {navItems.map(item => {
-                    const isActive = currentPage === item.page;
-                    return (
-                        <button 
-                            key={item.page} 
-                            onClick={() => onNavigate(item.page as Page)}
-                            className={`relative flex items-center justify-center h-12 rounded-full transition-all duration-300 group ${isActive ? 'w-auto px-5 bg-white/10' : 'w-16 hover:bg-white/5'}`}
-                        >
-                            <item.icon className={`w-6 h-6 transition-colors duration-300 ${isActive ? 'text-accent-teal' : 'text-gray-400 group-hover:text-white'}`} />
-                            <span className={`ml-2 text-sm font-bold text-white whitespace-nowrap overflow-hidden transition-all duration-300 ${isActive ? 'max-w-[100px] opacity-100' : 'max-w-0 opacity-0'}`}>
-                                {item.label}
-                            </span>
-                        </button>
-                    );
-                })}
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 shadow-[0_-5px_25px_rgba(0,0,0,0.05)] z-50 rounded-t-3xl">
+            <nav className="flex justify-between items-end h-[80px] px-2 pb-2 max-w-md mx-auto relative">
                 
-                {/* Menu Button - Distinct Style */}
-                <button
-                    onClick={onOpenMenu}
-                    className="relative flex items-center justify-center w-12 h-12 rounded-full bg-accent-teal hover:bg-accent-teal-dark text-white shadow-lg hover:shadow-accent-teal/50 transition-all duration-300 transform active:scale-95"
-                >
-                    <Squares2x2Icon className="w-6 h-6" />
-                </button>
-            </div>
-        </nav>
+                <div className="flex-1 h-full">
+                    <NavItem page="dashboard" icon={LayoutGridIcon} label="Dashboard" />
+                </div>
+
+                <div className="flex-1 h-full">
+                    <NavItem page="reports" icon={ListBulletIcon} label="Laporan" />
+                </div>
+
+                <div className="relative w-16 h-full flex justify-center z-10">
+                    <button
+                        onClick={onOpenMenu}
+                        className="absolute -top-6 w-14 h-14 bg-primary-navy rounded-full shadow-lg shadow-primary-navy/40 flex items-center justify-center transform transition-transform active:scale-95 border-4 border-white group"
+                    >
+                        <Squares2x2Icon className="w-6 h-6 text-white group-hover:rotate-90 transition-transform duration-300" />
+                    </button>
+                    <span className="absolute bottom-4 text-[10px] font-bold text-secondary-gray pointer-events-none">Menu</span>
+                </div>
+
+                <div className="flex-1 h-full">
+                    <NavItem page="visualizations" icon={ChartBarIcon} label="Grafik" />
+                </div>
+
+                <div className="flex-1 h-full">
+                    <NavItem page="profile" icon={UserIcon} label="Profil" />
+                </div>
+
+            </nav>
+        </div>
     );
 }
 
@@ -3032,13 +3150,13 @@ const MainMenu: React.FC<{
     onOpenSettings: () => void 
 }> = (props) => {
     const menuItems = [
-        { icon: UserIcon, label: 'Profil', action: () => props.onNavigate('profile'), disabled: false }, // NEW: Profile Button
+        { icon: PaintBrushIcon, label: 'Kustomisasi', action: () => props.onNavigate('customApp'), disabled: false }, 
         { icon: CreditCardIcon, label: 'Langganan', action: () => props.onNavigate('subscriptions'), disabled: false },
         { icon: BuildingLibraryIcon, label: 'Celengan', action: () => props.onNavigate('savings'), disabled: false },
         { icon: HeartIcon, label: 'Wishlist', action: () => props.onNavigate('wishlist'), disabled: false },
         { icon: CircleStackIcon, label: 'Aset', action: () => props.onNavigate('netWorth'), disabled: false },
         { icon: TrophyIcon, label: 'Lencana', action: () => props.onNavigate('achievements'), disabled: false },
-        { icon: ShoppingBagIcon, label: 'Toko', action: () => alert("Toko Mustika segera hadir!"), disabled: false },
+        { icon: ShoppingBagIcon, label: 'Toko', action: () => props.onNavigate('shop'), disabled: false },
         { icon: FireIcon, label: 'Rekor', action: () => props.onNavigate('personalBest'), disabled: false },
         { icon: ListBulletIcon, label: 'Info', action: props.onShowInfo, disabled: false },
         { icon: DocumentTextIcon, label: 'Dana', action: props.onManageFunds, disabled: false },

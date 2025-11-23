@@ -82,6 +82,100 @@ const SimpleSparkline = ({ data, color, width = 60, height = 20 }: { data: numbe
     );
 };
 
+const CalendarView: React.FC<{
+    currentDate: Date;
+    transactionsByDate: { [date: string]: { income: number; expense: number; transactions: GlobalTransaction[] } };
+    selectedDate: string | null;
+    onDateClick: (date: string) => void;
+    onChangeMonth: (offset: number) => void;
+    onDeleteTransaction: (timestamp: number) => void;
+    onEditTransaction: (t: GlobalTransaction) => void;
+    TransactionItem: React.FC<{ t: GlobalTransaction; onDelete: (timestamp: number) => void }>;
+}> = ({ currentDate, transactionsByDate, selectedDate, onDateClick, onChangeMonth, onDeleteTransaction, onEditTransaction, TransactionItem }) => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const firstDayOfMonth = new Date(year, month, 1).getDay(); // 0 (Sun) - 6 (Sat)
+
+    const days = [];
+    for (let i = 0; i < firstDayOfMonth; i++) days.push(null);
+    for (let i = 1; i <= daysInMonth; i++) days.push(i);
+
+    const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+
+    return (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="flex justify-between items-center p-4 border-b border-gray-100 bg-gray-50/50">
+                <button onClick={() => onChangeMonth(-1)} className="p-2 hover:bg-white rounded-full transition-colors"><ChevronLeftIcon className="w-5 h-5 text-secondary-gray" /></button>
+                <h2 className="font-bold text-primary-navy">{monthNames[month]} {year}</h2>
+                <button onClick={() => onChangeMonth(1)} className="p-2 hover:bg-white rounded-full transition-colors"><ChevronRightIcon className="w-5 h-5 text-secondary-gray" /></button>
+            </div>
+            
+            <div className="grid grid-cols-7 gap-px bg-gray-100 border-b border-gray-100">
+                {['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'].map(day => (
+                    <div key={day} className="text-center text-xs font-bold text-secondary-gray py-2 bg-white">{day}</div>
+                ))}
+            </div>
+
+            <div className="grid grid-cols-7 gap-px bg-gray-100">
+                {days.map((day, index) => {
+                    if (day === null) return <div key={`empty-${index}`} className="bg-white h-24" />;
+                    
+                    const dateStr = new Date(year, month, day).toLocaleDateString('fr-CA');
+                    const data = transactionsByDate[dateStr] || { income: 0, expense: 0, transactions: [] };
+                    const isSelected = selectedDate === dateStr;
+                    const isToday = new Date().toLocaleDateString('fr-CA') === dateStr;
+
+                    return (
+                        <div 
+                            key={day} 
+                            onClick={() => onDateClick(dateStr)}
+                            className={`bg-white h-24 p-1 flex flex-col justify-between cursor-pointer hover:bg-blue-50 transition-colors relative ${isSelected ? 'ring-2 ring-inset ring-primary-navy bg-blue-50' : ''}`}
+                        >
+                            <div className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full ${isToday ? 'bg-primary-navy text-white' : 'text-secondary-gray'}`}>
+                                {day}
+                            </div>
+                            <div className="flex flex-col items-end gap-0.5">
+                                {data.income > 0 && <span className="text-[10px] font-bold text-accent-teal">+{formatShortCurrency(data.income)}</span>}
+                                {data.expense > 0 && <span className="text-[10px] font-bold text-danger-red">-{formatShortCurrency(data.expense)}</span>}
+                            </div>
+                            {data.transactions.length > 0 && (
+                                <div className="absolute bottom-1 left-1 flex gap-0.5">
+                                    <div className={`w-1.5 h-1.5 rounded-full ${data.expense > 0 ? 'bg-danger-red' : 'bg-transparent'}`}></div>
+                                    <div className={`w-1.5 h-1.5 rounded-full ${data.income > 0 ? 'bg-accent-teal' : 'bg-transparent'}`}></div>
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+
+            {selectedDate && transactionsByDate[selectedDate] && (
+                <div className="p-4 bg-gray-50 border-t border-gray-100 animate-fade-in">
+                    <h3 className="font-bold text-primary-navy mb-3 flex items-center gap-2">
+                        <CalendarDaysIcon className="w-4 h-4" />
+                        {new Date(selectedDate).toLocaleDateString('id-ID', { dateStyle: 'full' })}
+                    </h3>
+                    <div className="space-y-2">
+                        {transactionsByDate[selectedDate].transactions.length === 0 ? (
+                            <p className="text-sm text-secondary-gray italic">Tidak ada transaksi.</p>
+                        ) : (
+                            transactionsByDate[selectedDate].transactions.map((t, i) => (
+                                <TransactionItem 
+                                    key={i} 
+                                    t={t} 
+                                    onDelete={onDeleteTransaction} 
+                                />
+                            ))
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
 const Reports: React.FC<ReportsProps> = ({ 
     state, onBack, onEditAsset, onDeleteTransaction, onEditTransaction,
     aiSearchResults, isSearchingWithAI, aiSearchError, onAiSearch, onClearAiSearch 
@@ -224,18 +318,6 @@ const Reports: React.FC<ReportsProps> = ({
     const summaryIncome = useMemo(() => {
         return transactionsToDisplay.reduce((sum, t) => (t.type === 'add' ? sum + t.amount : sum), 0);
     }, [transactionsToDisplay]);
-
-    // AMBIENT BACKGROUND LOGIC
-    const ambientBgClass = useMemo(() => {
-        const balance = summaryIncome - summaryExpense;
-        if (balance >= 0) {
-            // Surplus: Teal to Blue (Calm)
-            return "bg-gradient-to-b from-teal-50 via-blue-50 to-white";
-        } else {
-            // Deficit/High Spend: Orange to Pink (Alert)
-            return "bg-gradient-to-b from-orange-50 via-red-50 to-white";
-        }
-    }, [summaryIncome, summaryExpense]);
 
     const groupedTransactions = useMemo(() => {
         const groups: { [date: string]: { transactions: GlobalTransaction[], dailyTotal: number } } = {};
@@ -477,7 +559,7 @@ const Reports: React.FC<ReportsProps> = ({
     );
 
     return (
-        <main className={`h-full flex flex-col animate-fade-in ${ambientBgClass}`}>
+        <main className="h-full flex flex-col animate-fade-in bg-transparent">
             {/* Fixed Header */}
             <div className={`z-40 p-4 sticky top-0 transition-all duration-300 ease-in-out ${isHeaderVisible ? 'bg-transparent' : 'bg-white/90 backdrop-blur-md shadow-sm'}`}>
                 <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-2 gap-4">
@@ -645,7 +727,7 @@ const Reports: React.FC<ReportsProps> = ({
                         )}
 
                         {/* Footer Summary - Static now */}
-                        <div className="mt-6 p-4 bg-white border border-gray-100 rounded-xl shadow-sm">
+                        <div className="mt-6 p-4 bg-white/90 backdrop-blur-sm border border-gray-100 rounded-xl shadow-sm">
                             <div className="flex justify-between items-center mb-3">
                                 <div>
                                     <p className="text-xs text-secondary-gray uppercase font-bold">Pengeluaran</p>
@@ -698,118 +780,6 @@ const Reports: React.FC<ReportsProps> = ({
                </div>
             )}
         </main>
-    );
-};
-
-
-const CalendarView: React.FC<{
-    currentDate: Date;
-    transactionsByDate: { [key: string]: { income: number, expense: number, transactions: GlobalTransaction[] }};
-    selectedDate: string | null;
-    onDateClick: (date: string) => void;
-    onChangeMonth: (offset: number) => void;
-    onDeleteTransaction: (timestamp: number) => void;
-    onEditTransaction: (t: GlobalTransaction) => void;
-    TransactionItem: React.FC<{t: GlobalTransaction, onDelete: (ts: number) => void, onEdit: (t: GlobalTransaction) => void}>;
-}> = ({ currentDate, transactionsByDate, selectedDate, onDateClick, onChangeMonth, onDeleteTransaction, onEditTransaction, TransactionItem }) => {
-    const calendarDays = useMemo(() => {
-        const year = currentDate.getFullYear();
-        const month = currentDate.getMonth();
-        const firstDayOfMonth = new Date(year, month, 1).getDay();
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
-        
-        const days = [];
-        for (let i = 0; i < firstDayOfMonth; i++) {
-            days.push({ key: `prev-${i}`, isCurrentMonth: false });
-        }
-        for (let day = 1; day <= daysInMonth; day++) {
-            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            days.push({ 
-                key: dateStr, 
-                day, 
-                date: dateStr, 
-                isCurrentMonth: true, 
-                data: transactionsByDate[dateStr] 
-            });
-        }
-        return days;
-    }, [currentDate, transactionsByDate]);
-
-    const today = new Date().toLocaleDateString('fr-CA');
-
-    const getHeatmapColor = (income: number, expense: number) => {
-        if (income === 0 && expense === 0) return 'bg-white border-gray-200';
-        if (income > expense) return 'bg-green-100 border-green-300';
-        const netExpense = expense - income;
-        if (netExpense < 50000) return 'bg-red-50 border-red-200';
-        if (netExpense < 200000) return 'bg-red-100 border-red-300';
-        return 'bg-red-200 border-red-400';
-    };
-
-    return (
-        <div>
-            <div className="flex justify-between items-center mb-6 bg-white p-3 rounded-xl shadow-sm border border-gray-100">
-                <button onClick={() => onChangeMonth(-1)} className="p-2 rounded-full hover:bg-gray-100"><ChevronLeftIcon className="w-6 h-6 text-primary-navy" /></button>
-                <h3 className="text-lg font-bold text-primary-navy">{currentDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}</h3>
-                <button onClick={() => onChangeMonth(1)} className="p-2 rounded-full hover:bg-gray-100"><ChevronRightIcon className="w-6 h-6 text-primary-navy" /></button>
-            </div>
-            
-            <div className="grid grid-cols-7 gap-2 mb-2 text-center text-xs font-bold text-secondary-gray">
-                {['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'].map(day => <div key={day}>{day}</div>)}
-            </div>
-            <div className="grid grid-cols-7 gap-2">
-                {calendarDays.map(dayInfo => {
-                    if (!dayInfo.isCurrentMonth) return <div key={dayInfo.key} className="h-20 sm:h-24"></div>;
-                    
-                    const isSelected = selectedDate === dayInfo.date;
-                    const isToday = today === dayInfo.date;
-                    const income = dayInfo.data?.income || 0;
-                    const expense = dayInfo.data?.expense || 0;
-                    
-                    const bgClass = isSelected 
-                        ? 'bg-primary-navy text-white ring-2 ring-primary-navy border-transparent shadow-lg transform scale-105 z-10'
-                        : getHeatmapColor(income, expense);
-
-                    return (
-                        <div 
-                            key={dayInfo.key} 
-                            onClick={() => onDateClick(dayInfo.date!)}
-                            className={`relative h-20 sm:h-24 p-1 border rounded-xl cursor-pointer transition-all duration-200 flex flex-col justify-between
-                                ${bgClass}
-                                ${isToday && !isSelected ? 'ring-2 ring-accent-teal border-transparent' : ''}
-                                hover:shadow-md
-                            `}
-                        >
-                            <span className={`text-sm font-bold ml-1 mt-1 ${isSelected ? 'text-white' : (isToday ? 'text-accent-teal' : 'text-dark-text')}`}>{dayInfo.day}</span>
-                            {dayInfo.data && (
-                                <div className="flex flex-col items-end pr-1 pb-1">
-                                    {income > 0 && <p className={`text-[10px] font-bold leading-tight ${isSelected ? 'text-green-300' : 'text-accent-teal'}`}>+{formatShortCurrency(income)}</p>}
-                                    {expense > 0 && <p className={`text-[10px] font-bold leading-tight ${isSelected ? 'text-red-300' : 'text-danger-red'}`}>-{formatShortCurrency(expense)}</p>}
-                                </div>
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
-
-            {selectedDate && (
-                <div className="mt-8 animate-fade-in bg-white rounded-xl p-4 shadow-md border border-gray-100">
-                    <h4 className="font-bold text-primary-navy mb-4 pb-2 border-b flex justify-between items-center">
-                        <span>{new Date(selectedDate + 'T00:00:00').toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
-                        <span className="text-xs font-normal text-secondary-gray">Detail Harian</span>
-                    </h4>
-                     <div className="max-h-80 overflow-y-auto space-y-2 pl-2">
-                        {(transactionsByDate[selectedDate]?.transactions || []).length > 0 ? (
-                           [...transactionsByDate[selectedDate].transactions].sort((a,b) => b.timestamp - a.timestamp).map(t => (
-                            <TransactionItem key={t.timestamp} t={t} onDelete={onDeleteTransaction} onEdit={onEditTransaction} />
-                           ))
-                        ) : (
-                            <p className="text-center text-secondary-gray py-4">Tidak ada transaksi pada tanggal ini.</p>
-                        )}
-                    </div>
-                </div>
-            )}
-        </div>
     );
 }
 
