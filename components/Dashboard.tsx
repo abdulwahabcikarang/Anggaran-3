@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import type { AppState, Budget, Transaction } from '../types';
-import { LightbulbIcon, ArrowPathIcon, PlusCircleIcon, BudgetIcon, LockClosedIcon, ListBulletIcon } from './Icons';
+import { LightbulbIcon, ArrowPathIcon, PlusCircleIcon, BudgetIcon, LockClosedIcon, ListBulletIcon, SparklesIcon, ChevronRightIcon } from './Icons';
 import { CountUp, Skeleton, AISkeleton } from './UI';
 
 interface DashboardProps {
@@ -109,23 +109,49 @@ const AIInsightCard: React.FC<{
     insight: string;
     isLoading: boolean;
     onRefresh: () => void;
-}> = ({ insight, isLoading, onRefresh }) => {
+    isVisible: boolean;
+    onToggle: () => void;
+}> = ({ insight, isLoading, onRefresh, isVisible, onToggle }) => {
+    if (!isVisible) {
+        return (
+            <div className="mb-6">
+                <button 
+                    onClick={onToggle}
+                    className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold py-3 px-4 rounded-xl shadow-md flex items-center justify-between hover:shadow-lg transition-all transform hover:scale-[1.01] group"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="bg-white/20 p-1.5 rounded-full">
+                            <SparklesIcon className="w-5 h-5 text-yellow-200 animate-pulse" />
+                        </div>
+                        <span className="text-sm">Lihat Wawasan AI & Prediksi</span>
+                    </div>
+                    <ChevronRightIcon className="w-5 h-5 text-white/70 group-hover:text-white" />
+                </button>
+            </div>
+        );
+    }
+
     return (
-        <section className="bg-white/90 backdrop-blur-sm rounded-xl p-6 mb-6 shadow-md border border-white/20">
+        <section className="bg-white/90 backdrop-blur-sm rounded-xl p-6 mb-6 shadow-md border border-white/20 animate-spring-up">
             <div className="flex justify-between items-center mb-2">
                 <div className="flex items-center space-x-2">
                     <LightbulbIcon className="w-6 h-6 text-warning-yellow" />
                     <h2 className="text-xl font-bold text-primary-navy">Wawasan AI</h2>
                 </div>
-                <button onClick={onRefresh} disabled={isLoading} className="text-primary-navy disabled:text-gray-400 disabled:cursor-not-allowed">
-                    <ArrowPathIcon className="w-6 h-6" isSpinning={isLoading} />
-                </button>
+                <div className="flex items-center gap-2">
+                    <button onClick={onRefresh} disabled={isLoading} className="text-primary-navy disabled:text-gray-400 disabled:cursor-not-allowed p-1 hover:bg-gray-100 rounded-full transition-colors">
+                        <ArrowPathIcon className="w-5 h-5" isSpinning={isLoading} />
+                    </button>
+                    <button onClick={onToggle} className="text-secondary-gray hover:text-primary-navy text-sm font-semibold px-2 py-1 rounded hover:bg-gray-100 transition-colors">
+                        Sembunyikan
+                    </button>
+                </div>
             </div>
             {isLoading ? (
                 <AISkeleton />
             ) : (
                 <div className="text-secondary-gray text-sm max-w-none">
-                    {formatMarkdown(insight)}
+                    {insight ? formatMarkdown(insight) : <p className="italic text-center py-2">Klik refresh untuk memuat data terbaru...</p>}
                 </div>
             )}
         </section>
@@ -227,6 +253,7 @@ const Dashboard: React.FC<DashboardProps> = (props) => {
     const [draggedId, setDraggedId] = useState<number | null>(null);
     const [dragOverZone, setDragOverZone] = useState<'fixed' | 'temporary' | null>(null);
     const [dragOverBudgetId, setDragOverBudgetId] = useState<number | null>(null);
+    const [showInsight, setShowInsight] = useState(false);
     
     // Parallax & Sticky State
     const [scrollProgress, setScrollProgress] = useState(0);
@@ -305,6 +332,13 @@ const Dashboard: React.FC<DashboardProps> = (props) => {
         const budget2 = activeBudgets.find(b => b.id === id2);
         if (!budget1 || !budget2) return false;
         return budget1.isTemporary === budget2.isTemporary;
+    };
+
+    const handleToggleInsight = () => {
+        if (!showInsight && !props.aiInsight) {
+            props.onRefreshInsight();
+        }
+        setShowInsight(!showInsight);
     };
 
 
@@ -404,6 +438,8 @@ const Dashboard: React.FC<DashboardProps> = (props) => {
                     insight={props.aiInsight}
                     isLoading={props.isFetchingInsight}
                     onRefresh={props.onRefreshInsight}
+                    isVisible={showInsight}
+                    onToggle={handleToggleInsight}
                 />
 
                 <section className="space-y-8">

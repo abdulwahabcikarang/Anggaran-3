@@ -1382,11 +1382,6 @@ const App: React.FC = () => {
         });
     }, []);
 
-    const handleSecretBonus = () => {
-        updateState(prev => ({ ...prev, bonusPoints: (prev.bonusPoints || 0) + 90000 }));
-        setNotifications(prev => [...prev, "Cheat Activated: +90.000 Mustika!"]);
-    };
-
     const listInternalBackups = useCallback(() => {
         const backupList: { key: string; timestamp: number }[] = [];
         for (let i = 0; i < localStorage.length; i++) {
@@ -2413,25 +2408,29 @@ const App: React.FC = () => {
             }).filter(Boolean).join('\n');
             
             const prompt = `${getSystemInstruction(state.userProfile.activePersona)}
-            
+
             ANALISIS KEUANGAN BULANAN & PREDIKSI:
-            
+
             PERIODE: 1 ${now.toLocaleDateString('id-ID', {month: 'long'})} s.d. Hari Ini (${now.getDate()}).
-            
+
             DATA SAAT INI:
             - Total Pemasukan: ${formatCurrency(currentMonthIncome)}
             - Total Pengeluaran (Semua): ${formatCurrency(totalSpent)}
             - Sisa Uang Riil Saat Ini: ${formatCurrency(currentBalance)}
-            
+
+            DETAIL PENGELUARAN:
+            ${budgetDetails || "Belum ada data detail pos anggaran."}
+
             PROYEKSI AKHIR BULAN (Estimasi):
             - Rata-rata pengeluaran per hari: ${formatCurrency(avgDailySpend)}
             - Estimasi sisa uang di akhir bulan: ${formatCurrency(projectedEndMonthBalance)} (Jika pola belanja sama)
-            
+
             TUGASMU:
-            Berikan wawasan singkat (Maksimal 3 kalimat poin penting).
-            1. Komentari kesehatan keuangan saat ini berdasarkan data.
-            2. Berikan prediksi apakah akhir bulan akan aman atau minus berdasarkan proyeksi di atas.
-            3. Beri 1 saran spesifik untuk menjaga/memperbaiki kondisi hingga akhir bulan.
+            Berikan wawasan dalam format poin-poin Markdown yang menarik:
+            1. **Gambaran Pengeluaran**: Ceritakan singkat kemana uang paling banyak mengalir berdasarkan data.
+            2. **Pendapatku**: Berikan opinimu tentang cara user mengelola uang bulan ini (apakah boros, hemat, atau bahaya). Gunakan gaya bahasamu yang khas!
+            3. **Terawangan Masa Depan**: Prediksi apakah akhir bulan akan aman (surplus) atau bahaya (minus) jika user terus begini.
+            4. **Saran**: Satu aksi spesifik yang harus dilakukan sekarang.
             `;
 
             const apiKey = getApiKey();
@@ -2445,14 +2444,6 @@ const App: React.FC = () => {
             setIsFetchingDashboardInsight(false);
         }
     }, [state]);
-
-    useEffect(() => {
-        if(monthlyIncome > 0) {
-            handleFetchDashboardInsight();
-        } else {
-            setAiDashboardInsight("Tambahkan pemasukan bulan ini dulu biar aku bisa kasih ramalan keuangan!");
-        }
-    }, [monthlyIncome, handleFetchDashboardInsight]);
 
     const handleAnalyzeChartData = async (prompt: string): Promise<string> => {
         try {
@@ -2846,13 +2837,6 @@ const App: React.FC = () => {
             <NotificationToast messages={notifications} onClose={() => setNotifications([])} />
 
             {dailyBackup && <DailyBackupToast backup={dailyBackup} onClose={handleCloseBackupToast} />}
-
-            {/* SECRET BUTTON FOR TESTING/CHEAT */}
-            <div 
-                onClick={handleSecretBonus} 
-                className="fixed bottom-0 left-0 w-10 h-10 z-[9999] cursor-default opacity-0"
-                title="Nothing to see here"
-            />
 
             {renderPage()}
             
