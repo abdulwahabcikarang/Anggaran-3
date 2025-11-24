@@ -272,7 +272,15 @@ const Dashboard: React.FC<DashboardProps> = (props) => {
 
     const totalAllocated = state.budgets.reduce((sum, b) => sum + b.totalBudget, 0);
     const unallocatedFunds = monthlyIncome - totalAllocated;
-    const currentAvailableFunds = unallocatedFunds - monthlyGeneralExpense - totalDailySpent;
+    
+    // --- SAFETY CHECK LOGIC ---
+    // Calculate theoretical available funds
+    const currentAvailableFundsTheoretical = unallocatedFunds - monthlyGeneralExpense - totalDailySpent;
+    // Clamp actual available funds by total remaining cash
+    // If totalRemaining is less than theoretical (e.g. due to budget overspend), use totalRemaining.
+    // This prevents daily budget from being positive when you are actually broke.
+    const currentAvailableFunds = Math.min(currentAvailableFundsTheoretical, totalRemaining);
+
     const todaysDailyExpenses = state.dailyExpenses.filter(exp => new Date(exp.timestamp).toDateString() === new Date().toDateString());
     const totalDailySpentToday = todaysDailyExpenses.reduce((sum, exp) => sum + exp.amount, 0);
 

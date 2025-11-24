@@ -1346,7 +1346,11 @@ const App: React.FC = () => {
             
             const newTotalAllocated = newState.budgets.reduce((sum, b) => sum + b.totalBudget, 0);
             const newUnallocatedFunds = newMonthlyIncome - newTotalAllocated;
-            const newCurrentAvailableFunds = newUnallocatedFunds - newMonthlyGeneralExpense - newTotalDailySpent;
+            
+            // UPDATED SAFETY CHECK FOR STREAK CALCULATION
+            const newCurrentAvailableFundsTheoretical = newUnallocatedFunds - newMonthlyGeneralExpense - newTotalDailySpent;
+            const newCurrentAvailableFunds = Math.min(newCurrentAvailableFundsTheoretical, newTotalRemaining);
+            
             const remainingDays = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate() - new Date().getDate() + 1;
             const dailyBudgetMax = remainingDays > 0 ? newCurrentAvailableFunds / remainingDays : newCurrentAvailableFunds;
             const dailyBudgetRemaining = dailyBudgetMax;
@@ -1560,8 +1564,16 @@ const App: React.FC = () => {
         const totalRemaining = monthlyIncome - totalUsedOverall;
         const unallocatedFunds = monthlyIncome - totalAllocated;
         const generalAndDailyExpenses = monthlyGeneralExpense + totalDailySpent;
-        const remainingUnallocated = unallocatedFunds - generalAndDailyExpenses;
-        const currentAvailableFunds = unallocatedFunds - generalAndDailyExpenses;
+        
+        // NEW LOGIC: Safety Check for Available Funds
+        const currentAvailableFundsTheoretical = unallocatedFunds - generalAndDailyExpenses;
+        // If theoretical available is less than total remaining (e.g. budgets overspent), use total remaining.
+        // Wait, if total remaining is negative, available should be negative.
+        // If total remaining is positive but less than theoretical (budget overspend case), use total remaining.
+        // Math.min correctly picks the smaller (or more negative) value.
+        const currentAvailableFunds = Math.min(currentAvailableFundsTheoretical, totalRemaining);
+        
+        const remainingUnallocated = currentAvailableFunds; // Update this to reflect reality too
         
         return { monthlyIncome, totalUsedOverall, totalRemaining, totalAllocated, unallocatedFunds, generalAndDailyExpenses, remainingUnallocated, totalDailySpent, currentAvailableFunds };
     }, [state.fundHistory, state.budgets, state.dailyExpenses]);
