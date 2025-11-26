@@ -1567,13 +1567,9 @@ const App: React.FC = () => {
         
         // NEW LOGIC: Safety Check for Available Funds
         const currentAvailableFundsTheoretical = unallocatedFunds - generalAndDailyExpenses;
-        // If theoretical available is less than total remaining (e.g. budgets overspent), use total remaining.
-        // Wait, if total remaining is negative, available should be negative.
-        // If total remaining is positive but less than theoretical (budget overspend case), use total remaining.
-        // Math.min correctly picks the smaller (or more negative) value.
         const currentAvailableFunds = Math.min(currentAvailableFundsTheoretical, totalRemaining);
         
-        const remainingUnallocated = currentAvailableFunds; // Update this to reflect reality too
+        const remainingUnallocated = currentAvailableFunds; 
         
         return { monthlyIncome, totalUsedOverall, totalRemaining, totalAllocated, unallocatedFunds, generalAndDailyExpenses, remainingUnallocated, totalDailySpent, currentAvailableFunds };
     }, [state.fundHistory, state.budgets, state.dailyExpenses]);
@@ -1801,23 +1797,69 @@ const App: React.FC = () => {
     const handleSaveScannedItems = (items: ScannedItem[]) => {
         updateState(prev => {
             const newDailyExpenses = [...prev.dailyExpenses];
-            const newBudgets = JSON.parse(JSON.stringify(prev.budgets)); 
+            // Deep copy budgets to mutate history without affecting state immediately
+            const newBudgets = prev.budgets.map(b => ({
+                ...b,
+                history: [...b.history]
+            }));
 
             items.forEach(item => {
                 if (item.budgetId === 'none' || item.amount <= 0 || !item.desc.trim()) return;
-                
-                const newTransaction: Transaction = {
-                    desc: item.desc,
-                    amount: item.amount,
-                    timestamp: Date.now()
-                };
+
+                const timestamp = Date.now(); // Use one timestamp or increment slightly
 
                 if (item.budgetId === 'daily') {
-                    newDailyExpenses.push(newTransaction);
+                    newDailyExpenses.push({
+                        desc: item.desc,
+                        amount: item.amount,
+                        timestamp: timestamp
+                    });
                 } else {
-                    const budget = newBudgets.find((b: Budget) => b.id === item.budgetId);
-                    if (budget) {
-                        budget.history.push(newTransaction);
+                    // Find the target budget
+                    const budgetIndex = newBudgets.findIndex(b => b.id === item.budgetId);
+                    if (budgetIndex !== -1) {
+                        const budget = newBudgets[budgetIndex];
+
+                        // Calculate REMAINING quota dynamically (including items just added in this loop)
+                        const currentUsed = budget.history.reduce((sum, h) => sum + h.amount, 0);
+                        const remainingQuota = Math.max(0, budget.totalBudget - currentUsed);
+
+                        if (item.amount > remainingQuota) {
+                            // SPILL OVER LOGIC
+                            const overageAmount = item.amount - remainingQuota;
+
+                            // 1. Fill the bucket (if any space left)
+                            if (remainingQuota > 0) {
+                                budget.history.push({
+                                    desc: item.desc,
+                                    amount: remainingQuota,
+                                    timestamp: timestamp
+                                });
+                            }
+
+                            // 2. Spill the rest to Daily Expenses
+                            newDailyExpenses.push({
+                                desc: `[Overage] ${item.desc}`,
+                                amount: overageAmount,
+                                timestamp: timestamp,
+                                sourceCategory: budget.name // Tag the source
+                            });
+
+                        } else {
+                            // Fits in bucket
+                            budget.history.push({
+                                desc: item.desc,
+                                amount: item.amount,
+                                timestamp: timestamp
+                            });
+                        }
+                    } else {
+                        // Fallback if budget ID not found (shouldn't happen, but safety)
+                        newDailyExpenses.push({
+                            desc: item.desc,
+                            amount: item.amount,
+                            timestamp: timestamp
+                        });
                     }
                 }
             });
@@ -1848,39 +1890,32 @@ const App: React.FC = () => {
         setActiveModal(null);
     }
 
-    const handleEditGlobalTransaction = (timestamp: number, newDesc: string, newAmount: number) => {
+    // --- FIXED: Source-aware Editing ---
+    const handleEditGlobalTransaction = (timestamp: number, newDesc: string, newAmount: number, source: string, sourceId: number | string | undefined, oldDesc: string, oldAmount: number) => {
         updateState(prev => {
             const newState = JSON.parse(JSON.stringify(prev));
             
-            const fundIndex = newState.fundHistory.findIndex((t: FundTransaction) => t.timestamp === timestamp);
-            if (fundIndex !== -1) {
-                newState.fundHistory[fundIndex].desc = newDesc;
-                newState.fundHistory[fundIndex].amount = newAmount;
-                return newState;
-            }
-            
-            const dailyIndex = newState.dailyExpenses.findIndex((t: Transaction) => t.timestamp === timestamp);
-            if (dailyIndex !== -1) {
-                newState.dailyExpenses[dailyIndex].desc = newDesc;
-                newState.dailyExpenses[dailyIndex].amount = newAmount;
-                return newState;
-            }
-            
-            for (const budget of newState.budgets) {
-                const histIndex = budget.history.findIndex((t: Transaction) => t.timestamp === timestamp);
-                if (histIndex !== -1) {
-                    budget.history[histIndex].desc = newDesc;
-                    budget.history[histIndex].amount = newAmount;
-                    return newState;
+            const findAndEdit = (list: any[]) => {
+                const idx = list.findIndex((t: any) => t.timestamp === timestamp && t.desc === oldDesc && t.amount === oldAmount);
+                if (idx !== -1) {
+                    list[idx].desc = newDesc;
+                    list[idx].amount = newAmount;
                 }
-            }
+            };
 
-            for (const archive of newState.archives) {
-                const archIndex = archive.transactions.findIndex((t: GlobalTransaction) => t.timestamp === timestamp);
-                if (archIndex !== -1) {
-                    archive.transactions[archIndex].desc = newDesc;
-                    archive.transactions[archIndex].amount = newAmount;
-                    return newState;
+            if (source === 'fund') {
+                findAndEdit(newState.fundHistory);
+            } else if (source === 'daily') {
+                findAndEdit(newState.dailyExpenses);
+            } else if (source === 'budget' && sourceId) {
+                const budget = newState.budgets.find((b: Budget) => b.id === sourceId);
+                if (budget) {
+                    findAndEdit(budget.history);
+                }
+            } else if (source === 'archive' && sourceId) {
+                const archive = newState.archives.find((a: any) => a.month === sourceId);
+                if (archive) {
+                    findAndEdit(archive.transactions);
                 }
             }
             
@@ -1888,43 +1923,57 @@ const App: React.FC = () => {
         });
     };
     
-    const handleDeleteGlobalTransaction = (timestamp: number) => {
+    // --- FIXED: Source-aware Deletion ---
+    const handleDeleteGlobalTransaction = (timestamp: number, source: string, sourceId: number | string | undefined, desc: string, amount: number) => {
         updateState(prev => {
             const newState = JSON.parse(JSON.stringify(prev)); 
 
-            let transactionToDelete: FundTransaction | GlobalTransaction | undefined;
-            transactionToDelete = newState.fundHistory.find((t: FundTransaction) => t.timestamp === timestamp);
-            if (!transactionToDelete) {
-                for (const archive of newState.archives) {
-                    const found = archive.transactions.find((t: GlobalTransaction) => t.timestamp === timestamp);
-                    if (found) {
-                        transactionToDelete = found;
-                        break;
-                    }
+            // Helper to remove strictly one item
+            const removeOne = (list: any[]) => {
+                const idx = list.findIndex((t: any) => t.timestamp === timestamp && t.desc === desc && t.amount === amount);
+                if (idx !== -1) {
+                    list.splice(idx, 1);
+                    return true;
                 }
-            }
-            
-            if (transactionToDelete && transactionToDelete.type === 'remove' && transactionToDelete.desc.startsWith('Tabungan: ')) {
-                const goalName = transactionToDelete.desc.substring('Tabungan: '.length);
+                return false;
+            };
+
+            // Check for savings goal impact (special case)
+            if (source === 'fund' && desc.startsWith('Tabungan: ')) {
+                const goalName = desc.substring('Tabungan: '.length);
                 const goalIndex = newState.savingsGoals.findIndex((g: SavingsGoal) => g.name === goalName);
 
                 if (goalIndex !== -1) {
                     const goal = newState.savingsGoals[goalIndex];
-                    const originalHistoryLength = goal.history.length;
-                    goal.history = goal.history.filter((h: SavingTransaction) => h.timestamp !== timestamp);
-
-                    if (goal.history.length < originalHistoryLength) {
-                        const newSavedAmount = goal.savedAmount - transactionToDelete.amount;
+                    // Find corresponding history in savings goal
+                    const histIdx = goal.history.findIndex((h: SavingTransaction) => h.timestamp === timestamp && h.amount === amount);
+                    
+                    if (histIdx !== -1) {
+                        goal.history.splice(histIdx, 1); // Remove from history
+                        
+                        const newSavedAmount = goal.savedAmount - amount;
                         goal.savedAmount = newSavedAmount < 0 ? 0 : newSavedAmount;
                         goal.isCompleted = !goal.isInfinite && goal.targetAmount ? goal.savedAmount >= goal.targetAmount : false;
                     }
                 }
             }
             
-            newState.fundHistory = newState.fundHistory.filter((t: FundTransaction) => t.timestamp !== timestamp);
-            newState.dailyExpenses = newState.dailyExpenses.filter((t: Transaction) => t.timestamp !== timestamp);
-            newState.budgets.forEach((b: Budget) => { b.history = b.history.filter((h: Transaction) => h.timestamp !== timestamp); });
-            newState.archives.forEach((a: any) => { a.transactions = a.transactions.filter((t: any) => t.timestamp !== timestamp); });
+            // Perform Deletion based on Source
+            if (source === 'fund') {
+                removeOne(newState.fundHistory);
+            } else if (source === 'daily') {
+                removeOne(newState.dailyExpenses);
+            } else if (source === 'budget' && sourceId) {
+                const budget = newState.budgets.find((b: Budget) => b.id === sourceId);
+                if (budget) {
+                    removeOne(budget.history);
+                }
+            } else if (source === 'archive' && sourceId) {
+                const archive = newState.archives.find((a: any) => a.month === sourceId);
+                if (archive) {
+                    removeOne(archive.transactions);
+                }
+            }
             
             return newState;
         });
@@ -2714,10 +2763,12 @@ const App: React.FC = () => {
                             state={state} 
                             onBack={() => setCurrentPage('dashboard')} 
                             onEditAsset={() => setActiveModal('editAsset')}
-                            onDeleteTransaction={(timestamp) => openConfirm(
+                            // UPDATED: Using the new source-aware handler with specific identification
+                            onDeleteTransaction={(timestamp, source, sourceId, desc, amount) => openConfirm(
                                 'Yakin ingin menghapus transaksi ini secara PERMANEN dari seluruh data?',
-                                () => handleDeleteGlobalTransaction(timestamp)
+                                () => handleDeleteGlobalTransaction(timestamp, source, sourceId, desc, amount)
                             )}
+                            // UPDATED: Using the new source-aware handler
                             onEditTransaction={handleEditGlobalTransaction}
                             aiSearchResults={aiSearchResults}
                             isSearchingWithAI={isSearchingWithAI}

@@ -5,12 +5,20 @@ import { SparklesIcon, CalendarDaysIcon, ListBulletIcon, ChevronLeftIcon, Chevro
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
+// Extended interface for internal use in Reports to track source uniquely
+interface ReportTransaction extends GlobalTransaction {
+    _source: 'fund' | 'daily' | 'budget' | 'archive';
+    _sourceId?: number | string;
+    _uniqueId: string; // Added to prevent UI collisions
+}
+
 interface ReportsProps {
     state: AppState;
     onBack: () => void;
     onEditAsset: () => void;
-    onDeleteTransaction: (timestamp: number) => void;
-    onEditTransaction: (timestamp: number, desc: string, amount: number) => void;
+    // Updated signatures to accept specific data for precise identification
+    onDeleteTransaction: (timestamp: number, source: string, sourceId: number | string | undefined, desc: string, amount: number) => void;
+    onEditTransaction: (timestamp: number, newDesc: string, newAmount: number, source: string, sourceId: number | string | undefined, oldDesc: string, oldAmount: number) => void;
     aiSearchResults: GlobalTransaction[] | null;
     isSearchingWithAI: boolean;
     aiSearchError: string | null;
@@ -84,13 +92,13 @@ const SimpleSparkline = ({ data, color, width = 60, height = 20 }: { data: numbe
 
 const CalendarView: React.FC<{
     currentDate: Date;
-    transactionsByDate: { [date: string]: { income: number; expense: number; transactions: GlobalTransaction[] } };
+    transactionsByDate: { [date: string]: { income: number; expense: number; transactions: ReportTransaction[] } };
     selectedDate: string | null;
     onDateClick: (date: string) => void;
     onChangeMonth: (offset: number) => void;
-    onDeleteTransaction: (timestamp: number) => void;
-    onEditTransaction: (t: GlobalTransaction) => void;
-    TransactionItem: React.FC<{ t: GlobalTransaction; onDelete: (timestamp: number) => void }>;
+    onDeleteTransaction: (timestamp: number, source: string, sourceId: number | string | undefined, desc: string, amount: number) => void;
+    onEditTransaction: (timestamp: number, newDesc: string, newAmount: number, source: string, sourceId: number | string | undefined, oldDesc: string, oldAmount: number) => void;
+    TransactionItem: React.FC<{ t: ReportTransaction; onDelete: (t: ReportTransaction) => void; onSaveEdit: (t: ReportTransaction, newDesc: string, newAmount: number) => void }>;
 }> = ({ currentDate, transactionsByDate, selectedDate, onDateClick, onChangeMonth, onDeleteTransaction, onEditTransaction, TransactionItem }) => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
@@ -161,11 +169,12 @@ const CalendarView: React.FC<{
                         {transactionsByDate[selectedDate].transactions.length === 0 ? (
                             <p className="text-sm text-secondary-gray italic">Tidak ada transaksi.</p>
                         ) : (
-                            transactionsByDate[selectedDate].transactions.map((t, i) => (
+                            transactionsByDate[selectedDate].transactions.map((t) => (
                                 <TransactionItem 
-                                    key={i} 
+                                    key={t._uniqueId} 
                                     t={t} 
-                                    onDelete={onDeleteTransaction} 
+                                    onDelete={() => onDeleteTransaction(t.timestamp, t._source, t._sourceId, t.desc, t.amount)}
+                                    onSaveEdit={(t, newDesc, newAmount) => onEditTransaction(t.timestamp, newDesc, newAmount, t._source, t._sourceId, t.desc, t.amount)}
                                 />
                             ))
                         )}
@@ -188,8 +197,8 @@ const Reports: React.FC<ReportsProps> = ({
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
     const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
     
-    // Focus Mode State
-    const [expandedTxId, setExpandedTxId] = useState<number | null>(null);
+    // Focus Mode State - CHANGED TO STRING KEY TO SUPPORT UNIQUE ID
+    const [expandedTxKey, setExpandedTxKey] = useState<string | null>(null);
     
     const monthPickerRef = useRef<HTMLDivElement>(null);
 
@@ -233,23 +242,59 @@ const Reports: React.FC<ReportsProps> = ({
     }, [viewMode]);
 
 
-    const allTransactions = useMemo((): GlobalTransaction[] => {
-        let transactions: GlobalTransaction[] = [];
-        state.archives.forEach(archive => transactions.push(...archive.transactions));
-        transactions.push(...state.fundHistory);
-        transactions.push(...state.dailyExpenses.map(t => {
+    // --- FIXED: Aggregate with Source Data AND Unique IDs ---
+    const allTransactions = useMemo((): ReportTransaction[] => {
+        let transactions: ReportTransaction[] = [];
+        
+        // Helper to create unique ID
+        const createId = (source: string, id: string | number | undefined, ts: number, index: number) => 
+            `${source}-${id || 'na'}-${ts}-${index}`;
+
+        // 1. Archives
+        state.archives.forEach(archive => {
+            transactions.push(...archive.transactions.map((t, idx) => ({
+                ...t,
+                _source: 'archive' as const,
+                _sourceId: archive.month,
+                _uniqueId: createId('archive', archive.month, t.timestamp, idx)
+            })));
+        });
+
+        // 2. Fund History
+        transactions.push(...state.fundHistory.map((t, idx) => ({
+            ...t,
+            _source: 'fund' as const,
+            _uniqueId: createId('fund', 0, t.timestamp, idx)
+        })));
+
+        // 3. Daily Expenses
+        transactions.push(...state.dailyExpenses.map((t, idx) => {
             const overageBudget = t.sourceCategory ? state.budgets.find(b => b.name === t.sourceCategory) : null;
             return {
                 ...t,
                 type: 'remove',
                 category: t.sourceCategory || 'Harian',
                 icon: overageBudget?.icon,
-                color: overageBudget?.color
+                color: overageBudget?.color,
+                _source: 'daily' as const,
+                _uniqueId: createId('daily', 0, t.timestamp, idx)
             };
         }));
+
+        // 4. Budget History
         state.budgets.forEach(b => {
-            transactions.push(...b.history.map(h => ({...h, type: 'remove' as const, category: b.name, icon: b.icon, color: b.color })));
+            transactions.push(...b.history.map((h, idx) => ({
+                ...h, 
+                type: 'remove' as const, 
+                category: b.name, 
+                icon: b.icon, 
+                color: b.color,
+                _source: 'budget' as const,
+                _sourceId: b.id,
+                _uniqueId: createId('budget', b.id, h.timestamp, idx)
+            })));
         });
+
         return transactions.sort((a, b) => b.timestamp - a.timestamp);
     }, [state]);
 
@@ -282,7 +327,11 @@ const Reports: React.FC<ReportsProps> = ({
 
     const transactionsToDisplay = useMemo(() => {
         if (aiSearchResults !== null) {
-            return aiSearchResults;
+            // Cast back to ReportTransaction for display, assuming AI results are from current set
+            return aiSearchResults.map(aiT => {
+                const match = allTransactions.find(t => t.timestamp === aiT.timestamp && t.desc === aiT.desc && t.amount === aiT.amount);
+                return match || (aiT as ReportTransaction); 
+            });
         }
 
         let filtered = allTransactions.filter(t => {
@@ -320,7 +369,7 @@ const Reports: React.FC<ReportsProps> = ({
     }, [transactionsToDisplay]);
 
     const groupedTransactions = useMemo(() => {
-        const groups: { [date: string]: { transactions: GlobalTransaction[], dailyTotal: number } } = {};
+        const groups: { [date: string]: { transactions: ReportTransaction[], dailyTotal: number } } = {};
 
         transactionsToDisplay.forEach(t => {
             const date = new Date(t.timestamp).toLocaleDateString('fr-CA'); // YYYY-MM-DD
@@ -343,7 +392,7 @@ const Reports: React.FC<ReportsProps> = ({
     };
     
     const calendarTransactionsByDate = useMemo(() => {
-        const groups: { [date: string]: { income: number, expense: number, transactions: GlobalTransaction[] } } = {};
+        const groups: { [date: string]: { income: number, expense: number, transactions: ReportTransaction[] } } = {};
         allTransactions.forEach(t => {
             const date = new Date(t.timestamp).toLocaleDateString('fr-CA'); // YYYY-MM-DD
             if (!groups[date]) {
@@ -433,13 +482,13 @@ const Reports: React.FC<ReportsProps> = ({
 
     // --- FOCUS MODE ITEM ---
     const TimelineItem: React.FC<{
-        t: GlobalTransaction, 
-        isLast: boolean, 
+        t: ReportTransaction, 
+        isLast?: boolean, 
         isExpanded: boolean,
         onToggle: () => void,
-        onDelete: (ts: number) => void, 
-        onSaveEdit: (ts: number, desc: string, amount: number) => void
-    }> = ({t, isLast, isExpanded, onToggle, onDelete, onSaveEdit}) => {
+        onDelete: (t: ReportTransaction) => void, 
+        onSaveEdit: (t: ReportTransaction, desc: string, amount: number) => void
+    }> = ({t, isExpanded, onToggle, onDelete, onSaveEdit}) => {
          const color = t.color || (t.type === 'add' ? '#1ABC9C' : '#E74C3C');
          
          // Edit State
@@ -455,9 +504,13 @@ const Reports: React.FC<ReportsProps> = ({
 
          const handleSave = (e: React.MouseEvent) => {
              e.stopPropagation();
-             onSaveEdit(t.timestamp, editDesc, getRawNumber(editAmount));
+             onSaveEdit(t, editDesc, getRawNumber(editAmount));
              onToggle(); // Collapse after save
          };
+
+         const handleDelete = () => {
+             onDelete(t);
+         }
 
          return (
             <div className="relative pl-4 sm:pl-8 py-2 group">
@@ -507,7 +560,7 @@ const Reports: React.FC<ReportsProps> = ({
                                     <button onClick={onToggle} className="px-3 py-1.5 rounded text-sm text-gray-500 hover:bg-gray-100 font-medium">
                                         Batal
                                     </button>
-                                    <button onClick={() => onDelete(t.timestamp)} className="px-3 py-1.5 rounded text-sm text-danger-red hover:bg-red-50 font-medium flex items-center gap-1">
+                                    <button onClick={handleDelete} className="px-3 py-1.5 rounded text-sm text-danger-red hover:bg-red-50 font-medium flex items-center gap-1">
                                         <TrashIcon className="w-4 h-4" /> Hapus
                                     </button>
                                     <button onClick={handleSave} className="px-4 py-1.5 rounded bg-primary-navy text-white text-sm font-bold hover:bg-primary-navy-dark flex items-center gap-1">
@@ -712,13 +765,13 @@ const Reports: React.FC<ReportsProps> = ({
                                     <div className="ml-2 sm:ml-16 border-l-2 border-gray-200/60 space-y-1 pb-2">
                                         {group.transactions.map((t, idx) => (
                                             <TimelineItem 
-                                                key={t.timestamp} 
+                                                key={t._uniqueId} 
                                                 t={t} 
                                                 isLast={idx === group.transactions.length - 1}
-                                                isExpanded={expandedTxId === t.timestamp}
-                                                onToggle={() => setExpandedTxId(prev => prev === t.timestamp ? null : t.timestamp)}
-                                                onDelete={onDeleteTransaction}
-                                                onSaveEdit={onEditTransaction}
+                                                isExpanded={expandedTxKey === t._uniqueId}
+                                                onToggle={() => setExpandedTxKey(prev => prev === t._uniqueId ? null : t._uniqueId)}
+                                                onDelete={() => onDeleteTransaction(t.timestamp, t._source, t._sourceId, t.desc, t.amount)}
+                                                onSaveEdit={(t, newDesc, newAmount) => onEditTransaction(t.timestamp, newDesc, newAmount, t._source, t._sourceId, t.desc, t.amount)}
                                             />
                                         ))}
                                     </div>
@@ -763,15 +816,15 @@ const Reports: React.FC<ReportsProps> = ({
                        onDateClick={(date) => setSelectedDate(prev => prev === date ? null : date)}
                        onChangeMonth={changeMonth}
                        onDeleteTransaction={onDeleteTransaction}
-                       onEditTransaction={(t) => onEditTransaction(t.timestamp, t.desc, t.amount)} 
-                       TransactionItem={({t, onDelete}) => (
+                       onEditTransaction={onEditTransaction} 
+                       TransactionItem={({t, onDelete, onSaveEdit}) => (
                            <TimelineItem 
                                 t={t} 
                                 isLast={false} 
-                                isExpanded={expandedTxId === t.timestamp}
-                                onToggle={() => setExpandedTxId(prev => prev === t.timestamp ? null : t.timestamp)}
+                                isExpanded={expandedTxKey === t._uniqueId}
+                                onToggle={() => setExpandedTxKey(prev => prev === t._uniqueId ? null : t._uniqueId)}
                                 onDelete={onDelete} 
-                                onSaveEdit={onEditTransaction}
+                                onSaveEdit={onSaveEdit}
                            />
                        )}
                    />
