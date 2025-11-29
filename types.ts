@@ -53,6 +53,7 @@ export interface SavingsGoal {
   history: SavingTransaction[];
   createdAt: number;
   isCompleted: boolean;
+  visualType?: 'plant' | 'pet'; // NEW: Determines if it grows a plant or evolves a pet
 }
 
 export interface WishlistItem {
@@ -114,7 +115,7 @@ export interface ShopItem {
     name: string;
     description: string;
     price: number;
-    type: 'theme' | 'title' | 'frame' | 'persona' | 'banner' | 'special';
+    type: 'theme' | 'title' | 'frame' | 'persona' | 'banner' | 'egg' | 'seed' | 'special';
     value: string; // CSS class, ID, or config value
     icon: string;
 }

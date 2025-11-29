@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
-import type { AppState, Budget, Transaction } from '../types';
-import { LightbulbIcon, ArrowPathIcon, PlusCircleIcon, BudgetIcon, LockClosedIcon, ListBulletIcon, SparklesIcon, ChevronRightIcon } from './Icons';
+import type { AppState, Budget, Transaction, Subscription } from '../types';
+import { LightbulbIcon, ArrowPathIcon, PlusCircleIcon, BudgetIcon, LockClosedIcon, ListBulletIcon, SparklesIcon, ChevronRightIcon, ArrowDownTrayIcon, BellIcon } from './Icons';
 import { CountUp, Skeleton, AISkeleton } from './UI';
 
 interface DashboardProps {
@@ -17,10 +17,17 @@ interface DashboardProps {
   onAddBudget: () => void;
   onReorderBudgets: (reorderedBudgets: Budget[]) => void;
   onSetBudgetPermanence: (budgetId: number, isTemporary: boolean) => void;
-  onOpenBatchInput: () => void;
+  onAddIncome: () => void;
+  onPaySubscription: (subId: number) => void;
+  onGoToProfile: () => void;
 }
 
-const formatCurrency = (amount: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
+const formatCurrency = (amount: number) => {
+    if (amount >= 100000000000) { // If > 11 digits (100 Billion)
+        return amount.toExponential(2).replace('+', '');
+    }
+    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
+};
 
 const formatMarkdown = (text: string) => {
     return text
@@ -36,6 +43,99 @@ const formatMarkdown = (text: string) => {
         });
 };
 
+// Helper: Calculate Next Due Date (Same logic as Subscriptions.tsx)
+const getNextBillDate = (firstBillDate: string, cycle: 'monthly' | 'yearly') => {
+    const start = new Date(firstBillDate);
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    
+    let nextDate = new Date(start);
+
+    if (cycle === 'monthly') {
+        nextDate.setFullYear(currentYear);
+        nextDate.setMonth(currentMonth);
+        
+        const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+        if (start.getDate() > daysInMonth) {
+            nextDate.setDate(daysInMonth);
+        } else {
+            nextDate.setDate(start.getDate());
+        }
+
+        // If passed, move to next month
+        if (nextDate < new Date(new Date().setHours(0,0,0,0))) {
+             nextDate.setMonth(nextDate.getMonth() + 1);
+        }
+    } else {
+        nextDate.setFullYear(currentYear);
+        if (nextDate < new Date(new Date().setHours(0,0,0,0))) {
+            nextDate.setFullYear(nextDate.getFullYear() + 1);
+        }
+    }
+    return nextDate;
+};
+
+const UpcomingBillsCard: React.FC<{
+    subscriptions: Subscription[];
+    onPay: (id: number) => void;
+}> = ({ subscriptions, onPay }) => {
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const sevenDaysLater = new Date(today);
+    sevenDaysLater.setDate(today.getDate() + 7);
+
+    const upcomingBills = subscriptions
+        .filter(sub => sub.isActive)
+        .map(sub => ({ ...sub, nextDate: getNextBillDate(sub.firstBillDate, sub.cycle) }))
+        .filter(sub => sub.nextDate >= today && sub.nextDate <= sevenDaysLater)
+        .sort((a, b) => a.nextDate.getTime() - b.nextDate.getTime());
+
+    if (upcomingBills.length === 0) return null;
+
+    return (
+        <section className="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl p-4 mb-6 shadow-sm border border-indigo-100 animate-fade-in-down">
+            <div className="flex items-center gap-2 mb-3 text-indigo-800">
+                <BellIcon className="w-5 h-5 animate-bounce-slow" />
+                <h3 className="font-bold text-sm">
+                    {upcomingBills.length > 1 ? `${upcomingBills.length} Tagihan Minggu Ini` : 'Tagihan Segera Hadir'}
+                </h3>
+            </div>
+            <div className="space-y-2">
+                {upcomingBills.map(bill => {
+                    const daysLeft = Math.ceil((bill.nextDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                    const dayLabel = daysLeft === 0 ? 'HARI INI' : daysLeft === 1 ? 'Besok' : `${daysLeft} hari lagi`;
+                    const labelColor = daysLeft <= 1 ? 'text-red-600 bg-red-50' : 'text-indigo-600 bg-white';
+
+                    return (
+                        <div key={bill.id} className="bg-white p-3 rounded-lg shadow-sm flex items-center justify-between border border-indigo-50">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-primary-navy">
+                                    <BudgetIcon icon={bill.icon} className="w-4 h-4" />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-bold text-dark-text leading-none">{bill.name}</p>
+                                    <span className={`text-[10px] font-bold uppercase mt-1 inline-block px-1.5 py-0.5 rounded ${labelColor}`}>
+                                        {dayLabel}
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-1">
+                                <span className="text-xs font-bold text-dark-text">{formatCurrency(bill.price)}</span>
+                                <button 
+                                    onClick={() => onPay(bill.id)}
+                                    className="text-[10px] bg-primary-navy text-white px-2 py-1 rounded hover:bg-primary-navy-dark transition-colors font-bold"
+                                >
+                                    Bayar
+                                </button>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </section>
+    );
+};
 
 const OverviewCard: React.FC<{
     monthlyIncome: number;
@@ -45,8 +145,8 @@ const OverviewCard: React.FC<{
     totalDailySpentToday: number;
     onUseDailyBudget: () => void;
     onViewDailyHistory: () => void;
-    onOpenBatchInput: () => void;
-}> = ({ monthlyIncome, totalUsedOverall, totalRemaining, currentAvailableFunds, totalDailySpentToday, onUseDailyBudget, onViewDailyHistory, onOpenBatchInput }) => {
+    onAddIncome: () => void;
+}> = ({ monthlyIncome, totalUsedOverall, totalRemaining, currentAvailableFunds, totalDailySpentToday, onUseDailyBudget, onViewDailyHistory, onAddIncome }) => {
     const remainingDays = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate() - new Date().getDate() + 1;
     const dailyBudgetMax = remainingDays > 0 ? currentAvailableFunds / remainingDays : currentAvailableFunds;
     const dailyBudgetRemaining = dailyBudgetMax - totalDailySpentToday;
@@ -95,9 +195,9 @@ const OverviewCard: React.FC<{
                          <PlusCircleIcon className="w-5 h-5" />
                         <span>Catat</span>
                     </button>
-                     <button onClick={onOpenBatchInput} className="w-full bg-white border-2 border-accent-teal text-accent-teal font-bold py-3 px-4 rounded-lg hover:bg-teal-50 transition-colors shadow flex items-center justify-center gap-2">
-                        <ListBulletIcon className="w-5 h-5" />
-                        <span>Sekaligus</span>
+                     <button onClick={onAddIncome} className="w-full bg-white border-2 border-accent-teal text-accent-teal font-bold py-3 px-4 rounded-lg hover:bg-teal-50 transition-colors shadow flex items-center justify-center gap-2">
+                        <ArrowDownTrayIcon className="w-5 h-5" />
+                        <span>Pemasukan</span>
                     </button>
                 </div>
             </div>
@@ -385,53 +485,45 @@ const Dashboard: React.FC<DashboardProps> = (props) => {
     };
 
     // Parallax styles calculation
-    const headerScale = 1 - (scrollProgress * 0.3); // 1 -> 0.7
-    const headerOpacity = 1 - scrollProgress;
-    const headerY = scrollProgress * 10;
-    const bgOpacity = Math.min(0.9, scrollProgress);
+    const headerScale = 1 - (scrollProgress * 0.3); // 1 -> 0
 
     return (
-        <div 
-            id="dashboard-page" 
-            className="h-screen overflow-y-auto no-scrollbar relative bg-transparent pb-24" 
-            onScroll={handleScroll}
-            ref={scrollContainerRef}
-            onDragEnd={handleDragEnd}
-        >
-            {/* Sticky Parallax Header */}
-            <header 
-                className="sticky top-0 z-30 transition-all duration-300 px-4 py-3 border-b border-transparent"
-                style={{ 
-                    backgroundColor: `rgba(255, 255, 255, ${bgOpacity})`, 
-                    backdropFilter: scrollProgress > 0.2 ? 'blur(12px)' : 'none',
-                    borderColor: scrollProgress > 0.5 ? 'rgba(0,0,0,0.05)' : 'transparent'
-                }}
-            >
-                <div className="flex flex-col items-center justify-center transition-all duration-300 h-14 relative overflow-hidden">
-                    {/* Large Title (Morphs) */}
-                    <h1 
-                        className="font-bold text-primary-navy absolute transition-transform duration-300 origin-center"
-                        style={{ 
-                            transform: `scale(${headerScale}) translateY(${headerY}px)`,
-                            fontSize: scrollProgress > 0.8 ? '1.25rem' : '1.875rem', // text-xl vs text-3xl
-                            top: scrollProgress > 0.8 ? '8px' : '4px'
-                        }}
-                    >
-                        Dashboard
-                    </h1>
-                    
-                    {/* Date (Fades Out) */}
-                    <p 
-                        className="text-secondary-gray text-sm absolute top-10 transition-opacity duration-300"
-                        style={{ opacity: headerOpacity }}
-                    >
-                        {new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                    </p>
-                </div>
-            </header>
+        <div ref={scrollContainerRef} onScroll={handleScroll} className="h-full overflow-y-auto bg-gray-50 no-scrollbar relative">
+            
+            {/* Header Background with Parallax */}
+            <div 
+                className="absolute top-0 left-0 right-0 bg-primary-navy h-64 rounded-b-[3rem] z-0 origin-top"
+                style={{ transform: `scaleY(${headerScale})` }}
+            />
 
-            <div className="px-4">
-                <OverviewCard
+            <div className="relative z-10 px-4 pt-6 pb-24">
+                {/* Header Content */}
+                <div className="flex justify-between items-center text-white mb-6">
+                    <div>
+                        <p className="text-blue-200 text-sm">Selamat Datang,</p>
+                        <h1 className="text-2xl font-bold">{state.userProfile.name}</h1>
+                    </div>
+                    {/* Assuming onEditBudget is reused or we want a profile link, but here following layout logic */}
+                    <div 
+                        onClick={props.onGoToProfile} 
+                        className="bg-white/10 p-2 rounded-full backdrop-blur-sm border border-white/20 cursor-pointer hover:bg-white/20 transition-colors"
+                    >
+                         {state.userProfile.avatar ? (
+                            <img src={state.userProfile.avatar} alt="Profile" className="w-10 h-10 rounded-full object-cover" />
+                         ) : (
+                            <div className="w-10 h-10 bg-indigo-300 rounded-full flex items-center justify-center text-primary-navy font-bold">
+                                {state.userProfile.name.charAt(0)}
+                            </div>
+                         )}
+                    </div>
+                </div>
+
+                <UpcomingBillsCard 
+                    subscriptions={state.subscriptions} 
+                    onPay={props.onPaySubscription} 
+                />
+
+                <OverviewCard 
                     monthlyIncome={monthlyIncome}
                     totalUsedOverall={totalUsedOverall}
                     totalRemaining={totalRemaining}
@@ -439,61 +531,63 @@ const Dashboard: React.FC<DashboardProps> = (props) => {
                     totalDailySpentToday={totalDailySpentToday}
                     onUseDailyBudget={props.onUseDailyBudget}
                     onViewDailyHistory={props.onViewDailyHistory}
-                    onOpenBatchInput={props.onOpenBatchInput}
+                    onAddIncome={props.onAddIncome}
                 />
-                
+
                 <AIInsightCard 
-                    insight={props.aiInsight}
-                    isLoading={props.isFetchingInsight}
-                    onRefresh={props.onRefreshInsight}
+                    insight={props.aiInsight} 
+                    isLoading={props.isFetchingInsight} 
+                    onRefresh={props.onRefreshInsight} 
                     isVisible={showInsight}
                     onToggle={handleToggleInsight}
                 />
 
-                <section className="space-y-8">
-                    {/* Fixed Budgets Section */}
-                    <div 
-                        onDragOver={(e) => { e.preventDefault(); setDragOverZone('fixed'); }}
-                        onDragLeave={() => setDragOverZone(null)}
-                        onDrop={() => handleDropOnZone('fixed')}
-                        className={`p-4 rounded-xl transition-colors duration-300 ${dragOverZone === 'fixed' ? 'bg-blue-100/80 backdrop-blur-sm' : ''}`}
-                    >
-                        <h2 className="text-2xl font-bold text-primary-navy mb-4">Anggaran Tetap</h2>
-                        <div className="grid md:grid-cols-2 gap-6">
-                            {renderBudgetList(fixedBudgets)}
-                        </div>
+                {/* Fixed Budgets Section */}
+                <div 
+                    className={`mb-6 transition-all duration-300 rounded-xl p-2 border-2 border-dashed ${dragOverZone === 'fixed' ? 'border-primary-navy bg-blue-50' : 'border-transparent'}`}
+                    onDragOver={(e) => { e.preventDefault(); setDragOverZone('fixed'); }}
+                    onDrop={() => handleDropOnZone('fixed')}
+                    onDragLeave={() => setDragOverZone(null)}
+                >
+                    <div className="flex justify-between items-center mb-3 px-2">
+                        <h3 className="font-bold text-lg text-primary-navy flex items-center gap-2">
+                            <LockClosedIcon className="w-5 h-5" /> Pos Anggaran Tetap
+                        </h3>
+                        <button onClick={props.onAddBudget} className="text-sm text-accent-teal font-bold hover:underline">+ Tambah</button>
                     </div>
                     
-                    {/* Temporary Budgets Section */}
-                    <div 
-                        onDragOver={(e) => { e.preventDefault(); setDragOverZone('temporary'); }}
-                        onDragLeave={() => setDragOverZone(null)}
-                        onDrop={() => handleDropOnZone('temporary')}
-                        className={`p-4 rounded-xl transition-colors duration-300 border-2 border-dashed ${dragOverZone === 'temporary' ? 'bg-green-100/80 backdrop-blur-sm border-accent-teal' : 'border-secondary-gray/30'}`}
-                    >
-                        <h2 className="text-2xl font-bold text-primary-navy mb-2">Anggaran Sementara (Bulan Ini Saja)</h2>
-                        <p className="text-sm text-secondary-gray mb-4">Seret pos dari atas ke sini untuk menjadikannya sementara. Anggaran di sini akan otomatis diarsipkan di akhir bulan.</p>
-                        <div className="grid md:grid-cols-2 gap-6">
-                            {temporaryBudgets.length === 0 ? (
-                                 <div className="md:col-span-2 text-center text-secondary-gray py-6">
-                                    <p>Belum ada anggaran sementara.</p>
-                                </div>
-                            ) : (
-                                renderBudgetList(temporaryBudgets)
-                            )}
-                        </div>
+                    <div className="space-y-3">
+                        {fixedBudgets.length === 0 ? (
+                            <div className="text-center py-8 bg-white rounded-xl border border-gray-100 text-secondary-gray text-sm">
+                                Belum ada pos anggaran tetap.
+                            </div>
+                        ) : (
+                            renderBudgetList(fixedBudgets)
+                        )}
                     </div>
+                </div>
 
-                     <div className="mt-6 pb-8">
-                        <button 
-                            onClick={props.onAddBudget} 
-                            className="w-full flex items-center justify-center gap-2 bg-white/80 backdrop-blur-sm border-2 border-dashed border-secondary-gray text-secondary-gray font-bold py-3 px-4 rounded-lg hover:bg-white hover:text-dark-text hover:border-dark-text transition-colors"
-                        >
-                            <PlusCircleIcon className="w-6 h-6" />
-                            <span>Tambah Pos Anggaran Baru</span>
-                        </button>
+                {/* Temporary Budgets Section */}
+                <div 
+                    className={`mb-6 transition-all duration-300 rounded-xl p-2 border-2 border-dashed ${dragOverZone === 'temporary' ? 'border-primary-navy bg-blue-50' : 'border-transparent'}`}
+                    onDragOver={(e) => { e.preventDefault(); setDragOverZone('temporary'); }}
+                    onDrop={() => handleDropOnZone('temporary')}
+                    onDragLeave={() => setDragOverZone(null)}
+                >
+                    <h3 className="font-bold text-lg text-primary-navy mb-3 px-2 flex items-center gap-2">
+                        <ListBulletIcon className="w-5 h-5" /> Pos Sementara
+                    </h3>
+                    <div className="space-y-3">
+                        {temporaryBudgets.length === 0 ? (
+                            <div className="text-center py-4 bg-white/50 rounded-xl border border-gray-100 text-secondary-gray text-xs italic">
+                                Tidak ada pos sementara.
+                            </div>
+                        ) : (
+                            renderBudgetList(temporaryBudgets)
+                        )}
                     </div>
-                </section>
+                </div>
+
             </div>
         </div>
     );

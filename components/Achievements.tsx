@@ -1,14 +1,14 @@
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import type { Achievement, AppState } from '../types';
-import { BudgetIcon, LockClosedIcon, ClockIcon, TrophyIcon, FireIcon, CalendarDaysIcon, CheckCircleIcon, SparklesIcon, ArrowPathIcon, ShieldCheckIcon, RocketLaunchIcon, HeartIcon, ArchiveBoxIcon } from './Icons';
+import { BudgetIcon, LockClosedIcon, ClockIcon, TrophyIcon, FireIcon, CalendarDaysIcon, SparklesIcon, RocketLaunchIcon, ArchiveBoxIcon, CheckCircleIcon } from './Icons';
 
 interface AchievementsProps {
     state: AppState;
     allAchievements: Achievement[];
     unlockedAchievements: { [id: string]: number };
     achievementData?: AppState['achievementData'];
-    totalPoints: number;
+    totalPoints: number; // Still kept but mainly for stats, not level card
     userLevel: {
         level: string;
         currentLevelPoints: number;
@@ -18,11 +18,7 @@ interface AchievementsProps {
 
 const achievementCategories = ['Dasar', 'Kebiasaan Baik', 'Master Anggaran', 'Tantangan', 'Eksplorasi'];
 
-// --- ICONS & UI HELPERS ---
-const StarIconFilled: React.FC<{ className?: string }> = ({ className }) => (
-    <svg className={className} fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
-);
-
+// --- UI HELPERS ---
 const ProgressBar: React.FC<{ current: number; target: number, className?: string, colorClass?: string }> = ({ current, target, className, colorClass = 'bg-accent-teal' }) => {
     const percentage = target > 0 ? (current / target) * 100 : 0;
     return (
@@ -31,24 +27,6 @@ const ProgressBar: React.FC<{ current: number; target: number, className?: strin
         </div>
     );
 };
-
-const QuestItem: React.FC<{ label: string; isCompleted: boolean; points: number; subtext?: string }> = ({ label, isCompleted, points, subtext }) => (
-    <div className={`flex items-center justify-between p-2 rounded-lg border mb-2 transition-all ${isCompleted ? 'bg-green-50 border-green-200' : 'bg-white border-gray-100 opacity-80'}`}>
-        <div className="flex items-center gap-3 overflow-hidden">
-            <div className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center border ${isCompleted ? 'bg-green-500 border-green-500' : 'border-gray-300'}`}>
-                {isCompleted && <CheckCircleIcon className="w-3.5 h-3.5 text-white" />}
-            </div>
-            <div className="min-w-0">
-                <span className={`block text-sm font-medium truncate ${isCompleted ? 'text-green-800' : 'text-secondary-gray'}`}>{label}</span>
-                {subtext && <span className="block text-[10px] text-gray-400">{subtext}</span>}
-            </div>
-        </div>
-        <div className="flex items-center gap-1">
-            <span className="text-xs font-bold text-indigo-600 flex-shrink-0">+{points}</span>
-            <SparklesIcon className="w-3 h-3 text-indigo-400" />
-        </div>
-    </div>
-);
 
 // --- GEM FILTER COMPONENT ---
 const GemFilter: React.FC<{ activeCategory: string, onSelect: (cat: string) => void }> = ({ activeCategory, onSelect }) => {
@@ -304,7 +282,7 @@ const AchievementDetailModal: React.FC<{
     );
 }
 
-// --- HALL OF FAME COMPONENT (Suggestion 5) ---
+// --- HALL OF FAME COMPONENT ---
 const HallOfFameModal: React.FC<{
     unlockedAchievements: { [id: string]: number };
     allAchievements: Achievement[];
@@ -372,81 +350,12 @@ const HallOfFameModal: React.FC<{
     );
 };
 
-const FlyingParticles: React.FC<{ trigger: number, targetRef: React.RefObject<HTMLDivElement> }> = ({ trigger, targetRef }) => {
-    const [particles, setParticles] = useState<{id: number, x: number, y: number, tx: number, ty: number}[]>([]);
-    
-    useEffect(() => {
-        if (trigger === 0 || !targetRef.current) return;
-
-        const rect = targetRef.current.getBoundingClientRect();
-        const targetX = rect.left + rect.width / 2;
-        const targetY = rect.top + rect.height / 2;
-        
-        const newParticles = Array.from({ length: 12 }).map((_, i) => ({
-            id: Date.now() + i,
-            x: window.innerWidth / 2 + (Math.random() * 100 - 50), 
-            y: window.innerHeight / 2 + (Math.random() * 100 - 50),
-            tx: targetX,
-            ty: targetY
-        }));
-
-        setParticles(newParticles);
-
-        const timer = setTimeout(() => {
-            setParticles([]);
-        }, 1000); 
-
-        return () => clearTimeout(timer);
-    }, [trigger]);
-
-    if (particles.length === 0) return null;
-
-    return (
-        <div className="fixed inset-0 pointer-events-none z-[200]">
-            {particles.map((p, i) => (
-                <div
-                    key={p.id}
-                    className="absolute w-3 h-3 bg-yellow-400 rounded-full shadow-lg"
-                    style={{
-                        left: 0,
-                        top: 0,
-                        transform: `translate(${p.x}px, ${p.y}px)`,
-                        animation: `flyToTarget 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards`,
-                        animationDelay: `${i * 0.05}s`,
-                        // @ts-ignore 
-                        '--tx': `${p.tx - p.x}px`,
-                        '--ty': `${p.ty - p.y}px`
-                    }}
-                />
-            ))}
-            <style>{`
-                @keyframes flyToTarget {
-                    0% { opacity: 1; transform: translate(var(--start-x), var(--start-y)) scale(1); }
-                    80% { opacity: 1; }
-                    100% { opacity: 0; transform: translate(calc(var(--tx) + 0px), calc(var(--ty) + 0px)) scale(0.2); }
-                }
-            `}</style>
-        </div>
-    );
-};
-
-function usePrevious(value: number) {
-  const ref = useRef<number>(0);
-  useEffect(() => {
-    ref.current = value;
-  });
-  return ref.current;
-}
-
-const Achievements: React.FC<AchievementsProps> = ({ state, allAchievements, unlockedAchievements, achievementData, totalPoints, userLevel }) => {
+const Achievements: React.FC<AchievementsProps> = ({ state, allAchievements, unlockedAchievements, achievementData }) => {
     const [activeCategory, setActiveCategory] = useState(achievementCategories[0]);
     const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
     const [showHallOfFame, setShowHallOfFame] = useState(false);
     
-    const mustikaBadgeRef = useRef<HTMLDivElement>(null);
-    
-    // --- LOGIC FOR TIERED STACKING (SUGGESTION 2) ---
-    // This processes the filtered list to group achievements by 'streakKey'
+    // --- LOGIC FOR TIERED STACKING ---
     const stackedAchievements = useMemo(() => {
         // 1. Filter by current category first
         const categoryAchievements = allAchievements.filter(ach => ach.category === activeCategory);
@@ -497,273 +406,15 @@ const Achievements: React.FC<AchievementsProps> = ({ state, allAchievements, unl
 
     }, [allAchievements, activeCategory, unlockedAchievements]);
 
-
-    // --- QUEST LOGIC ---
-    const questStatus = useMemo(() => {
-        const todayStr = new Date().toLocaleDateString('fr-CA');
-        const now = Date.now();
-        const oneDay = 24 * 60 * 60 * 1000;
-        
-        const isToday = (ts: number) => new Date(ts).toLocaleDateString('fr-CA') === todayStr;
-        const isThisWeek = (ts: number) => (now - ts) < (7 * oneDay);
-
-        // --- DAILY QUESTS ---
-        const dailyQuests = [
-            {
-                label: "Login & Cek Aplikasi",
-                points: 5,
-                completed: true 
-            },
-            {
-                label: "Catat 1 Transaksi",
-                points: 10,
-                completed: state.dailyExpenses.some(t => isToday(t.timestamp)) || state.fundHistory.some(t => isToday(t.timestamp)) || state.budgets.some(b => b.history.some(h => isToday(h.timestamp)))
-            },
-            {
-                label: "Si Hemat (Harian < 50rb)",
-                points: 15,
-                completed: state.dailyExpenses.filter(t => isToday(t.timestamp)).reduce((sum, t) => sum + t.amount, 0) < 50000
-            },
-            {
-                label: "Isi Celengan",
-                points: 20,
-                completed: state.savingsGoals.some(g => g.history.some(h => isToday(h.timestamp)))
-            },
-            {
-                label: "Cek Wishlist",
-                points: 10,
-                completed: state.wishlist.length > 0 
-            }
-        ];
-
-        // --- WEEKLY CALCS ---
-        const uniqueTransactionDays = new Set();
-        state.dailyExpenses.forEach(t => { if(isThisWeek(t.timestamp)) uniqueTransactionDays.add(new Date(t.timestamp).toDateString()) });
-        state.fundHistory.forEach(t => { if(isThisWeek(t.timestamp)) uniqueTransactionDays.add(new Date(t.timestamp).toDateString()) });
-        state.budgets.forEach(b => b.history.forEach(t => { if(isThisWeek(t.timestamp)) uniqueTransactionDays.add(new Date(t.timestamp).toDateString()) }));
-        const activeDaysCount = uniqueTransactionDays.size;
-
-        const savingsCount = state.savingsGoals.reduce((count, g) => count + g.history.filter(h => isThisWeek(h.timestamp)).length, 0);
-        const activeBudgetsCount = state.budgets.filter(b => b.history.some(h => isThisWeek(h.timestamp))).length;
-        const addedWishlist = state.wishlist.some(w => isThisWeek(w.createdAt));
-
-        const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-        const monthlyIncome = state.fundHistory
-            .filter(t => t.type === 'add' && t.timestamp >= startOfMonth.getTime())
-            .reduce((sum, t) => sum + t.amount, 0);
-        
-        const weeklyExpense = 
-            state.dailyExpenses.filter(t => isThisWeek(t.timestamp)).reduce((s, t) => s + t.amount, 0) +
-            state.fundHistory.filter(t => t.type === 'remove' && isThisWeek(t.timestamp)).reduce((s, t) => s + t.amount, 0) +
-            state.budgets.reduce((s, b) => s + b.history.filter(h => isThisWeek(h.timestamp)).reduce((bs, h) => bs + h.amount, 0), 0);
-        
-        const isFinancePositive = monthlyIncome > 0 && weeklyExpense < (monthlyIncome * 0.25);
-
-        const weeklyQuests = [
-            {
-                label: "4 Hari Catat Transaksi",
-                points: 30,
-                completed: activeDaysCount >= 4,
-                subtext: `${activeDaysCount}/4 hari`
-            },
-            {
-                label: "3x Isi Celengan",
-                points: 40,
-                completed: savingsCount >= 3,
-                subtext: `${savingsCount}/3 kali`
-            },
-            {
-                label: "Tambah Wishlist Baru",
-                points: 20,
-                completed: addedWishlist
-            },
-            {
-                label: "Isi 4 Pos Anggaran",
-                points: 25,
-                completed: activeBudgetsCount >= 4,
-                subtext: `${activeBudgetsCount}/4 pos`
-            },
-            {
-                label: "Pengeluaran < 25% Pemasukan",
-                points: 50,
-                completed: isFinancePositive,
-                subtext: "Minggu ini vs Bulan ini"
-            }
-        ];
-
-        const dailyCompletedCount = dailyQuests.filter(q => q.completed).length;
-        const dailyBonusUnlocked = dailyCompletedCount >= 3;
-        const dailyBonusPoints = dailyBonusUnlocked ? 50 : 0;
-        const currentDailyPoints = dailyQuests.reduce((sum, q) => q.completed ? sum + q.points : sum, 0);
-
-        const weeklyCompletedCount = weeklyQuests.filter(q => q.completed).length;
-        const weeklyBonusUnlocked = weeklyCompletedCount >= 5;
-        const weeklyBonusPoints = weeklyBonusUnlocked ? 150 : 0;
-        const currentWeeklyPoints = weeklyQuests.reduce((sum, q) => q.completed ? sum + q.points : sum, 0);
-
-        return {
-            daily: dailyQuests,
-            dailyProgress: dailyCompletedCount,
-            dailyBonusUnlocked,
-            dailyTotalPoints: currentDailyPoints + dailyBonusPoints,
-            weekly: weeklyQuests,
-            weeklyProgress: weeklyCompletedCount,
-            weeklyBonusUnlocked,
-            weeklyTotalPoints: currentWeeklyPoints + weeklyBonusPoints
-        };
-
-    }, [state, achievementData]);
-
-    const grandTotalPoints = totalPoints + questStatus.dailyTotalPoints + questStatus.weeklyTotalPoints;
-    
-    const prevPoints = usePrevious(grandTotalPoints);
-    const [particleTrigger, setParticleTrigger] = useState(0);
-
-    useEffect(() => {
-        if (grandTotalPoints > prevPoints && prevPoints !== 0) {
-            setParticleTrigger(Date.now());
-        }
-    }, [grandTotalPoints, prevPoints]);
-
-    const levelInfo = (() => {
-        const rankTitles = [
-            "Pemula Finansial", "Pelajar Hemat", "Perencana Cerdas", "Pengelola Aset", 
-            "Juragan Strategi", "Investor Ulung", "Master Anggaran", "Sultan Muda", 
-            "Taipan Global", "Legenda Abadi"
-        ];
-        const levelNumber = Math.floor(Math.sqrt(grandTotalPoints / 50)) + 1;
-        const rankIndex = Math.min(rankTitles.length - 1, Math.floor((levelNumber - 1) / 5));
-        const currentTitle = rankTitles[rankIndex];
-        const currentStart = 50 * Math.pow(levelNumber - 1, 2);
-        const nextTarget = 50 * Math.pow(levelNumber, 2);
-
-        return { level: currentTitle, levelNumber: levelNumber, currentStart: currentStart, nextTarget: nextTarget };
-    })();
-
-    const levelProgressCurrent = grandTotalPoints - levelInfo.currentStart;
-    const levelProgressTarget = levelInfo.nextTarget - levelInfo.currentStart;
-
     return (
         <main className="p-4 pb-24 animate-fade-in">
-            <h1 className="text-3xl font-bold text-primary-navy text-center mb-6">Pusat Misi & Lencana</h1>
+            <h1 className="text-3xl font-bold text-primary-navy text-center mb-6">Galeri Lencana</h1>
             
-            {/* Particle System */}
-            <FlyingParticles trigger={particleTrigger} targetRef={mustikaBadgeRef} />
-
-            {/* --- LEVEL CARD --- */}
-            <section className="bg-white rounded-2xl shadow-lg p-5 mb-8 relative overflow-hidden border border-gray-100">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-100 rounded-full filter blur-3xl opacity-50 -translate-y-1/2 translate-x-1/2"></div>
-                <div className="relative z-10">
-                    <div className="flex justify-between items-start mb-2">
-                        <div>
-                            <p className="text-xs font-bold text-secondary-gray uppercase tracking-wider mb-1">Level Kamu</p>
-                            <div className="flex flex-col">
-                                <h2 className="text-4xl font-extrabold text-primary-navy leading-none tracking-tight">
-                                    LV {levelInfo.levelNumber}
-                                </h2>
-                                <span className="text-sm font-bold text-accent-teal mt-1">{levelInfo.level}</span>
-                            </div>
-                        </div>
-                        <div className="flex flex-col items-end">
-                            {/* MUSTIKA CURRENCY DISPLAY WITH REF */}
-                            <div ref={mustikaBadgeRef} className="flex items-center gap-2 bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-100 shadow-sm mb-1 z-20 relative">
-                                <div className="bg-indigo-500 rounded-full p-1 shadow-inner">
-                                    <SparklesIcon className="w-3 h-3 text-white" />
-                                </div>
-                                <span className="font-bold text-indigo-800 text-sm">{grandTotalPoints} Mustika</span>
-                            </div>
-                            <span className="text-[10px] text-secondary-gray font-medium">Total XP: {grandTotalPoints}</span>
-                        </div>
-                    </div>
-                    
-                    <div className="mt-4">
-                        <div className="flex justify-between text-xs font-bold text-secondary-gray mb-1">
-                            <span>{levelInfo.currentStart} XP</span>
-                            <span>Target: {levelInfo.nextTarget} XP</span>
-                        </div>
-                        <ProgressBar 
-                            current={levelProgressCurrent} 
-                            target={levelProgressTarget} 
-                            className="h-4 border border-gray-100" 
-                            colorClass="bg-gradient-to-r from-yellow-400 to-orange-500 shadow-[0_0_10px_rgba(251,191,36,0.6)]"
-                        />
-                        <div className="text-center mt-2">
-                            <p className="text-[10px] text-secondary-gray font-medium bg-gray-100 inline-block px-2 py-0.5 rounded-full">
-                                Kurang {levelInfo.nextTarget - grandTotalPoints} XP lagi untuk naik level
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            {/* --- QUEST BOARD --- */}
-            <div className="grid md:grid-cols-2 gap-6 mb-8">
-                {/* DAILY QUESTS */}
-                <section className="bg-white rounded-xl shadow-md border border-orange-100 overflow-hidden">
-                    <div className="bg-orange-50 p-4 border-b border-orange-100 flex justify-between items-center">
-                        <div className="flex items-center gap-2">
-                            <FireIcon className="w-5 h-5 text-orange-500" />
-                            <h3 className="font-bold text-orange-800">Misi Harian</h3>
-                        </div>
-                        <div className="text-xs font-bold bg-white px-2 py-1 rounded text-orange-600 border border-orange-200 shadow-sm">
-                            {questStatus.dailyProgress}/5 Selesai
-                        </div>
-                    </div>
-                    <div className="p-4">
-                        <p className="text-xs text-secondary-gray mb-3">Selesaikan minimal 3 misi untuk bonus poin!</p>
-                        <div className="space-y-1">
-                            {questStatus.daily.map((q, i) => (
-                                <QuestItem key={i} label={q.label} isCompleted={q.completed} points={q.points} />
-                            ))}
-                        </div>
-                        
-                        {/* Daily Bonus Status */}
-                        <div className={`mt-4 p-3 rounded-lg flex items-center justify-between ${questStatus.dailyBonusUnlocked ? 'bg-gradient-to-r from-orange-400 to-red-400 text-white shadow-lg' : 'bg-gray-100 text-gray-400'}`}>
-                            <div className="flex items-center gap-2">
-                                <SparklesIcon className="w-5 h-5" />
-                                <span className="text-sm font-bold">Bonus Harian</span>
-                            </div>
-                            <span className="text-sm font-bold">{questStatus.dailyBonusUnlocked ? '+50 Mustika' : 'Terkunci'}</span>
-                        </div>
-                    </div>
-                </section>
-
-                {/* WEEKLY QUESTS */}
-                <section className="bg-white rounded-xl shadow-md border border-indigo-100 overflow-hidden">
-                    <div className="bg-indigo-50 p-4 border-b border-indigo-100 flex justify-between items-center">
-                        <div className="flex items-center gap-2">
-                            <StarIconFilled className="w-5 h-5 text-indigo-500" />
-                            <h3 className="font-bold text-indigo-800">Misi Mingguan</h3>
-                        </div>
-                        <div className="text-xs font-bold bg-white px-2 py-1 rounded text-indigo-600 border border-indigo-200 shadow-sm">
-                            {questStatus.weeklyProgress}/5 Selesai
-                        </div>
-                    </div>
-                    <div className="p-4">
-                        <p className="text-xs text-secondary-gray mb-3">Sapu bersih semua misi untuk Jackpot poin!</p>
-                        <div className="space-y-1">
-                            {questStatus.weekly.map((q, i) => (
-                                <QuestItem key={i} label={q.label} isCompleted={q.completed} points={q.points} subtext={q.subtext} />
-                            ))}
-                        </div>
-
-                        {/* Weekly Bonus Status */}
-                        <div className={`mt-4 p-3 rounded-lg flex items-center justify-between ${questStatus.weeklyBonusUnlocked ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg' : 'bg-gray-100 text-gray-400'}`}>
-                            <div className="flex items-center gap-2">
-                                <TrophyIcon className="w-5 h-5" />
-                                <span className="text-sm font-bold">Jackpot Mingguan</span>
-                            </div>
-                            <span className="text-sm font-bold">{questStatus.weeklyBonusUnlocked ? '+150 Mustika' : 'Terkunci'}</span>
-                        </div>
-                    </div>
-                </section>
-            </div>
-
             {/* --- ACHIEVEMENT SECTION --- */}
             <div className="flex justify-between items-center mb-4 px-2 border-l-4 border-primary-navy pl-3">
-                <h2 className="text-xl font-bold text-primary-navy">Koleksi Lencana</h2>
+                <h2 className="text-xl font-bold text-primary-navy">Koleksi</h2>
                 
-                {/* HALL OF FAME BUTTON (SUGGESTION 5) */}
+                {/* HALL OF FAME BUTTON */}
                 <button 
                     onClick={() => setShowHallOfFame(true)}
                     className="flex items-center gap-2 bg-white border border-gray-200 text-secondary-gray hover:text-primary-navy hover:border-primary-navy px-3 py-1.5 rounded-full text-xs font-bold transition-colors shadow-sm"
@@ -814,7 +465,7 @@ const Achievements: React.FC<AchievementsProps> = ({ state, allAchievements, unl
                 />
             )}
 
-            {/* HALL OF FAME MODAL (SUGGESTION 5) */}
+            {/* HALL OF FAME MODAL */}
             {showHallOfFame && (
                 <HallOfFameModal 
                     unlockedAchievements={unlockedAchievements}

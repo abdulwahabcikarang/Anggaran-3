@@ -192,7 +192,6 @@ export const ShoppingBagIcon: React.FC<{ className?: string }> = ({ className })
     </svg>
 );
 
-// --- NEW ICONS FOR SUBSCRIPTIONS ---
 export const BellIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
@@ -205,7 +204,6 @@ export const CreditCardIcon: React.FC<{ className?: string }> = ({ className }) 
     </svg>
 );
 
-// --- NEW ICONS FOR MARKET ---
 export const ArrowTrendingUpIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
@@ -218,7 +216,6 @@ export const ArrowTrendingDownIcon: React.FC<{ className?: string }> = ({ classN
     </svg>
 );
 
-// --- USER PROFILE ICONS ---
 export const UserIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
@@ -231,8 +228,6 @@ export const PencilSquareIcon: React.FC<{ className?: string }> = ({ className }
     </svg>
 );
 
-
-// --- CATEGORY ICONS ---
 export const ShoppingCartIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c.51 0 .962-.343 1.087-.835l1.823-6.841a1.125 1.125 0 00-.84-1.332H5.169L4.623 3.87M16.5 21a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm-9 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
@@ -263,7 +258,6 @@ export const GiftIcon: React.FC<{ className?: string }> = ({ className }) => (
        <path strokeLinecap="round" strokeLinejoin="round" d="M21 11.25v8.25a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 19.5v-8.25M12 4.875A2.625 2.625 0 1014.625 7.5H9.375A2.625 2.625 0 1012 4.875zM21 11.25H3v-3.75a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v3.75z" />
     </svg>
 );
-// --- NEW ICONS ---
 export const SunIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
@@ -286,7 +280,7 @@ export const RocketLaunchIcon: React.FC<{ className?: string }> = ({ className }
 );
 export const ScissorsIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M7.848 8.25l1.536 1.536m-1.536-1.536l-1.536 1.536m1.536-1.536L6.312 9.786m1.536-1.536L9.384 6.714m-1.536 1.536L6.312 6.714m3.072 1.536l1.536-1.536m-1.536 1.536l-1.536-1.536m1.536 1.536L7.848 9.786m1.536-1.536L10.92 8.25m-3.072 1.536l1.536 1.536m-1.536 1.536l1.536-1.536m1.536 1.536l1.536-1.536M6.312 15.75l1.536-1.536m-1.536 1.536l-1.536-1.536m1.536 1.536l1.536-1.536m-1.536-1.536l1.536-1.536m-1.536-1.536l1.536-1.536m1.536 1.536l1.536-1.536M9.384 17.286l-1.536-1.536m1.536 1.536l1.536-1.536m-1.536-1.536l-1.536-1.536m3.072 1.536l-1.536-1.536m1.536 1.536l1.536-1.536L10.92 14.25m-1.536 1.536l1.536 1.536m-1.536-1.536l1.536-1.536m-1.536-1.536l1.536-1.536M15.75 6.312l-1.536 1.536m1.536-1.536l1.536 1.536m-1.536-1.536l1.536 1.536m-1.536-1.536l1.536 1.536m-1.536-1.536l1.536 1.536M14.214 9.384l1.536-1.536m-1.536 1.536l-1.536-1.536m1.536 1.536l1.536 1.536m-1.536-1.536l1.536-1.536M12 9.75l1.5-1.5M12 9.75l-1.5-1.5M12 9.75v4.5M12 14.25l1.5 1.5M12 14.25l-1.5 1.5" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M7.848 8.25l1.536 1.536m-1.536-1.536l-1.536 1.536m1.536-1.536L6.312 9.786m1.536-1.536L9.384 6.714m-1.536 1.536L6.312 6.714m3.072 1.536l1.536-1.536m-1.536 1.536l-1.536-1.536m1.536 1.536L7.848 9.786m1.536-1.536L10.92 8.25m-3.072 1.536l1.536 1.536m-1.536 1.536l1.536-1.536m1.536 1.536l1.536-1.536M6.312 15.75l1.536-1.536m-1.536 1.536l-1.536-1.536m1.536 1.536l1.536-1.536m-1.536-1.536l1.536-1.536m1.536 1.536l1.536-1.536M9.384 17.286l-1.536-1.536m1.536 1.536l1.536-1.536m-1.536-1.536l-1.536-1.536m3.072 1.536l-1.536-1.536m1.536 1.536l1.536-1.536L10.92 14.25m-1.536 1.536l1.536 1.536m-1.536-1.536l1.536-1.536m-1.536-1.536l1.536 1.536M15.75 6.312l-1.536 1.536m1.536-1.536l1.536 1.536m-1.536-1.536l1.536 1.536m-1.536-1.536l1.536 1.536m-1.536-1.536l1.536 1.536M14.214 9.384l1.536-1.536m-1.536 1.536l-1.536-1.536m1.536 1.536l1.536 1.536m-1.536-1.536l1.536 1.536m-1.536-1.536l1.536 1.536M12 9.75l1.5-1.5M12 9.75l-1.5-1.5M12 9.75v4.5M12 14.25l1.5 1.5M12 14.25l-1.5 1.5" />
     </svg>
 );
 export const FireIcon: React.FC<{ className?: string }> = ({ className }) => (
@@ -315,6 +309,17 @@ export const StarIconFilled: React.FC<{ className?: string }> = ({ className }) 
     <svg className={className} fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
 );
 
+export const CalculatorIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 15.75V18m-7.5-6.75h.008v.008H8.25v-.008zm0 2.25h.008v.008H8.25V13.5zm0 2.25h.008v.008H8.25v-.008zm0 2.25h.008v.008H8.25V18zm2.498-6.75h.007v.008h-.007v-.008zm0 2.25h.007v.008h-.007V13.5zm0 2.25h.007v.008h-.007v-.008zm0 2.25h.007v.008h-.007V18zm2.504-6.75h.008v.008h-.008v-.008zm0 2.25h.008v.008h-.008V13.5zm0 2.25h.008v.008h-.008v-.008zm0 2.25h.008v.008h-.008V18m2.498-6.75h.008v.008h-.008v-.008zm0 2.25h.008v.008h-.008V13.5zM8.25 6h7.5a2.25 2.25 0 012.25 2.25v12a2.25 2.25 0 01-2.25 2.25h-7.5a2.25 2.25 0 01-2.25-2.25v-12A2.25 2.25 0 018.25 6z" />
+    </svg>
+);
+
+export const ReceiptPercentIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 14.25l6-6m4.5-3.493V21.75l-3.75-1.5-3.75 1.5-3.75-1.5-3.75 1.5V4.757c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0c1.1.128 1.907 1.077 1.907 2.185zM9.75 9h.008v.008H9.75V9zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 4.5h.008v.008h-.008V13.5zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+    </svg>
+);
 
 const iconComponents: { [key: string]: React.FC<{ className?: string }> } = {
     ShoppingCartIcon,
@@ -362,12 +367,14 @@ const iconComponents: { [key: string]: React.FC<{ className?: string }> } = {
     UserIcon,
     PencilSquareIcon,
     PhotoIcon,
-    LayoutGridIcon
+    LayoutGridIcon,
+    CalculatorIcon,
+    ReceiptPercentIcon
 };
 
 export const BudgetIcon: React.FC<{ icon: string; className?: string }> = ({ icon, className }) => {
     const IconComponent = iconComponents[icon];
-    if (!IconComponent) return <div className={className} />; // Return an empty div if icon not found
+    if (!IconComponent) return <div className={className} />; 
     return <IconComponent className={className} />;
 };
 
