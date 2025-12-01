@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { GoogleGenAI, Type, Chat } from '@google/genai';
-import type { AppState, Budget, Transaction, FundTransaction, GlobalTransaction, ScannedItem, SavingsGoal, SavingTransaction, Achievement, Asset, WishlistItem, Subscription, ShopItem, CustomTheme } from './types';
+import type { AppState, Budget, Transaction, FundTransaction, GlobalTransaction, ScannedItem, SavingsGoal, SavingTransaction, Achievement, Asset, WishlistItem, Subscription, ShopItem, CustomTheme, ShoppingItem, DebtItem, DebtRecord } from './types';
 import Dashboard from './components/Dashboard';
 import Reports from './components/Reports';
 import Visualizations from './components/Visualizations';
@@ -18,7 +18,7 @@ import CustomApp from './components/CustomApp';
 import ShoppingList from './components/ShoppingList';
 import { allAchievements } from './data/achievements';
 import { availableIcons, availableColors } from './components/Icons';
-import { APP_VERSION, BACKUP_PREFIX, MAX_BACKUPS, THEMES, INITIAL_STATE } from './constants';
+import { APP_VERSION, BACKUP_PREFIX, MAX_BACKUPS, THEMES, INITIAL_STATE, VALID_REDEEM_CODES } from './constants';
 import { formatCurrency, formatNumberInput, getRawNumber, fileToBase64, getApiKey, getSystemInstruction } from './utils';
 import { Modal, ConfirmModal, DailyBackupToast, NotificationToast, AchievementUnlockedToast, BottomNavBar, MainMenu } from './components/AppUI';
 import { 
@@ -27,11 +27,394 @@ import {
     SavingsDetailModalContent, FundsManagementModalContent, HistoryModalContent, 
     InfoModalContent, EditAssetModalContent, SettingsModalContent, ArchivedBudgetsModalContent, 
     BackupRestoreModalContent, ScanResultModalContent, VoiceAssistantModalContent, 
-    SmartInputModalContent, AIAdviceModalContent, AIChatModalContent, AddWishlistModalContent 
+    SmartInputModalContent, AIAdviceModalContent, AIChatModalContent, AddWishlistModalContent, RedeemModalContent, DebtManagerModalContent, DailyBonusModalContent
 } from './components/AppModals';
 
 type Page = 'dashboard' | 'reports' | 'visualizations' | 'savings' | 'achievements' | 'missions' | 'personalBest' | 'netWorth' | 'wishlist' | 'subscriptions' | 'profile' | 'shop' | 'customApp' | 'shoppingList';
-type ModalType = 'input' | 'funds' | 'addBudget' | 'history' | 'info' | 'menu' | 'editAsset' | 'confirm' | 'scanResult' | 'aiAdvice' | 'smartInput' | 'aiChat' | 'voiceAssistant' | 'voiceResult' | 'addSavingsGoal' | 'addSavings' | 'withdrawSavings' | 'savingsDetail' | 'settings' | 'archivedBudgets' | 'backupRestore' | 'asset' | 'batchInput' | 'addWishlist';
+type ModalType = 'input' | 'funds' | 'addBudget' | 'history' | 'info' | 'menu' | 'editAsset' | 'confirm' | 'scanResult' | 'aiAdvice' | 'smartInput' | 'aiChat' | 'voiceAssistant' | 'voiceResult' | 'addSavingsGoal' | 'addSavings' | 'withdrawSavings' | 'savingsDetail' | 'settings' | 'archivedBudgets' | 'backupRestore' | 'asset' | 'batchInput' | 'addWishlist' | 'redeem' | 'debt' | 'dailyBonus';
+
+// --- LIVING BACKGROUND COMPONENT ---
+const LivingBackground: React.FC<{ percentage: number }> = ({ percentage }) => {
+    let mode: 'storm' | 'rain' | 'cloudy' | 'sunny' = 'sunny';
+    
+    if (percentage < 0) mode = 'storm';
+    else if (percentage < 30) mode = 'rain';
+    else if (percentage < 80) mode = 'cloudy';
+    else mode = 'sunny';
+
+    return (
+        <div className={`fixed inset-0 z-[-1] transition-all duration-1000 overflow-hidden pointer-events-none ${
+            mode === 'storm' ? 'bg-slate-900' :
+            mode === 'rain' ? 'bg-gray-800' :
+            mode === 'cloudy' ? 'bg-gradient-to-b from-blue-300 to-gray-200' :
+            'bg-gradient-to-b from-sky-400 to-blue-200'
+        }`}>
+            {/* SUNNY ELEMENTS */}
+            {mode === 'sunny' && (
+                <>
+                    <div className="absolute top-10 right-10 w-24 h-24 bg-yellow-300 rounded-full blur-xl opacity-80 animate-pulse"></div>
+                    <div className="absolute top-10 right-10 w-20 h-20 bg-yellow-100 rounded-full shadow-[0_0_40px_#fde047]"></div>
+                    <div className="absolute top-20 left-[-100px] opacity-40 animate-[float_20s_linear_infinite]">
+                        <div className="w-32 h-12 bg-white rounded-full blur-md"></div>
+                    </div>
+                    <div className="absolute top-40 left-[-150px] opacity-30 animate-[float_35s_linear_infinite_reverse]">
+                        <div className="w-48 h-16 bg-white rounded-full blur-md"></div>
+                    </div>
+                </>
+            )}
+
+            {/* RAIN ELEMENTS */}
+            {(mode === 'rain' || mode === 'storm') && (
+                <div className="absolute inset-0 opacity-30">
+                    {Array.from({ length: 50 }).map((_, i) => (
+                        <div 
+                            key={i}
+                            className="absolute bg-blue-200 w-[1px] h-10 animate-[rain_1s_linear_infinite]"
+                            style={{
+                                left: `${Math.random() * 100}%`,
+                                top: `-${Math.random() * 20}%`,
+                                animationDuration: `${0.5 + Math.random() * 0.5}s`,
+                                animationDelay: `${Math.random()}s`
+                            }}
+                        />
+                    ))}
+                </div>
+            )}
+
+            {/* CLOUDY ELEMENTS (Used in Rain/Storm too but darker) */}
+            {(mode !== 'sunny') && (
+                <>
+                    <div className={`absolute top-0 w-full h-64 bg-gradient-to-b ${mode === 'storm' ? 'from-black/60' : 'from-gray-600/40'} to-transparent`}></div>
+                    <div className="absolute top-20 right-[-100px] opacity-60 animate-[float_60s_linear_infinite]">
+                        <div className={`w-64 h-24 ${mode === 'storm' ? 'bg-slate-700' : 'bg-gray-100'} rounded-full blur-xl`}></div>
+                    </div>
+                </>
+            )}
+
+            {/* STORM ELEMENTS (LIGHTNING) */}
+            {mode === 'storm' && (
+                <>
+                    {/* Background Flash */}
+                    <div className="absolute inset-0 bg-white/20 animate-[lightning_4s_infinite] z-0"></div>
+                    {/* Dark overlay for atmosphere */}
+                    <div className="absolute top-0 left-0 w-full h-full bg-slate-900/60 z-0"></div>
+                    
+                    {/* Lightning Bolt 1 (SVG) */}
+                    <div className="absolute top-10 left-[20%] opacity-0 animate-[bolt_5s_infinite_1s] z-10">
+                         <svg width="100" height="200" viewBox="0 0 100 200" className="drop-shadow-[0_0_20px_rgba(255,255,0,0.8)]" style={{ transform: 'rotate(-10deg)' }}>
+                            <path d="M60 0 L0 90 L40 90 L20 200 L90 70 L50 70 L80 0 Z" fill="#fef08a" />
+                         </svg>
+                    </div>
+                    {/* Lightning Bolt 2 (SVG) - Delayed */}
+                    <div className="absolute top-20 right-[20%] opacity-0 animate-[bolt_7s_infinite_3s] z-10 scale-75">
+                         <svg width="100" height="200" viewBox="0 0 100 200" className="drop-shadow-[0_0_20px_rgba(255,255,0,0.8)]" style={{ transform: 'rotate(10deg)' }}>
+                            <path d="M60 0 L0 90 L40 90 L20 200 L90 70 L50 70 L80 0 Z" fill="#fef08a" />
+                         </svg>
+                    </div>
+                </>
+            )}
+
+            <style>{`
+                @keyframes float {
+                    0% { transform: translateX(0px); }
+                    50% { transform: translateX(50px); }
+                    100% { transform: translateX(0px); }
+                }
+                @keyframes rain {
+                    0% { transform: translateY(-100px); opacity: 0; }
+                    50% { opacity: 1; }
+                    100% { transform: translateY(100vh); opacity: 0; }
+                }
+                @keyframes lightning {
+                    0%, 90%, 100% { opacity: 0; }
+                    92% { opacity: 0.4; }
+                    93% { opacity: 0; }
+                    94% { opacity: 0.3; }
+                    96% { opacity: 0; }
+                }
+                @keyframes bolt {
+                    0%, 90%, 100% { opacity: 0; transform: scale(1); }
+                    92% { opacity: 1; transform: scale(1.1); }
+                    94% { opacity: 0; transform: scale(1); }
+                    96% { opacity: 1; transform: scale(1.1); }
+                }
+            `}</style>
+        </div>
+    );
+};
+
+// --- TIME BASED BACKGROUND COMPONENT ---
+const TimeBasedBackground: React.FC = () => {
+    const [time, setTime] = useState(new Date());
+
+    useEffect(() => {
+        const timer = setInterval(() => setTime(new Date()), 60000); // Update every minute
+        return () => clearInterval(timer);
+    }, []);
+
+    const hour = time.getHours();
+    let phase: 'morning' | 'noon' | 'afternoon' | 'night' = 'night';
+    
+    if (hour >= 5 && hour < 11) phase = 'morning';
+    else if (hour >= 11 && hour < 15) phase = 'noon';
+    else if (hour >= 15 && hour < 18) phase = 'afternoon';
+    else phase = 'night';
+
+    // Gradients
+    const gradients = {
+        morning: 'bg-gradient-to-b from-sky-200 to-white', // Sejuk
+        noon: 'bg-gradient-to-b from-blue-400 to-sky-300', // Cerah Terik
+        afternoon: 'bg-gradient-to-b from-orange-300 to-yellow-100', // Hangat
+        night: 'bg-gradient-to-b from-indigo-950 to-slate-900', // Malam
+    };
+
+    return (
+        <div className={`fixed inset-0 z-[-1] transition-all duration-1000 overflow-hidden pointer-events-none ${gradients[phase]}`}>
+            
+            {/* SUN / MOON Logic */}
+            <div className={`absolute transition-all duration-[2000ms] ease-in-out ${
+                phase === 'morning' ? 'top-10 left-[10%] w-24 h-24 bg-yellow-200 opacity-80 blur-xl' :
+                phase === 'noon' ? 'top-5 left-[50%] -translate-x-1/2 w-32 h-32 bg-yellow-400 opacity-100 shadow-[0_0_60px_#facc15]' :
+                phase === 'afternoon' ? 'top-20 right-[10%] w-28 h-28 bg-orange-400 opacity-90 blur-md' :
+                'top-10 right-[15%] w-20 h-20 bg-gray-100 opacity-100 shadow-[0_0_30px_rgba(255,255,255,0.5)]' // Moon
+            } rounded-full`}>
+                {/* Visual SVG for Sharpness */}
+                {phase !== 'night' ? (
+                    // Sun SVG
+                    <svg viewBox="0 0 100 100" className="w-full h-full animate-[spinSlow_60s_linear_infinite]">
+                        <circle cx="50" cy="50" r="30" fill={phase === 'afternoon' ? '#fb923c' : '#fde047'} />
+                        {/* Rays */}
+                        <g stroke={phase === 'afternoon' ? '#fb923c' : '#fde047'} strokeWidth="4">
+                            <line x1="50" y1="10" x2="50" y2="0" />
+                            <line x1="50" y1="90" x2="50" y2="100" />
+                            <line x1="10" y1="50" x2="0" y2="50" />
+                            <line x1="90" y1="50" x2="100" y2="50" />
+                            <line x1="22" y1="22" x2="15" y2="15" />
+                            <line x1="78" y1="78" x2="85" y2="85" />
+                            <line x1="22" y1="78" x2="15" y2="85" />
+                            <line x1="78" y1="22" x2="85" y2="15" />
+                        </g>
+                    </svg>
+                ) : (
+                    // Moon SVG (Crescent)
+                    <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-lg">
+                        <path d="M50 10 A40 40 0 1 0 50 90 A30 30 0 1 1 50 10" fill="#f1f5f9" />
+                    </svg>
+                )}
+            </div>
+
+            {/* ATMOSPHERE & CLOUDS */}
+            {phase === 'morning' && (
+                <div className="absolute top-20 right-[-50px] opacity-40 animate-[float_40s_linear_infinite]">
+                    <div className="w-48 h-16 bg-white rounded-full blur-xl"></div>
+                </div>
+            )}
+            {phase === 'noon' && (
+                <div className="absolute inset-0 bg-white/10 mix-blend-overlay"></div> // Glare
+            )}
+            {phase === 'afternoon' && (
+                <div className="absolute inset-0 bg-orange-500/10 mix-blend-overlay"></div> // Warmth
+            )}
+            {phase === 'night' && (
+                <>
+                    {/* Stars */}
+                    {Array.from({ length: 30 }).map((_, i) => (
+                        <div 
+                            key={i} 
+                            className="absolute bg-white rounded-full w-[2px] h-[2px] animate-pulse"
+                            style={{
+                                top: `${Math.random() * 60}%`,
+                                left: `${Math.random() * 100}%`,
+                                animationDelay: `${Math.random() * 3}s`
+                            }}
+                        />
+                    ))}
+                </>
+            )}
+
+            <style>{`
+                @keyframes spinSlow {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                }
+            `}</style>
+        </div>
+    );
+};
+
+// --- CYBERPUNK BATTERY BACKGROUND ---
+const CyberpunkBatteryBackground: React.FC<{ percentage: number }> = ({ percentage }) => {
+    let mode: 'high' | 'medium' | 'critical' = 'high';
+    
+    if (percentage < 20) mode = 'critical';
+    else if (percentage < 50) mode = 'medium';
+    else mode = 'high';
+
+    const overlayColor = mode === 'critical' ? 'rgba(220, 38, 38, 0.2)' : mode === 'medium' ? 'rgba(234, 179, 8, 0.1)' : 'rgba(16, 185, 129, 0.1)';
+    const gridColor = mode === 'critical' ? '#ef4444' : mode === 'medium' ? '#eab308' : '#10b981';
+
+    return (
+        <div className={`fixed inset-0 z-[-1] overflow-hidden pointer-events-none bg-slate-950 transition-colors duration-700 ${mode === 'critical' ? 'animate-shake' : ''}`}>
+            {/* Grid Overlay */}
+            <div 
+                className="absolute inset-0"
+                style={{
+                    backgroundImage: `linear-gradient(${gridColor} 1px, transparent 1px), linear-gradient(90deg, ${gridColor} 1px, transparent 1px)`,
+                    backgroundSize: '40px 40px',
+                    opacity: 0.1,
+                    transform: 'perspective(500px) rotateX(60deg) translateY(-100px) scale(2)',
+                }}
+            ></div>
+
+            {/* Glowing Horizon */}
+            <div 
+                className="absolute bottom-0 left-0 w-full h-1/2 bg-gradient-to-t from-black to-transparent"
+                style={{ backgroundColor: overlayColor }}
+            ></div>
+
+            {/* Warning Text for Critical */}
+            {mode === 'critical' && (
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-red-500 font-black text-6xl opacity-10 animate-pulse tracking-widest whitespace-nowrap">
+                    LOW POWER
+                </div>
+            )}
+
+            {/* Glitch Overlay */}
+            {mode === 'critical' && (
+                <div className="absolute inset-0 bg-red-500/10 mix-blend-overlay animate-glitch"></div>
+            )}
+
+            <style>{`
+                @keyframes shake {
+                    0% { transform: translate(1px, 1px) rotate(0deg); }
+                    10% { transform: translate(-1px, -2px) rotate(-1deg); }
+                    20% { transform: translate(-3px, 0px) rotate(1deg); }
+                    30% { transform: translate(3px, 2px) rotate(0deg); }
+                    40% { transform: translate(1px, -1px) rotate(1deg); }
+                    50% { transform: translate(-1px, 2px) rotate(-1deg); }
+                    60% { transform: translate(-3px, 1px) rotate(0deg); }
+                    70% { transform: translate(3px, 1px) rotate(-1deg); }
+                    80% { transform: translate(-1px, -1px) rotate(1deg); }
+                    90% { transform: translate(1px, 2px) rotate(0deg); }
+                    100% { transform: translate(1px, -2px) rotate(-1deg); }
+                }
+                @keyframes glitch {
+                    0% { transform: translate(0); }
+                    20% { transform: translate(-2px, 2px); }
+                    40% { transform: translate(-2px, -2px); }
+                    60% { transform: translate(2px, 2px); }
+                    80% { transform: translate(2px, -2px); }
+                    100% { transform: translate(0); }
+                }
+            `}</style>
+        </div>
+    );
+};
+
+// --- THERMAL HEAT BACKGROUND ---
+const ThermalHeatBackground: React.FC<{ spendingStatus: 'frozen' | 'warm' | 'hot' }> = ({ spendingStatus }) => {
+    
+    // Background Gradients
+    const bgClass = spendingStatus === 'frozen' 
+        ? 'bg-gradient-to-b from-slate-900 via-cyan-900 to-blue-900' // Dark frozen look
+        : spendingStatus === 'warm' 
+            ? 'bg-gradient-to-b from-orange-100 to-yellow-50' 
+            : 'bg-gradient-to-b from-red-900 to-orange-900';
+
+    return (
+        <div className={`fixed inset-0 z-[-1] overflow-hidden pointer-events-none transition-colors duration-1000 ${bgClass}`}>
+            
+            {/* FROZEN PARTICLES (Snow/Ice) */}
+            {spendingStatus === 'frozen' && (
+                <>
+                    <div className="absolute inset-0 bg-blue-500/10 mix-blend-overlay"></div>
+                    {/* Generative Snow */}
+                    {Array.from({ length: 60 }).map((_, i) => (
+                        <div 
+                            key={i}
+                            className="absolute bg-white rounded-full opacity-80"
+                            style={{
+                                width: Math.random() * 3 + 2 + 'px',
+                                height: Math.random() * 3 + 2 + 'px',
+                                left: Math.random() * 100 + '%',
+                                top: -10 + '%',
+                                animation: `fall ${Math.random() * 5 + 5}s linear infinite`,
+                                animationDelay: `${Math.random() * 5}s`,
+                                filter: 'blur(1px)'
+                            }}
+                        />
+                    ))}
+                    {/* Frost Vignette */}
+                    <div className="absolute inset-0 shadow-[inset_0_0_150px_rgba(30,64,175,0.5)] pointer-events-none"></div>
+                    {/* Cold Fog */}
+                    <div className="absolute bottom-0 w-full h-1/3 bg-gradient-to-t from-white/10 to-transparent"></div>
+                </>
+            )}
+
+            {/* WARM PARTICLES (Steam) */}
+            {spendingStatus === 'warm' && (
+                <>
+                    {Array.from({ length: 15 }).map((_, i) => (
+                        <div 
+                            key={i}
+                            className="absolute bg-white rounded-full opacity-20 blur-xl animate-[rise_4s_ease-in-out_infinite]"
+                            style={{
+                                width: Math.random() * 40 + 20 + 'px',
+                                height: Math.random() * 40 + 20 + 'px',
+                                left: Math.random() * 100 + '%',
+                                bottom: -20 + '%',
+                                animationDuration: Math.random() * 3 + 4 + 's',
+                                animationDelay: Math.random() * 2 + 's'
+                            }}
+                        />
+                    ))}
+                </>
+            )}
+
+            {/* HOT PARTICLES (Embers & Heat) */}
+            {spendingStatus === 'hot' && (
+                <>
+                    <div className="absolute inset-0 bg-red-500/10 mix-blend-overlay animate-pulse"></div>
+                    {Array.from({ length: 40 }).map((_, i) => (
+                        <div 
+                            key={i}
+                            className="absolute bg-yellow-500 rounded-full shadow-[0_0_10px_#fbbf24] animate-[riseFast_2s_linear_infinite]"
+                            style={{
+                                width: Math.random() * 3 + 1 + 'px',
+                                height: Math.random() * 3 + 1 + 'px',
+                                left: Math.random() * 100 + '%',
+                                bottom: -10 + '%',
+                                opacity: Math.random(),
+                                animationDuration: Math.random() * 1 + 1 + 's',
+                                animationDelay: Math.random() + 's'
+                            }}
+                        />
+                    ))}
+                    {/* Heat Haze Simulation (Blur) */}
+                    <div className="absolute inset-0 backdrop-blur-[1px]"></div>
+                </>
+            )}
+
+            <style>{`
+                @keyframes fall {
+                    0% { transform: translateY(0) translateX(0); opacity: 0; }
+                    10% { opacity: 0.8; }
+                    50% { transform: translateY(50vh) translateX(20px); }
+                    100% { transform: translateY(110vh) translateX(-20px); opacity: 0; }
+                }
+                @keyframes rise {
+                    0% { transform: translateY(0) scale(1); opacity: 0; }
+                    20% { opacity: 0.3; }
+                    100% { transform: translateY(-80vh) scale(1.5); opacity: 0; }
+                }
+                @keyframes riseFast {
+                    0% { transform: translateY(0); opacity: 1; }
+                    100% { transform: translateY(-100vh); opacity: 0; }
+                }
+            `}</style>
+        </div>
+    );
+};
 
 const App: React.FC = () => {
     // State management
@@ -77,18 +460,148 @@ const App: React.FC = () => {
     const importFileInputRef = useRef<HTMLInputElement>(null);
     const scanFileInputRef = useRef<HTMLInputElement>(null);
 
+    // --- FINANCIAL HEALTH CALCULATION FOR THEME ---
+    const { monthlyIncome, totalRemaining, totalDailySpent } = useMemo(() => {
+        const monthlyIncome = state.fundHistory.filter(t => t.type === 'add').reduce((sum, t) => sum + t.amount, 0);
+        const totalDailySpent = state.dailyExpenses.reduce((sum, e) => sum + e.amount, 0);
+        const totalUsedOverall = totalDailySpent + 
+                                 state.fundHistory.filter(t => t.type === 'remove').reduce((sum, t) => sum + t.amount, 0) +
+                                 state.budgets.reduce((sum, b) => sum + b.history.reduce((s, h) => s + h.amount, 0), 0);
+        const totalRemaining = monthlyIncome - totalUsedOverall;
+        return { monthlyIncome, totalRemaining, totalDailySpent };
+    }, [state.fundHistory, state.budgets, state.dailyExpenses]);
+
+    const financialHealthPercentage = monthlyIncome > 0 ? (totalRemaining / monthlyIncome) * 100 : 0;
+    
+    // Calculate remaining daily budget proxy for Thermal Theme
+    const remainingDays = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate() - new Date().getDate() + 1;
+    // Simple estimation for daily limit logic
+    const dailyBudgetLimitEstimate = monthlyIncome > 0 ? (monthlyIncome * 0.5) / 30 : 50000; // Assume 50% of income is for daily or fallback 50k
+    
+    let thermalStatus: 'frozen' | 'warm' | 'hot' = 'frozen';
+    if (totalDailySpent === 0) thermalStatus = 'frozen';
+    else if (totalDailySpent <= dailyBudgetLimitEstimate) thermalStatus = 'warm';
+    else thermalStatus = 'hot';
+
     // Theme Effect
     useEffect(() => {
         const themeId = state.activeTheme || 'theme_default';
+        const root = document.documentElement;
+        
+        // --- LIVING MOOD LOGIC ---
+        if (themeId === 'theme_living_mood') {
+            root.style.setProperty('--app-background', 'transparent');
+            if (financialHealthPercentage < 0 || financialHealthPercentage < 30) { 
+                root.style.setProperty('--color-primary-navy', '255 255 255');
+                root.style.setProperty('--color-dark-text', '240 240 240');
+                root.style.setProperty('--color-secondary-gray', '200 200 200');
+                root.style.setProperty('--color-light-bg', '30 41 59'); 
+                root.style.setProperty('--color-white', '15 23 42'); 
+                root.style.setProperty('--color-gray-50', '30 41 59'); 
+                root.style.setProperty('--color-gray-100', '51 65 85');
+                root.style.setProperty('--color-gray-200', '71 85 105');
+            } else {
+                root.style.setProperty('--color-primary-navy', '44 62 80');
+                root.style.setProperty('--color-dark-text', '52 73 94');
+                root.style.setProperty('--color-secondary-gray', '100 116 139');
+                root.style.setProperty('--color-light-bg', '255 255 255');
+                root.style.setProperty('--color-white', '255 255 255');
+                root.style.setProperty('--color-gray-50', '255 255 255');
+                root.style.setProperty('--color-gray-100', '241 245 249');
+                root.style.setProperty('--color-gray-200', '226 232 240');
+            }
+            return;
+        }
+
+        // --- TIME DYNAMIC LOGIC ---
+        if (themeId === 'theme_dynamic_time') {
+            root.style.setProperty('--app-background', 'transparent');
+            const hour = new Date().getHours();
+            if (hour >= 18 || hour < 5) { // Night
+                root.style.setProperty('--color-primary-navy', '224 231 255');
+                root.style.setProperty('--color-dark-text', '241 245 249');
+                root.style.setProperty('--color-secondary-gray', '148 163 184');
+                root.style.setProperty('--color-light-bg', '15 23 42');
+                root.style.setProperty('--color-white', '2 6 23');
+                root.style.setProperty('--color-gray-50', '30 41 59'); 
+                root.style.setProperty('--color-gray-100', '51 65 85');
+                root.style.setProperty('--color-gray-200', '71 85 105');
+            } else { // Day
+                root.style.setProperty('--color-primary-navy', '30 58 138');
+                root.style.setProperty('--color-dark-text', '15 23 42');
+                root.style.setProperty('--color-secondary-gray', '71 85 105');
+                root.style.setProperty('--color-light-bg', '255 255 255');
+                root.style.setProperty('--color-white', '255 255 255');
+                root.style.setProperty('--color-gray-50', '248 250 252');
+                root.style.setProperty('--color-gray-100', '241 245 249');
+                root.style.setProperty('--color-gray-200', '226 232 240');
+            }
+            return;
+        }
+
+        // --- CYBERPUNK BATTERY LOGIC ---
+        if (themeId === 'theme_cyberpunk_battery') {
+            root.style.setProperty('--app-background', 'transparent');
+            // Always Dark Mode for Cyberpunk
+            root.style.setProperty('--color-primary-navy', '56 189 248'); // Sky-400 (Neon Cyan)
+            root.style.setProperty('--color-primary-navy-dark', '14 165 233');
+            root.style.setProperty('--color-accent-teal', '34 211 238'); // Cyan-400
+            root.style.setProperty('--color-accent-teal-dark', '6 182 212');
+            root.style.setProperty('--color-light-bg', '15 23 42'); // Slate-900
+            root.style.setProperty('--color-dark-text', '241 245 249'); // Slate-100
+            root.style.setProperty('--color-secondary-gray', '148 163 184');
+            root.style.setProperty('--color-white', '2 6 23'); // Slate-950
+            root.style.setProperty('--color-gray-50', '30 41 59'); 
+            root.style.setProperty('--color-gray-100', '51 65 85');
+            root.style.setProperty('--color-gray-200', '71 85 105');
+            return;
+        }
+
+        // --- THERMAL HEAT LOGIC ---
+        if (themeId === 'theme_thermal_heat') {
+            root.style.setProperty('--app-background', 'transparent');
+            if (thermalStatus === 'hot') {
+                // Dark red theme for HOT
+                root.style.setProperty('--color-primary-navy', '252 165 165'); // Red-300
+                root.style.setProperty('--color-dark-text', '254 242 242'); // Red-50
+                root.style.setProperty('--color-secondary-gray', '252 165 165');
+                root.style.setProperty('--color-light-bg', '69 10 10'); // Red-950
+                root.style.setProperty('--color-white', '127 29 29'); // Red-900
+                root.style.setProperty('--color-gray-50', '69 10 10'); 
+                root.style.setProperty('--color-gray-100', '127 29 29');
+                root.style.setProperty('--color-gray-200', '153 27 27');
+            } else if (thermalStatus === 'frozen') {
+                // Dark blue theme for FROZEN (Night/Cold)
+                root.style.setProperty('--color-primary-navy', '186 230 253'); // Sky-200
+                root.style.setProperty('--color-dark-text', '240 249 255'); // Sky-50
+                root.style.setProperty('--color-secondary-gray', '148 163 184'); // Slate-400
+                root.style.setProperty('--color-light-bg', '23 37 84'); // Blue-950
+                root.style.setProperty('--color-white', '30 58 138'); // Blue-900
+                root.style.setProperty('--color-gray-50', '23 37 84'); 
+                root.style.setProperty('--color-gray-100', '30 58 138');
+                root.style.setProperty('--color-gray-200', '59 130 246');
+            } else {
+                // Light/Standard theme for WARM
+                root.style.setProperty('--color-primary-navy', '44 62 80');
+                root.style.setProperty('--color-dark-text', '52 73 94');
+                root.style.setProperty('--color-secondary-gray', '100 116 139');
+                root.style.setProperty('--color-light-bg', '255 255 255');
+                root.style.setProperty('--color-white', '255 255 255');
+                root.style.setProperty('--color-gray-50', '255 255 255');
+                root.style.setProperty('--color-gray-100', '241 245 249');
+                root.style.setProperty('--color-gray-200', '226 232 240');
+            }
+            return;
+        }
+
         let themeConfig = THEMES[themeId];
         if (!themeConfig && state.customThemes) {
             const custom = state.customThemes.find(t => t.id === themeId);
             if (custom) themeConfig = custom.colors;
         }
         themeConfig = themeConfig || THEMES['theme_default'];
-        const root = document.documentElement;
         Object.entries(themeConfig).forEach(([key, value]) => root.style.setProperty(key, value));
-    }, [state.activeTheme, state.customThemes]);
+    }, [state.activeTheme, state.customThemes, financialHealthPercentage, thermalStatus]);
 
     useEffect(() => {
         const handleClick = (e: MouseEvent) => { lastClickPos.current = { x: e.clientX, y: e.clientY }; };
@@ -161,6 +674,8 @@ const App: React.FC = () => {
                 parsed.achievementData = { ...INITIAL_STATE.achievementData, ...parsed.achievementData };
                 parsed.wishlist = parsed.wishlist || [];
                 parsed.subscriptions = parsed.subscriptions || [];
+                parsed.shoppingList = parsed.shoppingList || []; 
+                parsed.debts = parsed.debts || []; 
                 parsed.userProfile = parsed.userProfile || { name: 'Pengguna' };
                 parsed.spentPoints = parsed.spentPoints || 0;
                 parsed.inventory = parsed.inventory || [];
@@ -169,6 +684,13 @@ const App: React.FC = () => {
                 const defaultBonus = INITIAL_STATE.bonusPoints || 0;
                 parsed.bonusPoints = currentBonus > 0 ? currentBonus : defaultBonus;
                 parsed.customThemes = parsed.customThemes || [];
+                parsed.redeemedCodes = parsed.redeemedCodes || [];
+                parsed.redeemedMustika = parsed.redeemedMustika || 0;
+                // Init new Daily Bonus fields
+                parsed.collectedSkins = parsed.collectedSkins || [];
+                parsed.lastDailyBonusClaim = parsed.lastDailyBonusClaim || null;
+                parsed.accumulatedXP = parsed.accumulatedXP || 0;
+                
                 loadedState = { ...INITIAL_STATE, ...parsed };
             } catch (error) { console.error("Failed to parse state", error); }
         }
@@ -249,22 +771,116 @@ const App: React.FC = () => {
 
     const currentAsset = useMemo(() => allTransactions.reduce((sum, t) => t.type === 'add' ? sum + t.amount : sum - t.amount, 0), [allTransactions]);
 
-    const { monthlyIncome, totalUsedOverall, totalRemaining, totalAllocated, unallocatedFunds, generalAndDailyExpenses, remainingUnallocated, totalDailySpent, currentAvailableFunds } = useMemo(() => {
-        const monthlyIncome = state.fundHistory.filter(t => t.type === 'add').reduce((sum, t) => sum + t.amount, 0);
+    const { totalUsedOverall, totalAllocated, unallocatedFunds, generalAndDailyExpenses, remainingUnallocated, currentAvailableFunds } = useMemo(() => {
         const totalAllocated = state.budgets.reduce((sum, b) => sum + b.totalBudget, 0);
         const totalUsedFromPosts = state.budgets.reduce((sum, b) => sum + b.history.reduce((s, h) => s + h.amount, 0), 0);
         const totalDailySpent = state.dailyExpenses.reduce((sum, e) => sum + e.amount, 0);
         const monthlyGeneralExpense = state.fundHistory.filter(t => t.type === 'remove').reduce((sum, t) => sum + t.amount, 0);
         const totalUsedOverall = monthlyGeneralExpense + totalUsedFromPosts + totalDailySpent;
-        const totalRemaining = monthlyIncome - totalUsedOverall;
         const unallocatedFunds = monthlyIncome - totalAllocated;
         const generalAndDailyExpenses = monthlyGeneralExpense + totalDailySpent;
         const currentAvailableFundsTheoretical = unallocatedFunds - generalAndDailyExpenses;
         const currentAvailableFunds = Math.min(currentAvailableFundsTheoretical, totalRemaining);
         const remainingUnallocated = currentAvailableFunds; 
-        return { monthlyIncome, totalUsedOverall, totalRemaining, totalAllocated, unallocatedFunds, generalAndDailyExpenses, remainingUnallocated, totalDailySpent, currentAvailableFunds };
-    }, [state.fundHistory, state.budgets, state.dailyExpenses]);
+        return { totalUsedOverall, totalAllocated, unallocatedFunds, generalAndDailyExpenses, remainingUnallocated, currentAvailableFunds };
+    }, [state.fundHistory, state.budgets, state.dailyExpenses, monthlyIncome, totalRemaining]);
     
+    // --- DEBT HANDLERS ---
+    const handleAddDebt = (item: Omit<DebtItem, 'id' | 'paid' | 'history' | 'isPaidOff' | 'createdAt'>, syncWallet: boolean) => {
+        const newDebt: DebtItem = {
+            id: Date.now(),
+            ...item,
+            paid: 0,
+            history: [],
+            isPaidOff: false,
+            createdAt: Date.now()
+        };
+
+        updateState(prev => {
+            const newState = { ...prev, debts: [newDebt, ...(prev.debts || [])] };
+            if (syncWallet) {
+                const type = item.type === 'borrowed' ? 'add' : 'remove';
+                const desc = item.type === 'borrowed' 
+                    ? `Pinjaman dari ${item.person}` 
+                    : `Pinjaman ke ${item.person}`;
+                
+                newState.fundHistory = [
+                    ...prev.fundHistory,
+                    { type, desc, amount: item.amount, timestamp: Date.now() }
+                ];
+            }
+            return newState;
+        });
+    };
+
+    const handleIncreaseDebt = (debtId: number, amount: number, note: string, syncWallet: boolean) => {
+        updateState(prev => {
+            let debtType: 'borrowed' | 'lent' = 'borrowed';
+            let personName = '';
+
+            const debts = prev.debts.map(d => {
+                if (d.id === debtId) {
+                    debtType = d.type;
+                    personName = d.person;
+                    return { ...d, amount: d.amount + amount };
+                }
+                return d;
+            });
+
+            let newState = { ...prev, debts };
+
+            if (syncWallet) {
+                const type = debtType === 'borrowed' ? 'add' : 'remove';
+                const desc = debtType === 'borrowed' 
+                    ? `Tambah Hutang: ${personName}` 
+                    : `Tambah Piutang: ${personName}`;
+                
+                newState.fundHistory = [
+                    ...prev.fundHistory,
+                    { type, desc, amount, timestamp: Date.now() }
+                ];
+            }
+            return newState;
+        });
+    };
+
+    const handleDebtTransaction = (debtId: number, amount: number, note: string, syncWallet: boolean) => {
+        updateState(prev => {
+            const debts = prev.debts.map(d => {
+                if (d.id === debtId) {
+                    const newPaid = d.paid + amount;
+                    const isPaidOff = newPaid >= d.amount;
+                    const history = [...d.history, { amount, timestamp: Date.now(), note }];
+                    return { ...d, paid: newPaid, isPaidOff, history };
+                }
+                return d;
+            });
+
+            let newState = { ...prev, debts };
+
+            if (syncWallet) {
+                const debt = prev.debts.find(d => d.id === debtId);
+                if (debt) {
+                    const type = debt.type === 'borrowed' ? 'remove' : 'add';
+                    const desc = debt.type === 'borrowed'
+                        ? `Bayar Hutang: ${debt.person}`
+                        : `Pelunasan: ${debt.person}`;
+                    
+                    newState.fundHistory = [
+                        ...prev.fundHistory,
+                        { type, desc, amount, timestamp: Date.now() }
+                    ];
+                }
+            }
+            return newState;
+        });
+    };
+
+    const handleDeleteDebt = (id: number) => {
+        updateState(prev => ({ ...prev, debts: prev.debts.filter(d => d.id !== id) }));
+    };
+
+    // --- OTHER HANDLERS ---
     const handleAddBudget = (name: string, amount: number, icon: string, color: string) => {
         updateState(prev => {
             const newBudget: Budget = { id: Date.now(), name, totalBudget: amount, history: [], icon, color, order: prev.budgets.filter(b => !b.isArchived && !b.isTemporary).length, isArchived: false, isTemporary: false };
@@ -485,7 +1101,7 @@ const App: React.FC = () => {
         }));
     };
 
-    const handleAddSavingsGoal = (name: string, isInfinite: boolean, targetAmount?: number, visualType?: 'plant' | 'pet') => {
+    const handleAddSavingsGoal = (name: string, isInfinite: boolean, targetAmount?: number, visualType?: 'plant' | 'pet', skinId?: string) => {
         const newGoal: SavingsGoal = {
             id: Date.now(),
             name,
@@ -495,7 +1111,8 @@ const App: React.FC = () => {
             history: [],
             createdAt: Date.now(),
             isCompleted: false,
-            visualType: visualType || 'plant' 
+            visualType: visualType || 'plant',
+            skinId: skinId || 'default'
         };
         updateState(prev => ({ ...prev, savingsGoals: [...prev.savingsGoals, newGoal] }));
         setActiveModal(null);
@@ -530,7 +1147,7 @@ const App: React.FC = () => {
             const newSavingsGoals = prev.savingsGoals.map(g => {
                 if (g.id === goalId) {
                     const newSavedAmount = g.savedAmount - amount;
-                    const newHistory: SavingTransaction = { amount: -amount, timestamp: transactionTimestamp };
+                    const newHistory: SavingTransaction = { amount, timestamp: transactionTimestamp };
                     return { ...g, savedAmount: newSavedAmount, history: [...g.history, newHistory], isCompleted: false };
                 }
                 return g;
@@ -564,15 +1181,21 @@ const App: React.FC = () => {
                     sourceCategory: 'Tabungan'
                 };
                 const newSavingsGoals = prev.savingsGoals.filter(g => g.id !== goalId);
+                
+                // Add to collection
+                const skinId = goal.skinId || (goal.visualType === 'pet' ? 'pet_default' : 'default');
+                const collectedSkins = prev.collectedSkins || [];
+                const newCollectedSkins = collectedSkins.includes(skinId) ? collectedSkins : [...collectedSkins, skinId];
 
                 return {
                     ...prev,
                     fundHistory: [...prev.fundHistory, releaseIncome],
                     dailyExpenses: [...prev.dailyExpenses, expense],
-                    savingsGoals: newSavingsGoals
+                    savingsGoals: newSavingsGoals,
+                    collectedSkins: newCollectedSkins
                 };
             });
-            setNotifications(prev => [...prev, `Selamat menikmati ${goal.name}! Transaksi tercatat.`]);
+            setNotifications(prev => [...prev, `Selamat menikmati ${goal.name}! Skin telah ditambahkan ke koleksi bonus.`]);
             setActiveModal(null);
         });
     };
@@ -701,17 +1324,79 @@ const App: React.FC = () => {
         return dailyPoints + weeklyPoints;
     };
     const calculateUserLevel = (totalPoints: number) => { const rankTitles = [ "Pemula Finansial", "Pelajar Hemat", "Perencana Cerdas", "Pengelola Aset", "Juragan Strategi", "Investor Ulung", "Master Anggaran", "Sultan Muda", "Taipan Global", "Legenda Abadi" ]; const levelNumber = Math.floor(Math.sqrt(totalPoints / 50)) + 1; const rankIndex = Math.min(rankTitles.length - 1, Math.floor((levelNumber - 1) / 5)); const currentTitle = rankTitles[rankIndex]; const currentStart = 50 * Math.pow(levelNumber - 1, 2); const nextTarget = 50 * Math.pow(levelNumber, 2); return { level: currentTitle, levelNumber: levelNumber, currentLevelPoints: currentStart, nextLevelPoints: nextTarget }; };
-    const unlockedAchIds = Object.keys(state.unlockedAchievements); const achievementPoints = allAchievements.filter(ach => unlockedAchIds.includes(ach.id)).reduce((sum, ach) => sum + (ach.points || 0), 0); const questPoints = calculateQuestPoints(state); const grandTotalPoints = achievementPoints + questPoints + (state.bonusPoints || 0); const availableShopPoints = grandTotalPoints - (state.spentPoints || 0); const levelInfo = calculateUserLevel(grandTotalPoints);
+    const unlockedAchIds = Object.keys(state.unlockedAchievements); const achievementPoints = allAchievements.filter(ach => unlockedAchIds.includes(ach.id)).reduce((sum, ach) => sum + (ach.points || 0), 0); const questPoints = calculateQuestPoints(state); 
+    // Redeemed Mustika adds to Purchasing Power BUT NOT Level XP
+    // Accumulated XP from daily bonus adds to LEVEL XP
+    const grandTotalPoints = achievementPoints + questPoints + (state.bonusPoints || 0) + (state.accumulatedXP || 0); // For Level
+    const availableShopPoints = grandTotalPoints + (state.redeemedMustika || 0) - (state.spentPoints || 0); // For Shopping
+    
+    const levelInfo = calculateUserLevel(grandTotalPoints);
     const handlePurchase = (item: ShopItem) => { if (availableShopPoints < item.price) { openConfirm(<>Mustika tidak cukup! Kamu butuh <strong>{item.price - availableShopPoints}</strong> Mustika lagi.</>, () => {}); return; } updateState(prev => { const newSpent = (prev.spentPoints || 0) + item.price; const newInventory = [...(prev.inventory || []), item.id]; return { ...prev, spentPoints: newSpent, inventory: newInventory }; }); setNotifications(prev => [...prev, `Berhasil membeli ${item.name}!`]); };
     const handleSpendPoints = (amount: number) => { updateState(prev => ({ ...prev, spentPoints: (prev.spentPoints || 0) + amount })); };
-    const handleEquip = (item: ShopItem) => { updateState(prev => { let newProfile = { ...prev.userProfile }; let newActiveTheme = prev.activeTheme; if (item.type === 'theme') { newActiveTheme = item.value; } else if (item.type === 'title') { newProfile.customTitle = item.value; } else if (item.type === 'frame') { newProfile.frameId = item.value; } else if (item.type === 'persona') { newProfile.activePersona = item.value; } else if (item.type === 'banner') { newProfile.activeBanner = item.value; } return { ...prev, userProfile: newProfile, activeTheme: newActiveTheme }; }); };
+    const handleEquip = (item: ShopItem) => { updateState(prev => { let newProfile = { ...prev.userProfile }; let newActiveTheme = prev.activeTheme; if (item.type === 'theme' || item.type === 'special') { newActiveTheme = item.value; } else if (item.type === 'title') { newProfile.customTitle = item.value; } else if (item.type === 'frame') { newProfile.frameId = item.value; } else if (item.type === 'persona') { newProfile.activePersona = item.value; } else if (item.type === 'banner') { newProfile.activeBanner = item.value; } return { ...prev, userProfile: newProfile, activeTheme: newActiveTheme }; }); };
     const handleAddCustomTheme = (theme: CustomTheme, price: number) => { if (availableShopPoints < price) { openConfirm(<>Mustika tidak cukup untuk membuat tema kustom.</>, () => {}); return; } updateState(prev => { const newSpent = (prev.spentPoints || 0) + price; const newThemes = [...(prev.customThemes || []), theme]; return { ...prev, spentPoints: newSpent, customThemes: newThemes, activeTheme: theme.id }; }); setNotifications(prev => [...prev, `Tema Kustom "${theme.name}" berhasil dibuat dan diterapkan!`]); };
+    
+    // --- REDEEM CODE HANDLER ---
+    const handleRedeemCode = (code: string) => {
+        const normalizedCode = code.toUpperCase().trim();
+        if (state.redeemedCodes && state.redeemedCodes.includes(normalizedCode)) {
+            openConfirm("Kode ini sudah pernah digunakan.", () => {});
+            return;
+        }
+        const reward = VALID_REDEEM_CODES[normalizedCode];
+        if (reward) {
+            updateState(prev => ({
+                ...prev,
+                redeemedCodes: [...(prev.redeemedCodes || []), normalizedCode],
+                redeemedMustika: (prev.redeemedMustika || 0) + reward
+            }));
+            setNotifications(prev => [...prev, `Berhasil! +${reward} Mustika ditambahkan.`]);
+            setActiveModal(null);
+        } else {
+            openConfirm("Kode tidak valid. Periksa kembali.", () => {});
+        }
+    };
+
+    // --- DAILY BONUS HANDLER ---
+    const handleClaimDailyBonus = (mustikaReward: number, xpReward: number) => {
+        updateState(prev => ({
+            ...prev,
+            redeemedMustika: (prev.redeemedMustika || 0) + mustikaReward,
+            accumulatedXP: (prev.accumulatedXP || 0) + xpReward,
+            lastDailyBonusClaim: new Date().toLocaleDateString('fr-CA')
+        }));
+        setNotifications(prev => [...prev, `Bonus Harian Diklaim! +${mustikaReward} Mustika, +${xpReward} XP`]);
+        setActiveModal(null);
+    };
+
+    // --- SHOPPING LIST HANDLERS ---
+    const handleAddShoppingItem = (item: ShoppingItem) => {
+        updateState(prev => ({ ...prev, shoppingList: [...prev.shoppingList, item] }));
+    };
+    const handleToggleShoppingItem = (id: number) => {
+        updateState(prev => ({ ...prev, shoppingList: prev.shoppingList.map(i => i.id === id ? { ...i, isChecked: !i.isChecked } : i) }));
+    };
+    const handleDeleteShoppingItem = (id: number) => {
+        updateState(prev => ({ ...prev, shoppingList: prev.shoppingList.filter(i => i.id !== id) }));
+    };
+    const handleUpdateShoppingItemEstimate = (id: number, val: number) => {
+        updateState(prev => ({ ...prev, shoppingList: prev.shoppingList.map(i => i.id === id ? { ...i, estimate: val } : i) }));
+    };
+    const handleClearShoppingList = () => {
+        openConfirm("Hapus semua daftar belanja?", () => {
+            updateState(prev => ({ ...prev, shoppingList: [] }));
+        });
+    };
+    const handleClearCheckedShoppingItems = () => {
+        updateState(prev => ({ ...prev, shoppingList: prev.shoppingList.filter(i => !i.isChecked) }));
+    };
+
     const renderPage = () => { switch (currentPage) { 
         case 'reports': return <Reports state={state} onBack={() => setCurrentPage('dashboard')} onEditAsset={() => setActiveModal('editAsset')} onDeleteTransaction={(timestamp, source, sourceId, desc, amount) => openConfirm('Yakin ingin menghapus transaksi ini secara PERMANEN dari seluruh data?', () => handleDeleteGlobalTransaction(timestamp, source, sourceId, desc, amount))} onEditTransaction={handleEditGlobalTransaction} aiSearchResults={aiSearchResults} isSearchingWithAI={isSearchingWithAI} aiSearchError={aiSearchError} onAiSearch={handleAiSearch} onClearAiSearch={handleClearAiSearch} />; 
         case 'visualizations': return <Visualizations state={state} onBack={() => setCurrentPage('dashboard')} onAnalyzeChart={handleAnalyzeChartData} activePersona={state.userProfile.activePersona} />; 
         case 'savings': return <Savings state={state} onOpenAddGoalModal={() => setActiveModal('addSavingsGoal')} onOpenAddSavingsModal={(goalId) => { setCurrentSavingsGoalId(goalId); setActiveModal('addSavings'); }} onOpenDetailModal={(goalId) => { setCurrentSavingsGoalId(goalId); setActiveModal('savingsDetail'); }} onOpenSavingsGoal={handleOpenSavingsGoal} />; 
         case 'achievements': return <Achievements state={state} allAchievements={allAchievements} unlockedAchievements={state.unlockedAchievements} achievementData={state.achievementData} totalPoints={achievementPoints} userLevel={levelInfo} />; 
-        case 'missions': return <Missions state={state} achievementData={state.achievementData} totalPoints={grandTotalPoints} />;
+        case 'missions': return <Missions state={state} achievementData={state.achievementData} totalPoints={grandTotalPoints} spendablePoints={availableShopPoints} />;
         case 'personalBest': return <PersonalBest state={state} />; 
         case 'netWorth': return <NetWorth state={state} currentCashAsset={currentAsset} onAddAsset={() => openAssetModal(null)} onEditAsset={(assetId) => openAssetModal(assetId)} onDeleteAsset={handleDeleteAsset} />; 
         case 'wishlist': return <Wishlist wishlist={state.wishlist || []} onAddWishlist={() => setActiveModal('addWishlist')} onFulfillWishlist={handleFulfillWishlist} onCancelWishlist={handleCancelWishlist} onDeleteWishlist={handleDeleteWishlist} onConvertToBudget={handleConvertWishlistToBudget} onConvertToSavings={handleConvertWishlistToSavings} onDelayToNextMonth={handleDelayWishlist} />; 
@@ -719,7 +1404,18 @@ const App: React.FC = () => {
         case 'profile': return <Profile state={state} onUpdateProfile={handleUpdateProfile} onBack={() => setCurrentPage('dashboard')} totalPoints={grandTotalPoints} totalBadges={unlockedAchIds.length} userLevel={levelInfo} />; 
         case 'shop': return <Shop state={state} availablePoints={availableShopPoints} onBack={() => setCurrentPage('dashboard')} onPurchase={handlePurchase} onEquip={handleEquip} onAddCustomTheme={handleAddCustomTheme} onSpendPoints={handleSpendPoints} />; 
         case 'customApp': return <CustomApp state={state} onBack={() => setCurrentPage('dashboard')} onEquip={handleEquip} />; 
-        case 'shoppingList': return <ShoppingList onBack={() => setCurrentPage('dashboard')} budgets={state.budgets.filter(b => !b.isArchived)} onAddTransaction={handleAddTransaction} />;
+        case 'shoppingList': return <ShoppingList 
+                onBack={() => setCurrentPage('dashboard')} 
+                budgets={state.budgets.filter(b => !b.isArchived)} 
+                onAddTransaction={handleAddTransaction} 
+                items={state.shoppingList}
+                onAddItem={handleAddShoppingItem}
+                onToggleItem={handleToggleShoppingItem}
+                onDeleteItem={handleDeleteShoppingItem}
+                onUpdateEstimate={handleUpdateShoppingItemEstimate}
+                onClearAll={handleClearShoppingList}
+                onClearChecked={handleClearShoppingList}
+            />;
         case 'dashboard': default: return <Dashboard state={state} onUseDailyBudget={openUseDailyBudget} onManageFunds={() => { setFundsModalTab('add'); setActiveModal('funds'); }} onUseBudget={openUseBudget} onEditBudget={openEditBudget} aiInsight={aiDashboardInsight} isFetchingInsight={isFetchingDashboardInsight} onRefreshInsight={handleFetchDashboardInsight} onViewDailyHistory={openDailyHistory} onAddBudget={() => setActiveModal('addBudget')} onReorderBudgets={handleReorderBudgets} onSetBudgetPermanence={handleSetBudgetPermanence} onAddIncome={() => { setFundsModalTab('add'); setActiveModal('funds'); }} onPaySubscription={handleInitiatePaySubscription} onGoToProfile={() => setCurrentPage('profile')} />; 
     } };
     const budgetForInputModal = state.budgets.find(b => b.id === currentBudgetId);
@@ -737,7 +1433,24 @@ const App: React.FC = () => {
     const openBatchInput = () => setActiveModal('batchInput');
 
     return (
-        <div className="container mx-auto max-w-3xl font-sans text-dark-text">
+        <div className="container mx-auto max-w-3xl font-sans text-dark-text relative">
+            {/* RENDER LIVING BACKGROUND ONLY IF THEME IS ACTIVE */}
+            {state.activeTheme === 'theme_living_mood' && (
+                <LivingBackground percentage={financialHealthPercentage} />
+            )}
+            {/* RENDER TIME BASED BACKGROUND IF ACTIVE */}
+            {state.activeTheme === 'theme_dynamic_time' && (
+                <TimeBasedBackground />
+            )}
+            {/* RENDER CYBERPUNK BACKGROUND IF ACTIVE */}
+            {state.activeTheme === 'theme_cyberpunk_battery' && (
+                <CyberpunkBatteryBackground percentage={financialHealthPercentage} />
+            )}
+            {/* RENDER THERMAL BACKGROUND IF ACTIVE */}
+            {state.activeTheme === 'theme_thermal_heat' && (
+                <ThermalHeatBackground spendingStatus={thermalStatus} />
+            )}
+
             <input type="file" ref={importFileInputRef} accept=".json" className="hidden" onChange={handleImportData} />
             <input type="file" ref={scanFileInputRef} accept="image/*" className="hidden" onChange={handleImageFileChange} />
             <AchievementUnlockedToast achievement={newlyUnlockedAchievement} />
@@ -750,7 +1463,8 @@ const App: React.FC = () => {
             <Modal isOpen={activeModal === 'addWishlist'} onClose={() => setActiveModal(null)} title="Tambah Keinginan" originCoords={lastClickPos.current}><AddWishlistModalContent onSubmit={handleAddWishlist} /></Modal>
             <Modal isOpen={activeModal === 'batchInput'} onClose={() => setActiveModal(null)} title="Catat Banyak Pengeluaran" size="lg" originCoords={lastClickPos.current}><BatchInputModalContent budgets={state.budgets.filter(b => !b.isArchived)} onSave={handleSaveScannedItems} /></Modal>
             <Modal isOpen={activeModal === 'addBudget'} onClose={() => setActiveModal(null)} title="Buat Pos Anggaran Baru" originCoords={lastClickPos.current}><AddBudgetModalContent onSubmit={handleAddBudget} /></Modal>
-            <Modal isOpen={activeModal === 'addSavingsGoal'} onClose={() => setActiveModal(null)} title="Buat Celengan Baru" originCoords={lastClickPos.current}><AddSavingsGoalModalContent onSubmit={handleAddSavingsGoal} /></Modal>
+            {/* Updated AddSavingsGoalModalContent call with inventory */}
+            <Modal isOpen={activeModal === 'addSavingsGoal'} onClose={() => setActiveModal(null)} title="Buat Celengan Baru" originCoords={lastClickPos.current}><AddSavingsGoalModalContent onSubmit={handleAddSavingsGoal} inventory={state.inventory} /></Modal>
             <Modal isOpen={activeModal === 'addSavings'} onClose={() => setActiveModal(null)} title={`Tambah Tabungan: ${savingsGoalForModal?.name || ''}`} originCoords={lastClickPos.current}><AddSavingsModalContent goal={savingsGoalForModal} availableFunds={currentAvailableFunds} onSubmit={(amount) => currentSavingsGoalId && handleAddSavings(currentSavingsGoalId, amount)} /></Modal>
             <Modal isOpen={activeModal === 'withdrawSavings'} onClose={() => setActiveModal(null)} title={`Tarik Tabungan: ${savingsGoalForModal?.name || ''}`} originCoords={lastClickPos.current}><WithdrawSavingsModalContent goal={savingsGoalForModal} onSubmit={(amount) => currentSavingsGoalId && handleWithdrawSavings(currentSavingsGoalId, amount)} /></Modal>
             <Modal isOpen={activeModal === 'savingsDetail'} onClose={() => setActiveModal(null)} title={`Detail: ${savingsGoalForModal?.name || ''}`} originCoords={lastClickPos.current}><SavingsDetailModalContent goal={savingsGoalForModal} onDelete={() => currentSavingsGoalId && handleDeleteSavingsGoal(currentSavingsGoalId)} /></Modal>
@@ -758,8 +1472,8 @@ const App: React.FC = () => {
             <Modal isOpen={activeModal === 'history'} onClose={() => setActiveModal(null)} title={historyModalContent.title} originCoords={lastClickPos.current}><HistoryModalContent transactions={historyModalContent.transactions} type={historyModalContent.type} budgetId={historyModalContent.budgetId} onDelete={(timestamp, type, budgetId) => openConfirm("Yakin menghapus transaksi ini? Dana akan dikembalikan.", () => handleDeleteTransaction(timestamp, type, budgetId))} /></Modal>
             <Modal isOpen={activeModal === 'info'} onClose={() => setActiveModal(null)} title="Info Keuangan Bulan Ini" originCoords={lastClickPos.current}><InfoModalContent monthlyIncome={monthlyIncome} totalAllocated={totalAllocated} unallocatedFunds={unallocatedFunds} generalAndDailyExpenses={generalAndDailyExpenses} remainingUnallocated={remainingUnallocated} /></Modal>
             <Modal isOpen={activeModal === 'editAsset'} onClose={() => setActiveModal(null)} title="Koreksi Saldo Aset" originCoords={lastClickPos.current}><EditAssetModalContent currentAsset={currentAsset} onSubmit={handleEditAsset} /></Modal>
-            <Modal isOpen={activeModal === 'menu'} onClose={() => setActiveModal(null)} title="Menu & Opsi" originCoords={lastClickPos.current}><MainMenu onNavigate={(page) => { setCurrentPage(page); setActiveModal(null); }} onShowInfo={() => setActiveModal('info')} onManageFunds={() => setActiveModal('funds')} onScanReceipt={() => scanFileInputRef.current?.click()} onSmartInput={() => setActiveModal('smartInput')} onVoiceInput={() => setActiveModal('voiceAssistant')} onAskAI={handleOpenAIChat} onGetAIAdvice={handleGetAIAdvice} onOpenSettings={() => setActiveModal('settings')} /></Modal>
-            <Modal isOpen={activeModal === 'settings'} onClose={() => setActiveModal(null)} title="Pengaturan & Opsi" originCoords={lastClickPos.current}><SettingsModalContent onExport={() => { setActiveModal(null); handleExportData(); }} onImport={handleTriggerImport} onManageArchived={() => setActiveModal('archivedBudgets')} onManualBackup={handleManualBackup} onManageBackups={() => setActiveModal('backupRestore')} onResetMonthly={handleResetMonthlyData} onResetAll={handleResetAllData} onManualCloseBook={handleManualCloseBook} lastImportDate={lastImportDate} lastExportDate={lastExportDate} /></Modal>
+            <Modal isOpen={activeModal === 'menu'} onClose={() => setActiveModal(null)} title="Menu & Opsi" originCoords={lastClickPos.current}><MainMenu onNavigate={(page) => { setCurrentPage(page); setActiveModal(null); }} onShowInfo={() => setActiveModal('info')} onManageFunds={() => setActiveModal('funds')} onScanReceipt={() => scanFileInputRef.current?.click()} onSmartInput={() => setActiveModal('smartInput')} onVoiceInput={() => setActiveModal('voiceAssistant')} onAskAI={handleOpenAIChat} onGetAIAdvice={handleGetAIAdvice} onOpenSettings={() => setActiveModal('settings')} onOpenDailyBonus={() => setActiveModal('dailyBonus')} onOpenDebt={() => setActiveModal('debt')} /></Modal>
+            <Modal isOpen={activeModal === 'settings'} onClose={() => setActiveModal(null)} title="Pengaturan & Opsi" originCoords={lastClickPos.current}><SettingsModalContent onExport={() => { setActiveModal(null); handleExportData(); }} onImport={handleTriggerImport} onManageArchived={() => setActiveModal('archivedBudgets')} onManualBackup={handleManualBackup} onManageBackups={() => setActiveModal('backupRestore')} onResetMonthly={handleResetMonthlyData} onResetAll={handleResetAllData} onManualCloseBook={handleManualCloseBook} onRedeemCode={() => setActiveModal('redeem')} lastImportDate={lastImportDate} lastExportDate={lastExportDate} /></Modal>
             <Modal isOpen={activeModal === 'archivedBudgets'} onClose={() => setActiveModal(null)} title="Kelola Anggaran Diarsipkan" originCoords={lastClickPos.current}><ArchivedBudgetsModalContent archivedBudgets={state.budgets.filter(b => b.isArchived)} onRestore={handleRestoreBudget} onDelete={handleDeleteBudgetPermanently} /></Modal>
             <Modal isOpen={activeModal === 'backupRestore'} onClose={() => setActiveModal(null)} title="Cadangan Internal Otomatis" originCoords={lastClickPos.current}><BackupRestoreModalContent backups={internalBackups} onRestore={handleRestoreBackup} /></Modal>
             <Modal isOpen={activeModal === 'scanResult'} onClose={() => setActiveModal(null)} title="Hasil Pindai Struk" originCoords={lastClickPos.current}><ScanResultModalContent isLoading={isScanning} error={scanError} items={scannedItems} budgets={state.budgets.filter(b => !b.isArchived)} onItemsChange={setScannedItems} onSave={() => handleSaveScannedItems(scannedItems)} /></Modal>
@@ -768,6 +1482,9 @@ const App: React.FC = () => {
             <Modal isOpen={activeModal === 'smartInput'} onClose={() => setActiveModal(null)} title="Input Transaksi Cerdas" originCoords={lastClickPos.current}><SmartInputModalContent isProcessing={isProcessingSmartInput} error={smartInputError} resultItems={smartInputResult} budgets={state.budgets.filter(b => !b.isArchived)} onProcess={handleProcessSmartInput} onSave={() => handleSaveScannedItems(smartInputResult)} onItemsChange={setSmartInputResult} onClearError={() => setSmartInputError(null)} /></Modal>
             <Modal isOpen={activeModal === 'aiAdvice'} onClose={() => setActiveModal(null)} title="Saran Keuangan dari AI" originCoords={lastClickPos.current}><AIAdviceModalContent isLoading={isFetchingAdvice} error={adviceError} advice={aiAdvice} /></Modal>
             <Modal isOpen={activeModal === 'aiChat'} onClose={() => {setActiveModal(null); setAiChatSession(null);}} title="Tanya AI" size="lg" contentClassName="p-0" originCoords={lastClickPos.current}><AIChatModalContent history={aiChatHistory} isLoading={isAiChatLoading} error={aiChatError} onSendMessage={handleSendChatMessage} /></Modal>
+            <Modal isOpen={activeModal === 'redeem'} onClose={() => setActiveModal(null)} title="Kode Promo" originCoords={lastClickPos.current}><RedeemModalContent onClose={() => setActiveModal(null)} onRedeem={handleRedeemCode} /></Modal>
+            <Modal isOpen={activeModal === 'debt'} onClose={() => setActiveModal(null)} title="Manajemen Hutang" originCoords={lastClickPos.current}><DebtManagerModalContent onClose={() => setActiveModal(null)} debts={state.debts} onAddDebt={handleAddDebt} onDeleteDebt={handleDeleteDebt} onAddTransaction={handleDebtTransaction} onIncreaseDebt={handleIncreaseDebt} /></Modal>
+            <Modal isOpen={activeModal === 'dailyBonus'} onClose={() => setActiveModal(null)} title="Bonus Harian" originCoords={lastClickPos.current}><DailyBonusModalContent collectedSkins={state.collectedSkins || []} lastClaimDate={state.lastDailyBonusClaim} onClaim={handleClaimDailyBonus} /></Modal>
             <ConfirmModal isOpen={activeModal === 'confirm'} onClose={() => setActiveModal(null)} onConfirm={() => { confirmModalContent.onConfirm(); setActiveModal(null); }} message={confirmModalContent.message} />
         </div>
     );

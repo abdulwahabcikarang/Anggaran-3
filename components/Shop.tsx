@@ -1,31 +1,59 @@
 
 import React, { useState, useRef } from 'react';
 import type { AppState, ShopItem, CustomTheme } from '../types';
-import { ShoppingBagIcon, SparklesIcon, LockClosedIcon, CheckCircleIcon, PaintBrushIcon, UserIcon, StarIconFilled, HeartIcon, ShieldCheckIcon, Squares2x2Icon, LightbulbIcon, ArrowPathIcon, PhotoIcon, SpeakerWaveIcon, BuildingLibraryIcon, CameraIcon, ArrowUturnLeftIcon, ExclamationTriangleIcon } from './Icons';
+import { ShoppingBagIcon, SparklesIcon, LockClosedIcon, CheckCircleIcon, PaintBrushIcon, UserIcon, StarIconFilled, HeartIcon, ShieldCheckIcon, Squares2x2Icon, LightbulbIcon, ArrowPathIcon, PhotoIcon, SpeakerWaveIcon, BuildingLibraryIcon, CameraIcon, ArrowUturnLeftIcon, ExclamationTriangleIcon, FireIcon, RocketLaunchIcon, CircleStackIcon } from './Icons';
 import { GoogleGenAI, Type } from '@google/genai';
+import { SKIN_ASSETS } from '../assets';
 
 // --- DATA BARANG DAGANGAN (SHOP ITEMS) ---
 export const SHOP_ITEMS: ShopItem[] = [
+    // --- SPECIAL THEMES (Moved Living Mood Here) ---
+    { id: 'theme_living_mood', name: 'Living Mood (Hidup)', description: 'Background bereaksi real-time terhadap sisa uangmu (Cerah/Hujan/Badai).', price: 5000, type: 'theme', category: 'special', value: 'theme_living_mood', icon: 'SparklesIcon' },
+    { id: 'theme_dynamic_time', name: 'Waktu Dinamis', description: 'Background mengikuti waktu dunia nyata (Pagi/Siang/Sore/Malam).', price: 5000, type: 'theme', category: 'special', value: 'theme_dynamic_time', icon: 'ClockIcon' },
+    { id: 'theme_cyberpunk_battery', name: 'Cyberpunk Battery', description: 'Visualisasi energi anggaran. Hijau saat aman, Merah/Glitch saat kritis.', price: 6000, type: 'theme', category: 'special', value: 'theme_cyberpunk_battery', icon: 'SparklesIcon' },
+    { id: 'theme_thermal_heat', name: 'Thermal Heat', description: 'Suhu belanja harian. Beku saat hemat, Mendidih saat boros.', price: 6000, type: 'theme', category: 'special', value: 'theme_thermal_heat', icon: 'FireIcon' },
+
+    // --- SAVINGS SKINS (CELENGAN) ---
+    // RARE (750)
+    { id: 'skin_pet_swan', name: 'Pet Angsa (Swan)', description: 'Telur emas yang akan menetas menjadi angsa mahkota nan anggun.', price: 750, type: 'savings_skin', value: 'swan', icon: 'HeartIcon', rarity: 'rare' },
+    { id: 'skin_pet_robot', name: 'Robo-Bank 3000', description: 'Teknologi masa depan untuk mengamankan aset digitalmu.', price: 750, type: 'savings_skin', value: 'robot', icon: 'RocketLaunchIcon', rarity: 'rare' },
+    { id: 'skin_plant_anthurium', name: 'Tanaman Anturium', description: 'Tanaman hias merah merona yang melambangkan kekayaan dan cinta.', price: 750, type: 'savings_skin', value: 'anthurium', icon: 'SparklesIcon', rarity: 'rare' },
+    { id: 'skin_plant_aglonema', name: 'Aglonema', description: 'Sri Rejeki pembawa hoki. Daun merahnya mempesona.', price: 750, type: 'savings_skin', value: 'aglonema', icon: 'FireIcon', rarity: 'rare' },
+
+    // LEGENDARY (1250)
+    { id: 'skin_pet_jellyfish', name: 'Ubur-ubur Kosmik', description: 'Berenang di lautan bintang. Menenangkan dan indah.', price: 1250, type: 'savings_skin', value: 'jellyfish', icon: 'SparklesIcon', rarity: 'legendary' },
+    { id: 'skin_pet_turtle', name: 'Kura-kura Permata', description: 'Lambat tapi pasti. Tempurungnya dipenuhi kristal berharga.', price: 1250, type: 'savings_skin', value: 'turtle', icon: 'ShieldCheckIcon', rarity: 'legendary' },
+    { id: 'skin_plant_monstera', name: 'Monstera Deliciousa', description: 'Si janda bolong yang estetik. Daunnya semakin besar dan membelah.', price: 1250, type: 'savings_skin', value: 'monstera', icon: 'ShieldCheckIcon', rarity: 'legendary' },
+    { id: 'skin_plant_higanbana', name: 'Higanbana', description: 'Red Spider Lily. Bunga kematian yang memikat dan misterius.', price: 1250, type: 'savings_skin', value: 'higanbana', icon: 'StarIconFilled', rarity: 'legendary' },
+    { id: 'skin_plant_sakura', name: 'Pohon Sakura', description: 'Bawa nuansa Jepang. Mekar penuh dengan bunga pink yang indah.', price: 1250, type: 'savings_skin', value: 'sakura', icon: 'SparklesIcon', rarity: 'legendary' },
+
+    // MYTHICAL (2000)
+    { id: 'skin_pet_dragon', name: 'Naga Emas (Dragon)', description: 'Penjaga harta karun legendaris. Simbol keberuntungan tertinggi.', price: 2000, type: 'savings_skin', value: 'dragon', icon: 'FireIcon', rarity: 'mythical' },
+    { id: 'skin_pet_fox', name: 'Rubah Ekor 9 (Kitsune)', description: 'Roh rubah mistis yang ekornya bertambah seiring tabunganmu.', price: 2000, type: 'savings_skin', value: 'fox', icon: 'StarIconFilled', rarity: 'mythical' },
+    { id: 'skin_plant_wijaya', name: 'Wijayakusuma', description: 'Sang Ratu Malam. Kaktus langka yang bunganya sangat megah.', price: 2000, type: 'savings_skin', value: 'wijaya', icon: 'HeartIcon', rarity: 'mythical' },
+    { id: 'skin_plant_kadupul', name: 'Bunga Kadupul', description: 'Bunga termahal di dunia. Legenda yang mekar sesaat.', price: 2000, type: 'savings_skin', value: 'kadupul', icon: 'SparklesIcon', rarity: 'mythical' },
+    
+
     // --- THEMES ---
-    { id: 'theme_default', name: 'Standar Navy', description: 'Tampilan klasik profesional.', price: 0, type: 'theme', value: 'theme_default', icon: 'PaintBrushIcon' },
-    { id: 'theme_dark', name: 'Mode Gelap', description: 'Elegan dan nyaman di mata.', price: 500, type: 'theme', value: 'theme_dark', icon: 'PaintBrushIcon' },
-    { id: 'theme_teal', name: 'Teal Fresh', description: 'Nuansa hijau segar.', price: 300, type: 'theme', value: 'theme_teal', icon: 'PaintBrushIcon' },
-    { id: 'theme_gold', name: 'Sultan Gold', description: 'Kemewahan para jutawan.', price: 2000, type: 'theme', value: 'theme_gold', icon: 'PaintBrushIcon' },
+    { id: 'theme_default', name: 'Standar Navy', description: 'Tampilan klasik profesional.', price: 0, type: 'theme', category: 'standard', value: 'theme_default', icon: 'PaintBrushIcon' },
+    { id: 'theme_dark', name: 'Mode Gelap', description: 'Elegan dan nyaman di mata.', price: 500, type: 'theme', category: 'standard', value: 'theme_dark', icon: 'PaintBrushIcon' },
+    { id: 'theme_teal', name: 'Teal Fresh', description: 'Nuansa hijau segar.', price: 300, type: 'theme', category: 'standard', value: 'theme_teal', icon: 'PaintBrushIcon' },
+    { id: 'theme_gold', name: 'Sultan Gold', description: 'Kemewahan para jutawan.', price: 2000, type: 'theme', category: 'standard', value: 'theme_gold', icon: 'PaintBrushIcon' },
     
     // --- GRADIENT THEMES ---
-    { id: 'theme_sunset', name: 'Senja (Sunset)', description: 'Gradasi oranye hangat.', price: 1200, type: 'theme', value: 'theme_sunset', icon: 'PaintBrushIcon' },
-    { id: 'theme_ocean', name: 'Samudra (Ocean)', description: 'Kedalaman biru laut.', price: 1200, type: 'theme', value: 'theme_ocean', icon: 'PaintBrushIcon' },
-    { id: 'theme_berry', name: 'Beri (Berry)', description: 'Sentuhan pink & ungu.', price: 1200, type: 'theme', value: 'theme_berry', icon: 'PaintBrushIcon' },
+    { id: 'theme_sunset', name: 'Senja (Sunset)', description: 'Gradasi oranye hangat.', price: 1200, type: 'theme', category: 'gradient', value: 'theme_sunset', icon: 'PaintBrushIcon' },
+    { id: 'theme_ocean', name: 'Samudra (Ocean)', description: 'Kedalaman biru laut.', price: 1200, type: 'theme', category: 'gradient', value: 'theme_ocean', icon: 'PaintBrushIcon' },
+    { id: 'theme_berry', name: 'Beri (Berry)', description: 'Sentuhan pink & ungu.', price: 1200, type: 'theme', category: 'gradient', value: 'theme_berry', icon: 'PaintBrushIcon' },
 
     // --- FEMININE THEMES ---
-    { id: 'theme_rose', name: 'Rose Gold', description: 'Sentuhan pink mewah.', price: 1500, type: 'theme', value: 'theme_rose', icon: 'HeartIcon' },
-    { id: 'theme_lavender', name: 'Lavender Soft', description: 'Ungu lembut menenangkan.', price: 1500, type: 'theme', value: 'theme_lavender', icon: 'SparklesIcon' },
-    { id: 'theme_mint', name: 'Minty Fresh', description: 'Hijau pastel ceria.', price: 1500, type: 'theme', value: 'theme_mint', icon: 'SparklesIcon' },
+    { id: 'theme_rose', name: 'Rose Gold', description: 'Sentuhan pink mewah.', price: 1500, type: 'theme', category: 'standard', value: 'theme_rose', icon: 'HeartIcon' },
+    { id: 'theme_lavender', name: 'Lavender Soft', description: 'Ungu lembut menenangkan.', price: 1500, type: 'theme', category: 'standard', value: 'theme_lavender', icon: 'SparklesIcon' },
+    { id: 'theme_mint', name: 'Minty Fresh', description: 'Hijau pastel ceria.', price: 1500, type: 'theme', category: 'standard', value: 'theme_mint', icon: 'SparklesIcon' },
 
     // --- MASCULINE THEMES ---
-    { id: 'theme_midnight', name: 'Midnight Pro', description: 'Mode gelap biru deep.', price: 1800, type: 'theme', value: 'theme_midnight', icon: 'LockClosedIcon' },
-    { id: 'theme_forest', name: 'Ranger Green', description: 'Nuansa hutan taktis.', price: 1800, type: 'theme', value: 'theme_forest', icon: 'ShieldCheckIcon' },
-    { id: 'theme_slate', name: 'Slate Monochrome', description: 'Hitam putih minimalis.', price: 1800, type: 'theme', value: 'theme_slate', icon: 'Squares2x2Icon' },
+    { id: 'theme_midnight', name: 'Midnight Pro', description: 'Mode gelap biru deep.', price: 1800, type: 'theme', category: 'standard', value: 'theme_midnight', icon: 'LockClosedIcon' },
+    { id: 'theme_forest', name: 'Ranger Green', description: 'Nuansa hutan taktis.', price: 1800, type: 'theme', category: 'standard', value: 'theme_forest', icon: 'ShieldCheckIcon' },
+    { id: 'theme_slate', name: 'Slate Monochrome', description: 'Hitam putih minimalis.', price: 1800, type: 'theme', category: 'standard', value: 'theme_slate', icon: 'Squares2x2Icon' },
 
     // --- TITLES (Reduced to 25% price) ---
     { id: 'title_hemat', name: 'Si Hemat', description: 'Gelar penjaga dompet.', price: 37, type: 'title', value: 'Si Hemat', icon: 'UserIcon' },
@@ -163,7 +191,9 @@ const adjustColorBrightness = (bgRgbString: string, adjustment: number): string 
 };
 
 const Shop: React.FC<ShopProps> = ({ state, availablePoints, onBack, onPurchase, onEquip, onAddCustomTheme, onSpendPoints }) => {
-    const [activeTab, setActiveTab] = useState<'all' | 'theme' | 'title' | 'frame' | 'special' | 'lab'>('all');
+    const [activeTab, setActiveTab] = useState<'all' | 'theme' | 'title' | 'frame' | 'special' | 'lab' | 'savings_skin'>('all');
+    const [skinRarityFilter, setSkinRarityFilter] = useState<'all' | 'rare' | 'legendary' | 'mythical'>('all');
+    const [themeFilter, setThemeFilter] = useState<'all' | 'standard' | 'gradient' | 'special'>('all');
     
     // Lab State
     const [labMode, setLabMode] = useState<'text' | 'image'>('text');
@@ -184,21 +214,37 @@ const Shop: React.FC<ShopProps> = ({ state, availablePoints, onBack, onPurchase,
         description: 'Tema Kustom Buatanmu',
         price: 0,
         type: 'theme',
+        category: 'custom',
         value: ct.id,
         icon: 'PaintBrushIcon'
     }));
 
     const filteredItems = SHOP_ITEMS.filter(item => {
         if (activeTab === 'all') return true;
-        if (activeTab === 'special') return ['persona', 'banner'].includes(item.type);
+        if (activeTab === 'special') return ['persona', 'banner'].includes(item.type); // Modified: Special tab now mostly for persona/banner as Theme moved
+        
+        if (activeTab === 'theme') {
+            if (item.type !== 'theme') return false;
+            if (themeFilter === 'all') return true;
+            return item.category === themeFilter;
+        }
+
+        if (activeTab === 'savings_skin') {
+            if (item.type !== 'savings_skin') return false;
+            if (skinRarityFilter === 'all') return true;
+            return item.rarity === skinRarityFilter;
+        }
         return item.type === activeTab;
     });
     
-    const itemsToDisplay = (activeTab === 'theme' || activeTab === 'all') ? [...filteredItems, ...customThemeItems] : filteredItems;
+    // Combine filtered shop items with custom themes if viewing themes or all
+    const itemsToDisplay = (activeTab === 'theme' || activeTab === 'all') 
+        ? (themeFilter === 'all' || themeFilter === 'standard' ? [...filteredItems, ...customThemeItems] : filteredItems)
+        : filteredItems;
 
     const isOwned = (itemId: string) => state.inventory.includes(itemId) || itemId === 'theme_default' || itemId.startsWith('custom_');
     const isEquipped = (item: ShopItem) => {
-        if (item.type === 'theme') return state.activeTheme === item.value;
+        if (item.type === 'theme' || item.type === 'special') return state.activeTheme === item.value;
         if (item.type === 'title') return state.userProfile.customTitle === item.value;
         if (item.type === 'frame') return state.userProfile.frameId === item.value;
         if (item.type === 'persona') return state.userProfile.activePersona === item.value;
@@ -277,7 +323,7 @@ const Shop: React.FC<ShopProps> = ({ state, availablePoints, onBack, onPurchase,
 
             if (labMode === 'text') {
                 const palettePrompt = `Create a unique color palette for a UI theme based on this concept: "${themeConcept}".
-                Return ONLY valid JSON with RGB color numbers (e.g., "255 255 255").
+                Return ONLY valid JSON with RGB color numbers (e.g. "255 255 255").
                 Ensure the colors are harmonious with the concept.`;
 
                 const imagePrompt = `A high-quality, aesthetic mobile wallpaper representing the concept: ${themeConcept}. Artistic, clean, suitable for app background. No text.`;
@@ -387,12 +433,14 @@ const Shop: React.FC<ShopProps> = ({ state, availablePoints, onBack, onPurchase,
             case 'title': return 'from-purple-500 to-pink-500';
             case 'frame': return 'from-amber-400 to-orange-500';
             case 'persona': return 'from-emerald-400 to-teal-500';
+            case 'special': return 'from-indigo-600 to-violet-600';
+            case 'savings_skin': return 'from-pink-500 to-rose-500';
             default: return 'from-gray-400 to-gray-600';
         }
     };
 
     return (
-        <main className="h-screen flex flex-col bg-gray-50 overflow-hidden">
+        <main className="h-screen flex flex-col bg-transparent overflow-hidden">
             {/* GLASSMORPHIC HEADER */}
             <header className="sticky top-0 z-30 backdrop-blur-xl bg-white/70 border-b border-white/20 px-6 py-4 shadow-sm flex justify-between items-center">
                 <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-black/5 transition-colors text-secondary-gray">
@@ -436,7 +484,8 @@ const Shop: React.FC<ShopProps> = ({ state, availablePoints, onBack, onPurchase,
                             { id: 'theme', label: 'Tema', icon: PaintBrushIcon },
                             { id: 'title', label: 'Gelar', icon: UserIcon },
                             { id: 'frame', label: 'Bingkai', icon: StarIconFilled },
-                            { id: 'special', label: 'Spesial', icon: SparklesIcon },
+                            { id: 'savings_skin', label: 'Celengan', icon: BuildingLibraryIcon },
+                            { id: 'special', label: 'Asisten', icon: SpeakerWaveIcon },
                             { id: 'lab', label: 'Lab AI', icon: LightbulbIcon },
                         ].map((tab) => (
                             <button
@@ -452,6 +501,26 @@ const Shop: React.FC<ShopProps> = ({ state, availablePoints, onBack, onPurchase,
                             </button>
                         ))}
                     </nav>
+
+                    {/* FILTER SUB-NAV FOR SAVINGS SKINS */}
+                    {activeTab === 'savings_skin' && (
+                        <div className="flex justify-center gap-2 mb-2 animate-fade-in-down">
+                            <button onClick={() => setSkinRarityFilter('all')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${skinRarityFilter === 'all' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>All</button>
+                            <button onClick={() => setSkinRarityFilter('rare')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${skinRarityFilter === 'rare' ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-white text-gray-500 border-gray-200 hover:bg-blue-50'}`}>Rare</button>
+                            <button onClick={() => setSkinRarityFilter('legendary')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${skinRarityFilter === 'legendary' ? 'bg-yellow-100 text-yellow-700 border-yellow-300' : 'bg-white text-gray-500 border-gray-200 hover:bg-yellow-50'}`}>Legendary</button>
+                            <button onClick={() => setSkinRarityFilter('mythical')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${skinRarityFilter === 'mythical' ? 'bg-purple-100 text-purple-700 border-purple-300' : 'bg-white text-gray-500 border-gray-200 hover:bg-purple-50'}`}>Mythical</button>
+                        </div>
+                    )}
+
+                    {/* FILTER SUB-NAV FOR THEMES */}
+                    {activeTab === 'theme' && (
+                        <div className="flex justify-center gap-2 mb-2 animate-fade-in-down overflow-x-auto no-scrollbar pb-1">
+                            <button onClick={() => setThemeFilter('all')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${themeFilter === 'all' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>Semua</button>
+                            <button onClick={() => setThemeFilter('standard')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${themeFilter === 'standard' ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-white text-gray-500 border-gray-200 hover:bg-blue-50'}`}>Standar</button>
+                            <button onClick={() => setThemeFilter('gradient')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${themeFilter === 'gradient' ? 'bg-pink-100 text-pink-700 border-pink-300' : 'bg-white text-gray-500 border-gray-200 hover:bg-pink-50'}`}>Gradasi</button>
+                            <button onClick={() => setThemeFilter('special')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${themeFilter === 'special' ? 'bg-purple-100 text-purple-700 border-purple-300' : 'bg-white text-gray-500 border-gray-200 hover:bg-purple-50'}`}>Spesial</button>
+                        </div>
+                    )}
 
                     {/* CONTENT AREA */}
                     {activeTab === 'lab' ? (
@@ -563,7 +632,7 @@ const Shop: React.FC<ShopProps> = ({ state, availablePoints, onBack, onPurchase,
 
                                             <button 
                                                 onClick={handleSaveCustomTheme}
-                                                className="w-full mt-6 bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-green-900/30 transition-colors flex items-center justify-center gap-2"
+                                                className="w-full mt-6 bg-green-600 hover:bg-green-50 text-white font-bold py-3 rounded-xl shadow-lg shadow-green-900/30 transition-colors flex items-center justify-center gap-2"
                                             >
                                                 <CheckCircleIcon className="w-5 h-5" />
                                                 Simpan & Pakai (GRATIS)
@@ -581,28 +650,74 @@ const Shop: React.FC<ShopProps> = ({ state, availablePoints, onBack, onPurchase,
                                 const equipped = isEquipped(item);
                                 const canAfford = availablePoints >= item.price;
                                 const gradientClass = getGradientByType(item.type);
+                                const isSavingsSkin = item.type === 'savings_skin';
+                                const isSpecialTheme = item.category === 'special';
+                                
+                                // Get skin image for visualization if it's a savings skin
+                                let skinImage = null;
+                                if (isSavingsSkin) {
+                                    // Map item.value to asset key. Handle legacy/defaults.
+                                    const assetKey = item.value; 
+                                    const assets = SKIN_ASSETS[assetKey] || (item.value.includes('pet') ? SKIN_ASSETS['pet_default'] : SKIN_ASSETS['default']);
+                                    skinImage = assets.stage1;
+                                }
+
+                                // Dynamic styling based on rarity for savings skins or special themes
+                                let rarityClass = 'border-gray-100';
+                                let rarityBadge = null;
+                                let rarityGlow = '';
+
+                                if (isSavingsSkin) {
+                                    if (item.rarity === 'mythical') {
+                                        rarityClass = 'border-purple-500 bg-purple-50 shadow-md';
+                                        rarityGlow = 'shadow-[0_0_15px_rgba(168,85,247,0.4)]';
+                                        rarityBadge = <span className="absolute top-2 left-2 bg-purple-600 text-white text-[9px] font-bold px-2 py-0.5 rounded shadow-sm z-10">MYTHICAL</span>;
+                                    } else if (item.rarity === 'legendary') {
+                                        rarityClass = 'border-yellow-400 bg-yellow-50';
+                                        rarityBadge = <span className="absolute top-2 left-2 bg-yellow-500 text-white text-[9px] font-bold px-2 py-0.5 rounded shadow-sm z-10">LEGEND</span>;
+                                    } else if (item.rarity === 'rare') {
+                                        rarityClass = 'border-blue-300 bg-blue-50';
+                                        rarityBadge = <span className="absolute top-2 left-2 bg-blue-500 text-white text-[9px] font-bold px-2 py-0.5 rounded shadow-sm z-10">RARE</span>;
+                                    }
+                                }
+
+                                if (isSpecialTheme) {
+                                    rarityClass = 'border-indigo-500 bg-indigo-50 shadow-md';
+                                    rarityGlow = 'shadow-[0_0_15px_rgba(99,102,241,0.4)]';
+                                    rarityBadge = <span className="absolute top-2 left-2 bg-indigo-600 text-white text-[9px] font-bold px-2 py-0.5 rounded shadow-sm z-10">SPECIAL</span>;
+                                }
 
                                 return (
-                                    <div key={item.id} className="group bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col h-full border border-gray-100 hover:-translate-y-1">
+                                    <div key={item.id} className={`group bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col h-full border hover:-translate-y-1 ${rarityClass} ${rarityGlow}`}>
                                         
                                         {/* Item Visual Area */}
-                                        <div className={`relative h-32 bg-gradient-to-br ${gradientClass} flex items-center justify-center p-6`}>
-                                            <div className="bg-white/20 backdrop-blur-sm rounded-2xl p-4 shadow-inner">
-                                                {item.type === 'theme' && <PaintBrushIcon className="w-8 h-8 text-white drop-shadow-md" />}
-                                                {item.type === 'title' && <UserIcon className="w-8 h-8 text-white drop-shadow-md" />}
-                                                {item.type === 'frame' && <StarIconFilled className="w-8 h-8 text-white drop-shadow-md" />}
-                                                {item.type === 'persona' && <SpeakerWaveIcon className="w-8 h-8 text-white drop-shadow-md" />}
-                                                {item.type === 'banner' && <PhotoIcon className="w-8 h-8 text-white drop-shadow-md" />}
-                                            </div>
+                                        <div className={`relative h-32 bg-gradient-to-br ${gradientClass} flex items-center justify-center p-6 overflow-visible`}>
+                                            {rarityBadge}
+                                            
+                                            {isSavingsSkin && skinImage ? (
+                                                <img 
+                                                    src={skinImage} 
+                                                    alt={item.name} 
+                                                    className="w-28 h-28 object-contain drop-shadow-[0_10px_10px_rgba(0,0,0,0.3)] transform transition-transform duration-500 hover:scale-110 hover:-rotate-3 z-10"
+                                                />
+                                            ) : (
+                                                <div className="bg-white/20 backdrop-blur-sm rounded-2xl p-4 shadow-inner">
+                                                    {item.type === 'theme' || item.type === 'special' ? <PaintBrushIcon className="w-8 h-8 text-white drop-shadow-md" /> :
+                                                    item.type === 'title' ? <UserIcon className="w-8 h-8 text-white drop-shadow-md" /> :
+                                                    item.type === 'frame' ? <StarIconFilled className="w-8 h-8 text-white drop-shadow-md" /> :
+                                                    item.type === 'persona' ? <SpeakerWaveIcon className="w-8 h-8 text-white drop-shadow-md" /> :
+                                                    <PhotoIcon className="w-8 h-8 text-white drop-shadow-md" />}
+                                                </div>
+                                            )}
                                             
                                             {/* Status Badges */}
-                                            {equipped && (
+                                            {equipped && !isSavingsSkin && (
                                                 <div className="absolute top-2 right-2 bg-white/90 text-green-600 p-1.5 rounded-full shadow-sm" title="Sedang Dipakai">
                                                     <CheckCircleIcon className="w-4 h-4" />
                                                 </div>
                                             )}
-                                            {!equipped && owned && (
-                                                <div className="absolute top-2 right-2 bg-black/30 text-white px-2 py-0.5 rounded-full text-[10px] font-bold backdrop-blur-sm">
+                                            {(!equipped || isSavingsSkin) && owned && (
+                                                <div className="absolute top-2 right-2 bg-black/30 text-white px-2 py-0.5 rounded-full text-[10px] font-bold backdrop-blur-sm z-20">
                                                     MILIKMU
                                                 </div>
                                             )}
@@ -618,15 +733,15 @@ const Shop: React.FC<ShopProps> = ({ state, availablePoints, onBack, onPurchase,
                                             {/* Action Button */}
                                             {owned ? (
                                                 <button 
-                                                    onClick={() => onEquip(item)}
-                                                    disabled={equipped}
+                                                    onClick={() => !isSavingsSkin && onEquip(item)}
+                                                    disabled={equipped || isSavingsSkin}
                                                     className={`w-full py-2 rounded-lg font-bold text-xs transition-colors
-                                                        ${equipped 
+                                                        ${(equipped || isSavingsSkin)
                                                             ? 'bg-gray-100 text-gray-400 cursor-default' 
                                                             : 'bg-primary-navy text-white hover:bg-primary-navy-dark shadow-md'
                                                         }`}
                                                 >
-                                                    {equipped ? 'Dipakai' : 'Pakai'}
+                                                    {isSavingsSkin ? 'Tersedia' : equipped ? 'Dipakai' : 'Pakai'}
                                                 </button>
                                             ) : (
                                                 <button 

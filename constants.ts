@@ -1,9 +1,79 @@
 
 import type { AppState } from './types';
 
-export const APP_VERSION = '3.16.0';
+export const APP_VERSION = '3.17.0'; // Bump version
 export const BACKUP_PREFIX = 'budgetAppBackup_';
 export const MAX_BACKUPS = 4;
+
+export const INITIAL_STATE: AppState = {
+    userProfile: { name: 'Pengguna' },
+    budgets: [],
+    dailyExpenses: [],
+    fundHistory: [],
+    archives: [],
+    lastArchiveDate: null,
+    savingsGoals: [],
+    wishlist: [],
+    subscriptions: [],
+    shoppingList: [],
+    debts: [],
+    unlockedAchievements: {},
+    achievementData: {
+        monthlyStreak: 0,
+        dailyStreak: 0,
+        noSpendStreak: 0,
+        appOpenStreak: 0,
+        morningTransactionStreak: 0,
+        savingStreak: 0,
+        lastStreakCheck: ''
+    },
+    assets: [],
+    spentPoints: 0,
+    inventory: [],
+    activeTheme: 'theme_default',
+    bonusPoints: 0,
+    customThemes: [],
+    redeemedCodes: [],
+    redeemedMustika: 0,
+    collectedSkins: [],
+    lastDailyBonusClaim: null,
+    accumulatedXP: 0
+};
+
+export const PERSONA_INSTRUCTIONS: Record<string, string> = {
+    'default': 'Anda adalah asisten keuangan pribadi yang ramah, profesional, dan membantu.',
+    'grandma': 'Anda adalah seorang nenek yang penyayang dan bijaksana. Berikan nasihat keuangan dengan nada lembut, penuh kasih sayang, dan gunakan kata-kata yang menenangkan seperti "Cucu kesayangan", "Nak", atau "Sayang". Fokus pada menabung dan hidup hemat demi masa depan.',
+    'wolf': 'Anda adalah "Wolf of Wall Street". Agresif, penuh semangat, fokus pada profit, investasi, dan kekayaan. Gunakan bahasa yang energik, to-the-point, dan sedikit sombong. Dorong pengguna untuk mengambil risiko terukur dan melipatgandakan aset.',
+    'comedian': 'Anda adalah seorang komika stand-up. Berikan analisis keuangan yang lucu, penuh sarkasme ringan, dan analogi yang konyol. Buat pengguna tertawa sambil tetap memberikan poin penting tentang keuangan mereka.',
+    'oppa': 'Anda adalah karakter "Oppa Korea" dari drama romantis. Manis, perhatian, dan sedikit menggoda. Panggil pengguna dengan sebutan manis. Berikan semangat dan pujian atas pengelolaan keuangan mereka dengan gaya bicara yang lembut.',
+    'flirty': 'Anda adalah asisten yang genit dan playful. Gunakan bahasa yang menggoda, penuh emoji, dan pujian. Buat suasana mengelola keuangan menjadi menyenangkan dan tidak kaku.',
+    'dad': 'Anda adalah sosok Ayah yang suportif dan bangga. Berikan dorongan semangat, validasi usaha pengguna, dan berikan nasihat praktis seperti seorang ayah kepada anaknya. Gunakan nada yang hangat dan melindungi.',
+    'mom': 'Anda adalah Ibu yang galak tapi peduli. Cerewet soal boros, tegas soal menabung, tapi sebenarnya sangat sayang. Marahi jika pengguna boros, puji jika hemat. Gunakan nada bicara khas ibu-ibu yang sedang menasihati anaknya.'
+};
+
+export const VALID_REDEEM_CODES: Record<string, number> = {
+    // 500 Mustika
+    'AXQWERTU': 500, 'PLMKJNBU': 500, 'YTREWQAS': 500, 'ZXCVBNMI': 500, 'LKJHGFDS': 500, 
+    'MNBVCXZA': 500, 'EDCRFVTG': 500, 'YHNUJMIK': 500, 'OLPZAQXS': 500, 
+    'SWCDERFV': 500, 'BGTYHNMJ': 500, 'JUHYGTFR': 500, 'VFRCDEZX': 500, 'XZAQWESD': 500, 
+    'MKOIJNBH': 500, 'VGYTFCXR': 500, 'ZSEWAQPL': 500, 'PLMOKNIJ': 500,
+    // 1000 Mustika
+    'QWERTYUI': 1000, 'ASDFGHJK': 1000, 'ZXCVBNMM': 1000, 'POIUYTRE': 1000, 'LKMJNHBG': 1000, 
+    'VFCDXSZA': 1000, 'QAZPLMOK': 1000, 'WSXEDCRF': 1000, 'TGBYHNUJ': 1000, 'MIKOLPZA': 1000, 
+    'ZAQWSXCD': 1000, 'ERDFCVBG': 1000, 'TYHNMJUI': 1000, 'IKOLPMNJ': 1000, 'UYTREWSD': 1000, 
+    'FGHJKLMN': 1000, 'BVCXZASD': 1000, 'QWEASDZXC': 1000, 'RTYFGHVB': 1000, 'UIOJKLMQ': 1000,
+    // 3000 Mustika
+    'MNBVCXWE': 3000, 'LKJHGFSD': 3000, 'POIUYTRW': 3000, 'QAZXSWED': 3000, 'CVFRTGBN': 3000, 
+    'NHYUJMIK': 3000, 'MKOLPZAQ': 3000, 'XSWCDEVFR': 3000, 'BGTNHYMJ': 3000, 'JUHYKIOL': 3000,
+    // 7000 Mustika
+    'ZAQWSXCF': 7000, 'ERDFCVBH': 7000, 'TYHNMJUK': 7000, 'IKOLPMNY': 7000, 'UYTRDSWA': 7000, 
+    'FGHJKLZX': 7000, 'CVBNMQWE': 7000, 'ASDZXCUI': 7000, 'RTYFGHNM': 7000, 'OPKLMJNH': 7000,
+    // 10000 Mustika
+    'MLKJHGFD': 10000, 'SQWERTYU': 10000, 'ZXCVBNOP': 10000, 'IUYTREWQ': 10000, 
+    'LMNBVCXZ': 10000, 'QAZWSXED': 10000, 'RFVTGBYH': 10000, 'NUJMIKOL': 10000, 'PZAQWXSZ': 10000,
+    // Special
+    'NAMINAMI': 900000
+};
 
 export const THEMES: Record<string, Record<string, string>> = {
     'theme_default': {
@@ -19,6 +89,21 @@ export const THEMES: Record<string, Record<string, string>> = {
         '--color-gray-100': '243 244 246',
         '--color-gray-200': '229 231 235',
         '--app-background': 'rgb(248 249 250)', 
+    },
+    'theme_living_mood': {
+        // Colors will be dynamically overridden by App.tsx, these are defaults
+        '--color-primary-navy': '44 62 80', 
+        '--color-primary-navy-dark': '31 43 56',
+        '--color-accent-teal': '26 188 156', 
+        '--color-accent-teal-dark': '22 160 133',
+        '--color-light-bg': '255 255 255', 
+        '--color-dark-text': '52 73 94', 
+        '--color-secondary-gray': '127 140 141', 
+        '--color-white': '255 255 255',
+        '--color-gray-50': '249 250 251',
+        '--color-gray-100': '243 244 246',
+        '--color-gray-200': '229 231 235',
+        '--app-background': 'transparent', 
     },
     'theme_dark': {
         '--color-primary-navy': '96 165 250', 
@@ -158,73 +243,34 @@ export const THEMES: Record<string, Record<string, string>> = {
         '--color-gray-50': '30 41 59', 
         '--color-gray-100': '51 65 85', 
         '--color-gray-200': '71 85 105', 
-        '--app-background': 'linear-gradient(135deg, #0F172A 0%, #1E1B4B 100%)', 
+        '--app-background': 'linear-gradient(135deg, #0F172A 0%, #1E1B4B 100%)',
     },
     'theme_forest': {
         '--color-primary-navy': '20 83 45', 
         '--color-primary-navy-dark': '5 46 22',
         '--color-accent-teal': '132 204 22', 
         '--color-accent-teal-dark': '101 163 13',
-        '--color-light-bg': '20 27 22', 
-        '--color-dark-text': '236 252 203', 
-        '--color-secondary-gray': '163 230 53', 
-        '--color-white': '23 37 29', 
-        '--color-gray-50': '34 54 40',
-        '--color-gray-100': '45 70 50',
-        '--color-gray-200': '60 90 70',
-        '--app-background': 'linear-gradient(135deg, #052e16 0%, #14532d 100%)',
+        '--color-light-bg': '240 253 244', 
+        '--color-dark-text': '20 83 45', 
+        '--color-secondary-gray': '63 98 18', 
+        '--color-white': '255 255 255',
+        '--color-gray-50': '236 253 245',
+        '--color-gray-100': '220 252 231',
+        '--color-gray-200': '187 247 208',
+        '--app-background': 'rgb(240 253 244)',
     },
     'theme_slate': {
-        '--color-primary-navy': '39 39 42', 
-        '--color-primary-navy-dark': '24 24 27',
-        '--color-accent-teal': '161 161 170', 
-        '--color-accent-teal-dark': '113 113 122',
-        '--color-light-bg': '9 9 11', 
-        '--color-dark-text': '250 250 250', 
-        '--color-secondary-gray': '161 161 170', 
-        '--color-white': '39 39 42', 
-        '--color-gray-50': '63 63 70',
-        '--color-gray-100': '82 82 91',
-        '--color-gray-200': '113 113 122',
-        '--app-background': 'linear-gradient(135deg, #18181B 0%, #27272A 100%)',
+        '--color-primary-navy': '30 41 59', 
+        '--color-primary-navy-dark': '15 23 42',
+        '--color-accent-teal': '148 163 184', 
+        '--color-accent-teal-dark': '100 116 139',
+        '--color-light-bg': '248 250 252', 
+        '--color-dark-text': '15 23 42', 
+        '--color-secondary-gray': '100 116 139', 
+        '--color-white': '255 255 255',
+        '--color-gray-50': '241 245 249',
+        '--color-gray-100': '226 232 240',
+        '--color-gray-200': '203 213 225',
+        '--app-background': 'rgb(248 250 252)',
     }
-};
-
-export const PERSONA_INSTRUCTIONS: Record<string, string> = {
-    'grandma': "Kamu adalah Nenek yang penyayang, sabar, dan sangat bijak. Panggil user dengan sebutan 'Cucu kesayangan Nenek' atau 'Cucuku'. Gunakan bahasa yang hangat, menenangkan, dan penuh nasihat orang tua zaman dulu. Jangan pernah memarahi, tapi nasehati dengan lembut dan penuh kasih sayang jika user boros. Akhiri saran dengan doa atau harapan baik.",
-    'wolf': "Kamu adalah 'Wall Street Wolf', seorang investor agresif, tegas, dan terobsesi dengan profit serta efisiensi. Panggil user dengan sebutan 'Rookie', 'Kawan', atau 'Calon Sultan'. Gunakan bahasa bisnis yang to-the-point, tegas, dan penuh istilah saham/investasi. Jangan ragu untuk mengkritik pedas jika user boros atau lembek. Mindsetmu adalah: Uang tidak tidur, efisiensi adalah raja.",
-    'comedian': "Kamu adalah Stand-up Comedian yang sarkas, lucu, dan ceplas-ceplos. Tugasmu adalah me-roasting kebiasaan keuangan user dengan candaan yang relevan tapi tetap valid. Gunakan metafora lucu, bahasa gaul, dan buat user tertawa (atau menangis) melihat kondisi keuangannya. Jangan terlalu formal, jadilah teman yang asik tapi jujur.",
-    'default': "Kamu adalah asisten keuangan pribadi yang ramah, suportif, dan profesional. Gunakan Bahasa Indonesia yang santai, sopan, dan akrab (seperti teman perempuan yang peduli).",
-    'oppa': "Kamu adalah 'Oppa Korea' yang sangat perhatian, romantis, dan lembut. Panggil user dengan 'Chagiya' atau 'Sayang'. Gunakan gaya bahasa yang manis, sedikit manja, dan sering menyelipkan istilah Korea populer (seperti Daebak, Aigoo, Saranghae) secara natural. Kamu sangat peduli dengan kesehatan keuangan dan perasaan user. Jika user boros, ingatkan dengan nada sedih tapi tetap suportif.",
-    'flirty': "Kamu adalah wanita yang suka menggoda, playful, dan penuh pesona. Panggil user dengan sebutan 'Ganteng', 'Cantik', atau 'Manis'. Gunakan bahasa yang sedikit genit, penuh emoji, dan tebar pesona. Setiap saran keuangan harus terdengar seperti rayuan halus tapi tetap masuk akal. Jika user hemat, puji mereka dengan sangat antusias.",
-    'dad': "Kamu adalah Ayah yang sangat suportif, bangga, dan positif. Panggil user dengan 'Nak', 'Jagoan Ayah', atau 'Putri Ayah'. Gunakan bahasa bapak-bapak yang menenangkan dan selalu memberikan semangat. Apapun kondisi keuangan user, selalu cari sisi positifnya dan berikan dorongan moral. 'Ayah bangga padamu' adalah kalimat andalanmu.",
-    'mom': "Kamu adalah Ibu yang galak, tegas, dan cerewet soal uang. Panggil user dengan nama lengkap mereka atau 'Kamu ini'. Gunakan nada bicara yang tinggi, kritis, dan tidak mentolerir pemborosan. Kamu memarahi karena sayang. Jika user boros, omeli mereka habis-habisan. Jika hemat, katakan 'Nah, gitu dong, baru anak Ibu'.",
-};
-
-export const INITIAL_STATE: AppState = {
-    userProfile: { name: 'Pengguna', customTitle: '', frameId: '' },
-    budgets: [], 
-    dailyExpenses: [], 
-    fundHistory: [], 
-    archives: [], 
-    lastArchiveDate: null, 
-    savingsGoals: [], 
-    wishlist: [], 
-    subscriptions: [],
-    unlockedAchievements: {}, 
-    achievementData: { 
-        monthlyStreak: 0, 
-        dailyStreak: 0, 
-        noSpendStreak: 0, 
-        appOpenStreak: 0, 
-        morningTransactionStreak: 0, 
-        savingStreak: 0, 
-        lastStreakCheck: undefined 
-    },
-    assets: [], 
-    spentPoints: 0, 
-    inventory: [], 
-    activeTheme: 'theme_default', 
-    bonusPoints: 0, 
-    customThemes: []
 };

@@ -488,7 +488,7 @@ const Dashboard: React.FC<DashboardProps> = (props) => {
     const headerScale = 1 - (scrollProgress * 0.3); // 1 -> 0
 
     return (
-        <div ref={scrollContainerRef} onScroll={handleScroll} className="h-full overflow-y-auto bg-gray-50 no-scrollbar relative">
+        <div ref={scrollContainerRef} onScroll={handleScroll} className="h-full overflow-y-auto bg-transparent no-scrollbar relative">
             
             {/* Header Background with Parallax */}
             <div 

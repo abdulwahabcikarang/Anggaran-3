@@ -2,363 +2,377 @@
 import React, { useMemo } from 'react';
 import type { AppState, SavingsGoal } from '../types';
 import { PlusCircleIcon, BuildingLibraryIcon, ArrowUturnLeftIcon, SparklesIcon, HeartIcon, TrashIcon, ArrowDownTrayIcon, ShoppingBagIcon } from './Icons';
+import { SKIN_ASSETS, SkinStage } from '../assets';
 
 const formatCurrency = (amount: number) => {
-    if (amount >= 100000000000) { // If > 11 digits (100 Billion)
+    if (amount >= 100000000000) { 
         return amount.toExponential(2).replace('+', '');
     }
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
 };
 
-// --- PLANT VISUALIZATION COMPONENT ---
-const PlantVisualizer: React.FC<{
-    progress: number; // 0 to 100
-    isCompleted: boolean;
-    seed: number; // Used to randomize curves slightly
-    type: 'finite' | 'infinite';
-}> = ({ progress, isCompleted, seed, type }) => {
-    // Normalize progress (clamp between 0 and 100)
-    const growth = Math.min(100, Math.max(0, progress));
-    
-    // Procedural constants based on seed
-    const curveDir = seed % 2 === 0 ? 1 : -1; // Curving left or right
-    const leafAngleVar = (seed % 20) - 10; 
+// --- DEFAULT SVGS ---
 
-    // Height of the plant (max 150 units)
-    const plantHeight = (growth / 100) * 120;
-    
-    // Number of leaves: roughly 1 leaf per 15% progress, max 8-10
-    const leafCount = Math.floor(growth / 15);
-
-    const renderLeaves = () => {
-        const leaves = [];
-        for (let i = 0; i < leafCount; i++) {
-            const yPos = 150 - (i * (120 / 8)) - 20; // Distribute leaves up the stem
-            const side = i % 2 === 0 ? 1 : -1;
-            const scale = 0.5 + (i * 0.05); // Leaves get slightly bigger/smaller logic
-            
-            // Leaf SVG path (simple quadratic bezier shape)
-            const leafPath = `M0,0 Q${15 * side},${-10} ${30 * side},${-5} Q${15 * side},${10} 0,0`;
-            
-            leaves.push(
-                <path 
-                    key={i}
-                    d={leafPath}
-                    fill={isCompleted ? "#27AE60" : "#2ECC71"} // Darker green if completed
-                    stroke="#1E8449"
-                    strokeWidth="1"
-                    transform={`translate(100, ${yPos}) rotate(${(-20 * side) + leafAngleVar}) scale(${scale})`}
-                    className="animate-fade-in"
-                    style={{ animationDelay: `${i * 100}ms` }}
-                />
-            );
-        }
-        return leaves;
-    };
-
+const DefaultPlantSvg: React.FC<{ stage: string; className?: string }> = ({ stage, className }) => {
     return (
-        <div className="relative w-full h-52 flex items-end justify-center overflow-hidden rounded-t-xl bg-gradient-to-t from-blue-50 to-white">
-            {/* Background Sun/Aura if completed */}
-            {isCompleted && (
-                <div className="absolute top-4 right-10 w-16 h-16 bg-yellow-200 rounded-full opacity-50 blur-xl animate-pulse"></div>
+        <svg viewBox="0 0 512 512" className={className} xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="leafGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#4ade80" />
+                    <stop offset="100%" stopColor="#16a34a" />
+                </linearGradient>
+                <linearGradient id="potGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#d97706" />
+                    <stop offset="100%" stopColor="#92400e" />
+                </linearGradient>
+                <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur in="SourceAlpha" stdDeviation="3" />
+                    <feOffset dx="2" dy="2" result="offsetblur" />
+                    <feComponentTransfer>
+                        <feFuncA type="linear" slope="0.3" />
+                    </feComponentTransfer>
+                    <feMerge>
+                        <feMergeNode />
+                        <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                </filter>
+            </defs>
+            
+            {/* STAGE 1: BENIH */}
+            {stage === 'stage1' && (
+                <g filter="url(#shadow)">
+                    {/* Tanah */}
+                    <path d="M156 400 Q256 440 356 400 Q356 380 256 380 Q156 380 156 400" fill="#5D4037" />
+                    <path d="M176 395 Q256 420 336 395 Q336 385 256 385 Q176 385 176 395" fill="#795548" />
+                    {/* Biji */}
+                    <path d="M256 390 Q270 390 270 405 Q256 425 242 405 Q242 390 256 390" fill="#8D6E63" stroke="#5D4037" strokeWidth="2" />
+                </g>
             )}
 
-            <svg width="200" height="200" viewBox="0 0 200 200" className="z-10">
-                {/* Pot */}
-                <defs>
-                    <linearGradient id="potGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor="#8B4513" />
-                        <stop offset="50%" stopColor="#A0522D" />
-                        <stop offset="100%" stopColor="#8B4513" />
-                    </linearGradient>
-                </defs>
-                <path d="M70 170 L130 170 L120 200 L80 200 Z" fill="url(#potGradient)" stroke="#5D4037" strokeWidth="2" />
-                <rect x="65" y="165" width="70" height="10" rx="2" fill="#A0522D" stroke="#5D4037" />
+            {/* STAGE 2: TUNAS */}
+            {stage === 'stage2' && (
+                <g filter="url(#shadow)">
+                    {/* Tanah */}
+                    <path d="M186 420 Q256 440 326 420 Q326 410 256 410 Q186 410 186 420" fill="#5D4037" opacity="0.8"/>
+                    {/* Batang */}
+                    <path d="M256 415 Q256 380 250 350" stroke="#4ade80" strokeWidth="6" fill="none" strokeLinecap="round" />
+                    {/* Daun Kiri */}
+                    <path d="M250 350 Q220 320 200 340 Q220 370 250 350" fill="url(#leafGrad)" />
+                    {/* Daun Kanan */}
+                    <path d="M250 350 Q280 320 300 340 Q280 370 250 350" fill="url(#leafGrad)" />
+                </g>
+            )}
 
-                {/* Seedling Stage (always visible if > 0) */}
-                {growth > 0 && (
-                    <>
-                        {/* Stem */}
-                        <path 
-                            d={`M100 170 Q${100 + (20 * curveDir)} ${170 - (plantHeight / 2)} 100 ${170 - plantHeight}`} 
-                            stroke={isCompleted ? "#1E8449" : "#27AE60"} 
-                            strokeWidth={Math.max(2, growth / 20)} 
-                            fill="none" 
-                            strokeLinecap="round"
-                            className="transition-all duration-1000 ease-out"
-                        />
+            {/* STAGE 3: BERTUMBUH */}
+            {stage === 'stage3' && (
+                <g filter="url(#shadow)">
+                    {/* Pot Sederhana */}
+                    <path d="M220 450 L292 450 L285 380 L227 380 Z" fill="url(#potGrad)" />
+                    <rect x="215" y="370" width="82" height="15" rx="2" fill="#b45309" />
+                    
+                    {/* Tanaman */}
+                    <path d="M256 380 Q260 300 256 220" stroke="#16a34a" strokeWidth="8" fill="none" strokeLinecap="round" />
+                    {/* Daun-daun */}
+                    <path d="M256 320 Q210 290 190 310 Q220 340 256 320" fill="url(#leafGrad)" />
+                    <path d="M256 280 Q300 250 320 270 Q290 300 256 280" fill="url(#leafGrad)" />
+                    <path d="M256 240 Q210 210 190 230 Q220 260 256 240" fill="url(#leafGrad)" />
+                    {/* Pucuk */}
+                    <path d="M256 220 Q236 180 256 160 Q276 180 256 220" fill="#86efac" />
+                </g>
+            )}
+
+            {/* STAGE 4: DEWASA */}
+            {stage === 'stage4' && (
+                <g filter="url(#shadow)">
+                    {/* Pot Bagus */}
+                    <path d="M190 460 L322 460 L310 340 L202 340 Z" fill="url(#potGrad)" />
+                    <path d="M180 340 L332 340 L332 310 L180 310 Z" fill="#b45309" />
+                    <rect x="220" y="360" width="72" height="60" rx="5" fill="#78350f" opacity="0.3" /> {/* Decor on pot */}
+
+                    {/* Batang Utama */}
+                    <path d="M256 320 Q256 200 256 150" stroke="#15803d" strokeWidth="12" fill="none" strokeLinecap="round" />
+                    
+                    {/* Rimbunan Daun */}
+                    <g transform="translate(0, -20)">
+                        <circle cx="256" cy="150" r="110" fill="url(#leafGrad)" opacity="0.3" />
+                        <path d="M256 180 Q180 100 120 160 Q180 240 256 180" fill="#22c55e" />
+                        <path d="M256 180 Q332 100 392 160 Q332 240 256 180" fill="#22c55e" />
+                        <path d="M256 150 Q190 50 140 100 Q190 180 256 150" fill="#16a34a" />
+                        <path d="M256 150 Q322 50 372 100 Q322 180 256 150" fill="#16a34a" />
+                        <path d="M256 120 Q220 20 256 10 Q292 20 256 120" fill="#4ade80" />
                         
-                        {/* Leaves */}
-                        {renderLeaves()}
-
-                        {/* Flower (Only if completed or > 95%) */}
-                        {(isCompleted || growth >= 95) && (
-                            <g transform={`translate(100, ${170 - plantHeight})`} className="animate-bounce-slow">
-                                <circle cx="0" cy="0" r="8" fill="#F1C40F" />
-                                {[0, 45, 90, 135, 180, 225, 270, 315].map((deg, i) => (
-                                    <ellipse 
-                                        key={i}
-                                        cx="0" 
-                                        cy="-12" 
-                                        rx="6" 
-                                        ry="10" 
-                                        fill={seed % 2 === 0 ? "#E74C3C" : "#9B59B6"} // Random flower color Red or Purple
-                                        transform={`rotate(${deg})`} 
-                                    />
-                                ))}
-                            </g>
-                        )}
-                        
-                         {/* Bud (If approaching goal) */}
-                         {!isCompleted && growth > 70 && growth < 95 && (
-                            <circle cx="100" cy={170 - plantHeight} r="6" fill="#2ECC71" stroke="#1E8449" />
-                        )}
-                    </>
-                )}
-
-                {/* Empty State / Soil */}
-                {growth === 0 && (
-                    <circle cx="100" cy="170" r="3" fill="#5D4037" />
-                )}
-            </svg>
-            
-            {/* Progress Badge Overlay */}
-            <div className="absolute bottom-2 right-2 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-lg text-xs font-bold text-primary-navy shadow-sm border border-gray-100">
-                {Math.floor(growth)}%
-            </div>
-        </div>
+                        {/* Bunga/Buah */}
+                        <circle cx="200" cy="120" r="10" fill="#fbbf24" />
+                        <circle cx="312" cy="120" r="10" fill="#fbbf24" />
+                        <circle cx="256" cy="80" r="12" fill="#f59e0b" stroke="#fff" strokeWidth="2" />
+                    </g>
+                </g>
+            )}
+        </svg>
     );
 };
 
-// --- HIGH FIDELITY PET VISUALIZER COMPONENT ---
-const PetVisualizer: React.FC<{
+const DefaultPetSvg: React.FC<{ stage: string; className?: string }> = ({ stage, className }) => {
+    return (
+        <svg viewBox="0 0 512 512" className={className} xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="petBody" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#fb923c" /> {/* Orange Cat */}
+                    <stop offset="100%" stopColor="#c2410c" />
+                </linearGradient>
+                <filter id="petShadow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur in="SourceAlpha" stdDeviation="4" />
+                    <feOffset dx="0" dy="4" result="offsetblur" />
+                    <feComponentTransfer>
+                        <feFuncA type="linear" slope="0.3" />
+                    </feComponentTransfer>
+                    <feMerge>
+                        <feMergeNode />
+                        <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                </filter>
+            </defs>
+            
+            {/* STAGE 1: TELUR */}
+            {stage === 'stage1' && (
+                <g filter="url(#petShadow)" transform="translate(0, 50)">
+                    <ellipse cx="256" cy="256" rx="85" ry="105" fill="#fef08a" stroke="#eab308" strokeWidth="6"/>
+                    <path d="M256 151 A 85 105 0 0 1 341 256" fill="none" stroke="#fff" strokeWidth="10" opacity="0.4" strokeLinecap="round"/>
+                    <circle cx="210" cy="220" r="18" fill="#facc15" opacity="0.7"/>
+                    <circle cx="290" cy="290" r="12" fill="#facc15" opacity="0.7"/>
+                    <circle cx="280" cy="190" r="8" fill="#facc15" opacity="0.7"/>
+                </g>
+            )}
+
+            {/* STAGE 2: BAYI */}
+            {stage === 'stage2' && (
+                <g filter="url(#petShadow)" transform="translate(0, 30)">
+                    {/* Kepala Bulat */}
+                    <circle cx="256" cy="256" r="90" fill="url(#petBody)" />
+                    {/* Telinga */}
+                    <path d="M190 190 L160 110 L240 170 Z" fill="#fb923c" stroke="#c2410c" strokeWidth="4" strokeLinejoin="round" />
+                    <path d="M322 190 L352 110 L272 170 Z" fill="#fb923c" stroke="#c2410c" strokeWidth="4" strokeLinejoin="round" />
+                    {/* Wajah Imut */}
+                    <circle cx="215" cy="240" r="12" fill="#1f2937" />
+                    <circle cx="218" cy="236" r="4" fill="#fff" />
+                    <circle cx="297" cy="240" r="12" fill="#1f2937" />
+                    <circle cx="300" cy="236" r="4" fill="#fff" />
+                    <path d="M246 270 Q256 280 266 270" stroke="#1f2937" strokeWidth="4" fill="none" strokeLinecap="round" />
+                    {/* Pipi */}
+                    <ellipse cx="200" cy="265" rx="8" ry="5" fill="#fca5a5" opacity="0.6"/>
+                    <ellipse cx="312" cy="265" rx="8" ry="5" fill="#fca5a5" opacity="0.6"/>
+                </g>
+            )}
+
+            {/* STAGE 3: REMAJA */}
+            {stage === 'stage3' && (
+                <g filter="url(#petShadow)">
+                    {/* Ekor Goyang */}
+                    <path d="M320 360 Q390 320 370 250" stroke="#c2410c" strokeWidth="18" fill="none" strokeLinecap="round">
+                        <animate attributeName="d" values="M320 360 Q390 320 370 250; M320 360 Q410 360 370 250; M320 360 Q390 320 370 250" dur="2s" repeatCount="indefinite" />
+                    </path>
+                    {/* Badan */}
+                    <ellipse cx="256" cy="350" rx="80" ry="70" fill="url(#petBody)" />
+                    <ellipse cx="256" cy="350" rx="50" ry="40" fill="#fff" opacity="0.2" /> {/* Perut */}
+                    
+                    {/* Kepala */}
+                    <circle cx="256" cy="250" r="80" fill="url(#petBody)" />
+                    {/* Telinga */}
+                    <path d="M190 190 L160 110 L240 170 Z" fill="#fb923c" />
+                    <path d="M322 190 L352 110 L272 170 Z" fill="#fb923c" />
+                    {/* Wajah */}
+                    <circle cx="220" cy="230" r="10" fill="#1f2937" />
+                    <circle cx="292" cy="230" r="10" fill="#1f2937" />
+                    <path d="M246 260 Q256 270 266 260" stroke="#1f2937" strokeWidth="4" fill="none" strokeLinecap="round" />
+                    {/* Kaki Depan */}
+                    <ellipse cx="220" cy="410" rx="15" ry="10" fill="#fff" />
+                    <ellipse cx="292" cy="410" rx="15" ry="10" fill="#fff" />
+                </g>
+            )}
+
+            {/* STAGE 4: DEWASA */}
+            {stage === 'stage4' && (
+                <g filter="url(#petShadow)">
+                    {/* Ekor Besar */}
+                    <path d="M300 380 Q420 350 400 220" stroke="#ea580c" strokeWidth="25" fill="none" strokeLinecap="round">
+                        <animate attributeName="d" values="M300 380 Q420 350 400 220; M300 380 Q440 380 400 200; M300 380 Q420 350 400 220" dur="4s" repeatCount="indefinite" />
+                    </path>
+                    
+                    {/* Badan */}
+                    <path d="M196 420 L316 420 L330 280 L182 280 Z" fill="url(#petBody)" stroke="#c2410c" strokeWidth="2" strokeLinejoin="round"/>
+                    {/* Kaki-kaki */}
+                    <path d="M196 420 Q170 440 210 440" stroke="#fb923c" strokeWidth="14" strokeLinecap="round" />
+                    <path d="M316 420 Q342 440 302 440" stroke="#fb923c" strokeWidth="14" strokeLinecap="round" />
+                    
+                    {/* Kepala */}
+                    <circle cx="256" cy="230" r="85" fill="url(#petBody)" />
+                    <path d="M180 180 L150 90 L240 160 Z" fill="#ea580c" />
+                    <path d="M332 180 L362 90 L272 160 Z" fill="#ea580c" />
+                    
+                    {/* Wajah Detail */}
+                    <circle cx="220" cy="220" r="14" fill="#1f2937" />
+                    <circle cx="224" cy="216" r="5" fill="#fff" />
+                    <circle cx="292" cy="220" r="14" fill="#1f2937" />
+                    <circle cx="296" cy="216" r="5" fill="#fff" />
+                    <path d="M246 250 Q256 260 266 250" stroke="#1f2937" strokeWidth="5" fill="none" strokeLinecap="round" />
+                    <path d="M256 240 L246 250 L266 250 Z" fill="#fca5a5" /> {/* Nose */}
+                    
+                    {/* Kumis */}
+                    <line x1="180" y1="240" x2="210" y2="245" stroke="#78350f" strokeWidth="2" opacity="0.5"/>
+                    <line x1="180" y1="255" x2="210" y2="255" stroke="#78350f" strokeWidth="2" opacity="0.5"/>
+                    <line x1="332" y1="240" x2="302" y2="245" stroke="#78350f" strokeWidth="2" opacity="0.5"/>
+                    <line x1="332" y1="255" x2="302" y2="255" stroke="#78350f" strokeWidth="2" opacity="0.5"/>
+
+                    {/* Kalung Emas (Simbol Tabungan) */}
+                    <rect x="216" y="305" width="80" height="18" rx="6" fill="#ef4444" />
+                    <circle cx="256" cy="320" r="10" fill="#fbbf24" stroke="#d97706" strokeWidth="2" />
+                    <path d="M256 315 L256 325 M251 320 L261 320" stroke="#b45309" strokeWidth="2" strokeLinecap="round" /> {/* Plus sign on coin */}
+                </g>
+            )}
+        </svg>
+    );
+};
+
+// --- IMAGE VISUALIZER COMPONENT (4 STAGES) ---
+const ExternalImageVisualizer: React.FC<{
     progress: number;
     isCompleted: boolean;
-    seed: number;
-    type: 'finite' | 'infinite';
-}> = ({ progress, isCompleted, seed }) => {
-    // Determine Stage
-    let stage: 'egg' | 'baby' | 'teen' | 'adult' | 'legendary' = 'egg';
-    if (progress >= 100 || isCompleted) stage = 'legendary';
-    else if (progress >= 80) stage = 'adult';
-    else if (progress >= 50) stage = 'teen';
-    else if (progress >= 20) stage = 'baby';
-
-    // Procedural Color Palettes based on seed
-    const palettes = [
-        { name: 'Phoenix', primary: '#FF4500', secondary: '#FFA500', accent: '#FFD700', dark: '#8B0000' }, // Merah Api
-        { name: 'Sapphire', primary: '#1E90FF', secondary: '#00BFFF', accent: '#E0FFFF', dark: '#00008B' }, // Biru
-        { name: 'Emerald', primary: '#228B22', secondary: '#32CD32', accent: '#98FB98', dark: '#006400' }, // Hijau
-        { name: 'Amethyst', primary: '#9370DB', secondary: '#BA55D3', accent: '#E6E6FA', dark: '#4B0082' }, // Ungu
-        { name: 'Gold', primary: '#DAA520', secondary: '#FFD700', accent: '#FFFACD', dark: '#8B4513' }, // Emas
-    ];
+    visualType: 'plant' | 'pet';
+    skinId?: string;
+}> = ({ progress, isCompleted, visualType, skinId }) => {
     
-    const p = palettes[seed % palettes.length];
+    // 1. Determine Stage (4 Tahapan)
+    let stageKey: 'stage1' | 'stage2' | 'stage3' | 'stage4';
+    let stageLabel = '';
+
+    const isMaxLevel = progress >= 100 || isCompleted;
+
+    if (isMaxLevel) {
+        stageKey = 'stage4';
+        stageLabel = visualType === 'pet' ? 'Dewasa (Max)' : 'Mekar (Max)';
+    } else if (progress >= 75) {
+        stageKey = 'stage4';
+        stageLabel = visualType === 'pet' ? 'Dewasa' : 'Pohon Besar';
+    } else if (progress >= 50) {
+        stageKey = 'stage3';
+        stageLabel = visualType === 'pet' ? 'Remaja' : 'Bertumbuh';
+    } else if (progress >= 25) {
+        stageKey = 'stage2';
+        stageLabel = visualType === 'pet' ? 'Bayi' : 'Tunas';
+    } else {
+        stageKey = 'stage1';
+        stageLabel = visualType === 'pet' ? 'Telur' : 'Benih';
+    }
+
+    // 2. Check for Default Skin Logic
+    const isDefaultSkin = (!skinId || skinId === 'default' || (visualType === 'pet' && skinId === 'pet_default'));
+
+    // 3. Get Correct Asset URL (if not default)
+    let assets: SkinStage;
+    if (skinId && SKIN_ASSETS[skinId]) {
+        assets = SKIN_ASSETS[skinId];
+    } else {
+        assets = visualType === 'pet' ? SKIN_ASSETS['pet_default'] : SKIN_ASSETS['default'];
+    }
+
+    const imageUrl = assets[stageKey];
+
+    // 4. Animation & Style Logic based on stage
+    // Apply large size scaling (Big Boss Mode) to all premium skins
+    const largeSkins = [
+        'fox', 'dragon', 'swan', 'turtle', 'robot', 'jellyfish', 
+        'anthurium', 'monstera', 'sakura', 'aglonema', 'higanbana', 'wijaya', 'kadupul'
+    ];
+    const isLargeSkin = skinId && largeSkins.includes(skinId);
+
+    let animationClass = "";
+    let sizeClass = "";
+    let filterClass = "";
+
+    switch (stageKey) {
+        case 'stage1':
+            animationClass = "animate-bounce-slow";
+            sizeClass = isLargeSkin ? "w-48 h-48" : "w-24 h-24"; // 2x size for Big Skins
+            filterClass = "drop-shadow-lg";
+            break;
+        case 'stage2':
+            animationClass = "animate-pulse";
+            sizeClass = isLargeSkin ? "w-64 h-64" : "w-32 h-32"; 
+            filterClass = "drop-shadow-xl";
+            break;
+        case 'stage3':
+            animationClass = "animate-[float_8s_ease-in-out_infinite]";
+            sizeClass = isLargeSkin ? "w-72 h-72" : "w-40 h-40"; 
+            filterClass = "drop-shadow-2xl";
+            break;
+        case 'stage4':
+            animationClass = "animate-[float_6s_ease-in-out_infinite]";
+            sizeClass = isLargeSkin ? "w-96 h-96" : "w-48 h-48"; 
+            filterClass = "drop-shadow-[0_20px_35px_rgba(0,0,0,0.25)]";
+            break;
+    }
 
     return (
-        <div className="relative w-full h-56 flex items-center justify-center overflow-hidden rounded-t-xl bg-gradient-to-t from-gray-100 to-white group">
-            
-            {/* Environment / Background Elements */}
-            <div className="absolute bottom-0 w-full h-12 bg-[#e0e0e0] rounded-[50%] blur-xl transform scale-x-150 translate-y-6 opacity-60"></div>
-            
-            {/* Interactive Elements on Hover */}
-            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-                <HeartIcon className="w-6 h-6 text-pink-400 animate-bounce" />
+        <div className="relative w-full h-64 flex items-center justify-center rounded-t-xl bg-gradient-to-b from-blue-50/50 to-white overflow-hidden group">
+            {/* SPECIAL 100% LIGHT EFFECT - HOLY LIGHT */}
+            {isMaxLevel && (
+                <>
+                    {/* Rotating Sunburst */}
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200%] h-[200%] opacity-40 z-0 animate-[spinSlow_15s_linear_infinite]">
+                        <div className="w-full h-full bg-[conic-gradient(from_0deg,transparent_0deg,rgba(255,215,0,0.5)_20deg,transparent_40deg,rgba(255,215,0,0.5)_60deg,transparent_80deg,rgba(255,215,0,0.5)_100deg,transparent_120deg,rgba(255,215,0,0.5)_140deg,transparent_160deg,rgba(255,215,0,0.5)_180deg,transparent_200deg,rgba(255,215,0,0.5)_220deg,transparent_240deg,rgba(255,215,0,0.5)_260deg,transparent_280deg,rgba(255,215,0,0.5)_300deg,transparent_320deg,rgba(255,215,0,0.5)_340deg,transparent_360deg)]"></div>
+                    </div>
+                    {/* Pulsing Aura */}
+                    <div className="absolute w-60 h-60 rounded-full bg-yellow-400/20 blur-3xl animate-pulse z-0"></div>
+                    
+                    {/* Floating Particles */}
+                    <SparklesIcon className="absolute top-10 left-10 w-6 h-6 text-yellow-400 animate-bounce z-20" />
+                    <SparklesIcon className="absolute bottom-12 right-10 w-4 h-4 text-yellow-500 animate-ping z-20" />
+                    <SparklesIcon className="absolute top-20 right-20 w-3 h-3 text-orange-400 animate-pulse z-20" />
+                </>
+            )}
+
+            {/* Standard Background Glow (Dynamic based on stage) */}
+            {!isMaxLevel && (
+                <div className={`absolute w-40 h-40 rounded-full blur-3xl opacity-50 transition-all duration-1000 ${
+                    stageKey === 'stage4' ? 'bg-yellow-300 scale-150' : 
+                    stageKey === 'stage3' ? 'bg-purple-200 scale-125' :
+                    stageKey === 'stage2' ? 'bg-green-200 scale-100' : 'bg-gray-200 scale-75'
+                }`}></div>
+            )}
+
+            {/* The Image OR SVG */}
+            {isDefaultSkin ? (
+                 visualType === 'plant' ? (
+                    <DefaultPlantSvg stage={stageKey} className={`relative z-10 transition-all duration-700 ease-out w-40 h-40 sm:w-48 sm:h-48 ${animationClass} ${filterClass} hover:scale-110`} />
+                 ) : (
+                    <DefaultPetSvg stage={stageKey} className={`relative z-10 transition-all duration-700 ease-out w-40 h-40 sm:w-48 sm:h-48 ${animationClass} ${filterClass} hover:scale-110`} />
+                 )
+            ) : (
+                <img 
+                    src={imageUrl} 
+                    alt={`${visualType} ${stageKey}`}
+                    className={`relative z-10 object-contain transition-all duration-700 ease-out ${sizeClass} ${animationClass} ${filterClass} hover:scale-110`}
+                />
+            )}
+
+            {/* Stage Badge */}
+            <div className="absolute bottom-3 right-3 bg-white/90 backdrop-blur px-3 py-1.5 rounded-full text-xs font-bold text-primary-navy shadow-md border border-gray-200 z-20 flex items-center gap-1">
+                <span>{stageLabel}</span>
+                <span className={`ml-1 ${progress >= 100 ? 'text-green-600' : 'text-accent-teal'}`}>
+                    ({Math.floor(progress)}%)
+                </span>
             </div>
 
-            <svg width="220" height="200" viewBox="0 0 220 200" className="z-10 drop-shadow-lg">
-                <defs>
-                    <linearGradient id={`gradBody-${seed}`} x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor={p.secondary} />
-                        <stop offset="100%" stopColor={p.primary} />
-                    </linearGradient>
-                    <linearGradient id={`gradWing-${seed}`} x1="0%" y1="0%" x2="0%" y2="100%">
-                        <stop offset="0%" stopColor={p.accent} />
-                        <stop offset="100%" stopColor={p.secondary} />
-                    </linearGradient>
-                    <radialGradient id={`gradEye-${seed}`} cx="30%" cy="30%" r="50%">
-                        <stop offset="0%" stopColor="#fff" />
-                        <stop offset="100%" stopColor="#000" />
-                    </radialGradient>
-                    <filter id="glow">
-                        <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
-                        <feMerge>
-                            <feMergeNode in="coloredBlur"/>
-                            <feMergeNode in="SourceGraphic"/>
-                        </feMerge>
-                    </filter>
-                </defs>
-
-                {/* --- STAGE 1: REALISTIC EGG (0-20%) --- */}
-                {stage === 'egg' && (
-                    <g className="animate-[wiggle_3s_ease-in-out_infinite] origin-bottom">
-                        {/* Shadow */}
-                        <ellipse cx="110" cy="175" rx="35" ry="8" fill="black" opacity="0.2" />
-                        
-                        {/* Egg Shape */}
-                        <path 
-                            d="M110,40 C140,40 160,100 160,140 C160,170 140,180 110,180 C80,180 60,170 60,140 C60,100 80,40 110,40 Z" 
-                            fill={`url(#gradBody-${seed})`}
-                            stroke={p.dark}
-                            strokeWidth="1"
-                        />
-                        
-                        {/* Highlights & Texture */}
-                        <ellipse cx="95" cy="80" rx="10" ry="25" fill="white" opacity="0.3" transform="rotate(-15 95 80)" />
-                        <circle cx="130" cy="120" r="5" fill={p.dark} opacity="0.1" />
-                        <circle cx="90" cy="150" r="8" fill={p.dark} opacity="0.1" />
-                        
-                        {/* Cracks appear near end of stage */}
-                        {progress > 15 && (
-                            <path d="M110,40 L105,60 L115,70 L100,90" fill="none" stroke="black" strokeWidth="2" strokeLinecap="round" className="animate-pulse" />
-                        )}
-                    </g>
-                )}
-
-                {/* --- STAGE 2: CUTE BABY CHICK (20-50%) --- */}
-                {stage === 'baby' && (
-                    <g className="animate-bounce-slow origin-bottom">
-                        {/* Shadow */}
-                        <ellipse cx="110" cy="170" rx="30" ry="6" fill="black" opacity="0.2" />
-
-                        {/* Body (Fluffy Ball) */}
-                        <circle cx="110" cy="130" r="40" fill={`url(#gradBody-${seed})`} />
-                        
-                        {/* Tiny Wings */}
-                        <path d="M70,130 Q60,120 75,115" fill="none" stroke={p.dark} strokeWidth="3" strokeLinecap="round" className="animate-[flap_0.5s_ease-in-out_infinite]" />
-                        <path d="M150,130 Q160,120 145,115" fill="none" stroke={p.dark} strokeWidth="3" strokeLinecap="round" className="animate-[flap_0.5s_ease-in-out_infinite_reverse]" />
-
-                        {/* Big Cute Eyes */}
-                        <circle cx="95" cy="120" r="6" fill="black" />
-                        <circle cx="125" cy="120" r="6" fill="black" />
-                        <circle cx="93" cy="118" r="2.5" fill="white" />
-                        <circle cx="123" cy="118" r="2.5" fill="white" />
-
-                        {/* Beak (Open demanding food) */}
-                        <path d="M105,135 L115,135 L110,145 Z" fill="#FFA500" stroke="#CC8400" strokeWidth="1" />
-                        
-                        {/* Feet */}
-                        <path d="M100,165 L100,175 M120,165 L120,175" stroke={p.dark} strokeWidth="3" strokeLinecap="round" />
-                    </g>
-                )}
-
-                {/* --- STAGE 3: TEEN BIRD (50-80%) --- */}
-                {stage === 'teen' && (
-                    <g transform="translate(10, 10)">
-                        {/* Shadow */}
-                        <ellipse cx="100" cy="160" rx="30" ry="6" fill="black" opacity="0.2" />
-
-                        {/* Body shape getting more streamlined */}
-                        <path 
-                            d="M60,120 Q60,90 100,90 Q140,90 140,130 Q140,160 100,160 Q60,160 60,120" 
-                            fill={`url(#gradBody-${seed})`} 
-                        />
-
-                        {/* Head */}
-                        <circle cx="100" cy="80" r="25" fill={`url(#gradBody-${seed})`} />
-
-                        {/* Crest/Hair starting to grow */}
-                        <path d="M100,55 Q90,40 105,35 Q110,45 100,55" fill={p.dark} />
-
-                        {/* Wing */}
-                        <path 
-                            d="M80,120 Q80,160 120,140 Q130,120 80,120" 
-                            fill={p.secondary} 
-                            stroke={p.dark} 
-                            strokeWidth="1" 
-                        />
-
-                        {/* Eye & Beak */}
-                        <circle cx="90" cy="75" r="4" fill="black" />
-                        <circle cx="89" cy="73" r="1.5" fill="white" />
-                        <path d="M75,80 L60,85 L75,90 Z" fill="#FFA500" />
-                    </g>
-                )}
-
-                {/* --- STAGE 4: MAJESTIC ADULT (80-100%) --- */}
-                {(stage === 'adult' || stage === 'legendary') && (
-                    <g transform="translate(20, 20)">
-                        {/* Legendary Aura */}
-                        {stage === 'legendary' && (
-                            <circle cx="100" cy="80" r="70" fill="url(#gradBody-seed)" opacity="0.2" filter="url(#glow)" className="animate-pulse" />
-                        )}
-
-                        {/* Long Decorative Tail */}
-                        <g className="origin-top-left animate-[sway_3s_ease-in-out_infinite]">
-                            <path d="M60,120 C40,160 20,180 0,160 C10,140 50,120 60,120" fill={p.dark} opacity="0.8" />
-                            <path d="M60,120 C50,170 60,190 80,180 C80,150 70,130 60,120" fill={p.secondary} opacity="0.9" />
-                        </g>
-
-                        {/* Main Body - Elegant Curve */}
-                        <path 
-                            d="M60,120 C60,150 140,150 140,100 C140,60 100,60 100,60" 
-                            fill={`url(#gradBody-${seed})`}
-                            stroke={p.dark}
-                            strokeWidth="0.5"
-                        />
-
-                        {/* Wing - Detailed */}
-                        <path 
-                            d="M70,100 C70,140 130,130 150,90 C120,90 90,90 70,100" 
-                            fill={`url(#gradWing-${seed})`}
-                            stroke={p.dark}
-                            strokeWidth="1"
-                        />
-
-                        {/* Head */}
-                        <path d="M100,60 C80,60 80,90 100,90 C110,90 120,80 120,60" fill={`url(#gradBody-${seed})`} />
-                        <circle cx="100" cy="60" r="18" fill={`url(#gradBody-${seed})`} />
-
-                        {/* Eye */}
-                        <circle cx="92" cy="55" r="3" fill="black" />
-                        <circle cx="91" cy="54" r="1" fill="white" />
-
-                        {/* Beak */}
-                        <path d="M84,55 Q70,60 84,65" fill="#FFA500" />
-
-                        {/* Crest / Crown */}
-                        {stage === 'legendary' ? (
-                            <path d="M100,42 L110,20 L120,42 Z" fill="#FFD700" stroke="#B8860B" filter="url(#glow)" />
-                        ) : (
-                            <path d="M105,45 Q115,30 120,45" fill={p.dark} />
-                        )}
-
-                        {/* Branch */}
-                        <path d="M40,135 L180,135" stroke="#8B4513" strokeWidth="6" strokeLinecap="round" />
-                        <path d="M120,135 L140,150" stroke="#8B4513" strokeWidth="4" strokeLinecap="round" />
-                        
-                        {/* Feet Claws */}
-                        <path d="M90,135 L90,140 M100,135 L100,140" stroke="#000" strokeWidth="2" />
-                    </g>
-                )}
-            </svg>
-
-            {/* Custom Animations */}
             <style>{`
-                @keyframes wiggle {
-                    0%, 100% { transform: rotate(0deg); }
-                    25% { transform: rotate(-5deg); }
-                    75% { transform: rotate(5deg); }
+                @keyframes float {
+                    0%, 100% { transform: translateY(0); }
+                    50% { transform: translateY(-15px); }
                 }
-                @keyframes flap {
-                    0%, 100% { transform: scaleY(1); }
-                    50% { transform: scaleY(0.6); }
-                }
-                @keyframes sway {
-                    0%, 100% { transform: rotate(0deg); }
-                    50% { transform: rotate(5deg); }
+                @keyframes spinSlow {
+                    from { transform: translate(-50%, -50%) rotate(0deg); }
+                    to { transform: translate(-50%, -50%) rotate(360deg); }
                 }
             `}</style>
-            
-            {/* Status Badge */}
-            <div className="absolute bottom-2 right-2 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-lg text-xs font-bold text-primary-navy shadow-sm border border-gray-100 flex items-center gap-1 z-20">
-                {stage === 'egg' && 'Fase Telur'}
-                {stage === 'baby' && 'Fase Bayi'}
-                {stage === 'teen' && 'Fase Remaja'}
-                {stage === 'adult' && 'Fase Dewasa'}
-                {stage === 'legendary' && <><SparklesIcon className="w-3 h-3 text-yellow-500" /> Legenda</>}
-                <span className="ml-1 text-[10px] text-secondary-gray">({Math.floor(progress)}%)</span>
-            </div>
         </div>
     );
 };
@@ -369,7 +383,7 @@ const SavingsGoalCard: React.FC<{
     onWithdrawSavings: () => void;
     onViewDetails: () => void;
     onDelete: () => void;
-    onUseGoal: () => void; // New prop for using completed goal
+    onUseGoal: () => void; 
 }> = ({ goal, onAddSavings, onWithdrawSavings, onViewDetails, onDelete, onUseGoal }) => {
     
     // EVOLUTION LOGIC
@@ -377,27 +391,22 @@ const SavingsGoalCard: React.FC<{
     let growthLabel = '';
 
     if (!goal.isInfinite && goal.targetAmount) {
-        // --- 1. TARGETED GOAL: PERCENTAGE BASED ---
         const clampedSaved = Math.max(0, goal.savedAmount);
         percentage = Math.min(100, (clampedSaved / goal.targetAmount) * 100);
         growthLabel = `${Math.floor(percentage)}% Terkumpul`;
     } else {
-        // --- 2. INFINITE GOAL: COUNT BASED ---
+        // Infinite Goal Logic
+        // Scale updated for 4 stages: need more interaction to reach max
         const positiveTxCount = goal.history.filter(h => h.amount > 0).length;
         const negativeTxCount = goal.history.filter(h => h.amount < 0).length;
-        
         const penaltyPerWithdrawal = 10;
         const effectiveGrowthScore = positiveTxCount - (negativeTxCount * penaltyPerWithdrawal);
-        const maxScore = 30; // 30 deposits to max out
+        const maxScore = 40; // Increased max score for longer game
         const clampedScore = Math.max(0, Math.min(maxScore, effectiveGrowthScore));
-        
         percentage = (clampedScore / maxScore) * 100;
         growthLabel = `Evolusi: ${clampedScore}/${maxScore} Poin`;
     }
 
-    const isPet = goal.visualType === 'pet';
-
-    // Handle Click behavior: If completed, offer Use, otherwise Add Savings
     const handleMainClick = () => {
         if (goal.isCompleted) {
             onUseGoal();
@@ -407,124 +416,110 @@ const SavingsGoalCard: React.FC<{
     };
 
     return (
-        <div className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 overflow-hidden flex flex-col h-full border border-gray-100 relative">
-            {/* Infinite Label Badge */}
+        <div className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col h-full border border-gray-100 relative group transform hover:-translate-y-1">
             {goal.isInfinite && (
-                <div className="absolute top-2 left-2 z-20 bg-indigo-100 text-indigo-700 text-[10px] font-bold px-2 py-1 rounded-md border border-indigo-200 shadow-sm">
+                <div className="absolute top-3 left-3 z-20 bg-white/90 backdrop-blur text-indigo-600 text-[10px] font-extrabold px-2 py-1 rounded-md border border-indigo-100 shadow-sm uppercase tracking-wide">
                     Fleksibel
                 </div>
             )}
 
-            {/* Visual Area */}
-            <div onClick={handleMainClick} className="cursor-pointer group relative">
-                 {isPet ? (
-                     <PetVisualizer 
-                        progress={percentage} 
-                        isCompleted={goal.isCompleted} 
-                        seed={goal.id} 
-                        type={goal.isInfinite ? 'infinite' : 'finite'}
-                     />
-                 ) : (
-                     <PlantVisualizer 
-                        progress={percentage} 
-                        isCompleted={goal.isCompleted} 
-                        seed={goal.id}
-                        type={goal.isInfinite ? 'infinite' : 'finite'}
-                     />
-                 )}
+            <div onClick={handleMainClick} className="cursor-pointer relative bg-gray-50">
                  
-                 {/* Hover overlay to indicate action */}
-                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors flex items-center justify-center">
-                    <div className={`opacity-0 group-hover:opacity-100 transform translate-y-4 group-hover:translate-y-0 transition-all duration-300 px-4 py-2 rounded-full shadow-lg flex items-center gap-2 font-bold text-sm ${goal.isCompleted ? 'bg-yellow-100 text-yellow-700' : 'bg-white/90 text-accent-teal'}`}>
+                 <ExternalImageVisualizer 
+                    progress={percentage}
+                    isCompleted={goal.isCompleted}
+                    visualType={goal.visualType || 'plant'}
+                    skinId={goal.skinId}
+                 />
+                 
+                 {/* Hover Overlay */}
+                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors flex items-center justify-center z-20">
+                    <div className={`opacity-0 group-hover:opacity-100 transform translate-y-4 group-hover:translate-y-0 transition-all duration-300 px-5 py-2.5 rounded-full shadow-xl flex items-center gap-2 font-bold text-sm backdrop-blur-md ${goal.isCompleted ? 'bg-yellow-100/90 text-yellow-800' : 'bg-white/90 text-accent-teal'}`}>
                         {goal.isCompleted ? (
                             <><ShoppingBagIcon className="w-4 h-4" /> Gunakan</>
                         ) : (
-                            <><PlusCircleIcon className="w-4 h-4" /> {isPet ? 'Beri Makan' : 'Siram'}</>
+                            <><PlusCircleIcon className="w-4 h-4" /> {goal.visualType === 'pet' ? 'Beri Makan' : 'Siram'}</>
                         )}
                     </div>
                  </div>
             </div>
 
-            {/* Card Content */}
-            <div className="p-4 flex flex-col flex-grow">
-                <div className="flex justify-between items-start mb-2">
-                    <h3 className="text-lg font-bold text-dark-text truncate w-full" title={goal.name}>{goal.name}</h3>
+            <div className="p-5 flex flex-col flex-grow">
+                <div className="flex justify-between items-start mb-1">
+                    <h3 className="text-lg font-black text-primary-navy truncate w-full tracking-tight" title={goal.name}>{goal.name}</h3>
                 </div>
 
-                <div className="mb-4">
+                <div className="mb-5">
                     {goal.isInfinite ? (
                         <div>
-                             <p className="text-xs text-secondary-gray uppercase tracking-wider mb-1">Dana Terkumpul</p>
-                             <p className="font-bold text-2xl text-primary-navy">{formatCurrency(goal.savedAmount)}</p>
-                             <p className="text-[10px] text-gray-400 mt-1">{growthLabel}</p>
+                             <p className="text-[10px] text-secondary-gray uppercase tracking-widest font-bold mb-1">Dana Terkumpul</p>
+                             <p className="font-black text-2xl text-primary-navy">{formatCurrency(goal.savedAmount)}</p>
+                             <p className="text-[10px] text-accent-teal font-medium mt-1 bg-teal-50 inline-block px-2 py-0.5 rounded">{growthLabel}</p>
                         </div>
                     ) : (
                         <div>
                             <div className="flex justify-between items-end mb-1">
-                                <span className="text-2xl font-bold text-primary-navy">{formatCurrency(goal.savedAmount)}</span>
+                                <span className="text-2xl font-black text-primary-navy">{formatCurrency(goal.savedAmount)}</span>
                             </div>
-                             <div className="flex justify-between text-xs text-secondary-gray mb-2">
+                             <div className="flex justify-between text-xs text-secondary-gray mb-2 font-medium">
                                 <span>Target: {formatCurrency(goal.targetAmount || 0)}</span>
-                                <span>{goal.isCompleted ? 'Selesai' : 'Sedang Tumbuh'}</span>
+                                <span className={goal.isCompleted ? 'text-green-600 font-bold' : ''}>{goal.isCompleted ? 'Selesai!' : 'Sedang Tumbuh'}</span>
                             </div>
-                            <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden border border-gray-100">
+                            <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden shadow-inner">
                                 <div 
-                                    className={`h-full rounded-full transition-all duration-1000 ease-out ${goal.isCompleted ? 'bg-gradient-to-r from-green-400 to-green-600' : 'bg-gradient-to-r from-teal-400 to-teal-600'}`} 
+                                    className={`h-full rounded-full transition-all duration-1000 ease-out relative ${goal.isCompleted ? 'bg-gradient-to-r from-green-400 to-green-600' : 'bg-gradient-to-r from-teal-400 to-teal-600'}`} 
                                     style={{ width: `${percentage}%` }}
-                                ></div>
+                                >
+                                    <div className="absolute inset-0 bg-white/20 animate-[shimmer_2s_infinite]"></div>
+                                </div>
                             </div>
                         </div>
                     )}
                 </div>
                 
-                {/* Action Area */}
-                <div className={`mt-auto pt-3 border-t border-gray-50 grid ${goal.isInfinite ? 'grid-cols-[1fr_1fr_auto]' : 'grid-cols-[1fr_auto]'} gap-2`}>
-                    
-                    {/* 1. Main Action Button (Use if completed, Add if not) */}
+                <div className={`mt-auto pt-4 border-t border-gray-100 grid ${goal.isInfinite ? 'grid-cols-[1fr_1fr_auto]' : 'grid-cols-[1fr_auto]'} gap-3`}>
                     {goal.isCompleted ? (
                         <button 
                             onClick={onUseGoal}
-                            className="bg-yellow-500 text-white font-bold py-2 px-2 rounded-lg hover:bg-yellow-600 transition-colors shadow-md text-xs flex items-center justify-center gap-1 animate-pulse"
+                            className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white font-bold py-2.5 px-3 rounded-xl hover:shadow-lg hover:shadow-orange-200 transition-all text-xs flex items-center justify-center gap-2 animate-pulse"
                         >
-                            <ShoppingBagIcon className="w-3 h-3" />
-                            Gunakan!
+                            <ShoppingBagIcon className="w-4 h-4" />
+                            CAIRKAN
                         </button>
                     ) : (
                         <button 
                             onClick={onAddSavings} 
-                            className="bg-primary-navy text-white font-bold py-2 px-2 rounded-lg hover:bg-primary-navy-dark transition-colors shadow-sm text-xs flex items-center justify-center gap-1"
+                            className="bg-primary-navy text-white font-bold py-2.5 px-3 rounded-xl hover:bg-primary-navy-dark transition-all shadow-md hover:shadow-lg text-xs flex items-center justify-center gap-2"
                         >
-                            <PlusCircleIcon className="w-3 h-3" />
-                            Isi (+)
+                            <PlusCircleIcon className="w-4 h-4" />
+                            ISI CELENGAN
                         </button>
                     )}
 
-                    {/* 2. Partial Withdraw (ONLY FOR INFINITE) */}
                     {goal.isInfinite && (
                         <button 
                             onClick={onWithdrawSavings}
                             disabled={goal.savedAmount <= 0}
-                            className="bg-white border border-gray-200 text-danger-red font-bold py-2 px-2 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-xs flex items-center justify-center gap-1"
+                            className="bg-white border border-gray-200 text-danger-red font-bold py-2.5 px-3 rounded-xl hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-xs flex items-center justify-center gap-1"
                         >
-                            <ArrowDownTrayIcon className="w-3 h-3" />
-                            Ambil (-)
+                            <ArrowDownTrayIcon className="w-4 h-4" />
+                            TARIK
                         </button>
                     )}
                     
-                    {/* 3. Menu / Delete */}
                     {goal.isInfinite ? (
                         <button 
                             onClick={onDelete} 
-                            className="font-bold p-2 rounded-lg transition-colors flex items-center justify-center bg-red-100 text-red-600 hover:bg-red-200"
-                            title="Tarik Semua & Hapus Celengan"
+                            className="font-bold p-2.5 rounded-xl transition-colors flex items-center justify-center bg-red-50 text-red-500 hover:bg-red-100 border border-red-100"
+                            title="Hapus Permanen"
                         >
                             <TrashIcon className="w-4 h-4" />
                         </button>
                     ) : (
                         <button 
                             onClick={onViewDetails} 
-                            title="Detail & Opsi Hapus"
-                            className="font-bold p-2 rounded-lg transition-colors flex items-center justify-center bg-gray-100 text-secondary-gray hover:bg-gray-200"
+                            title="Detail Riwayat"
+                            className="font-bold p-2.5 rounded-xl transition-colors flex items-center justify-center bg-gray-50 text-secondary-gray hover:bg-gray-100 border border-gray-200"
                         >
                             <BuildingLibraryIcon className="w-4 h-4" />
                         </button>
@@ -545,37 +540,44 @@ interface SavingsProps {
 
 const Savings: React.FC<SavingsProps> = ({ state, onOpenAddGoalModal, onOpenAddSavingsModal, onOpenDetailModal, onOpenSavingsGoal }) => {
     const { savingsGoals } = state;
-    
-    // Total stats for the header
     const totalSaved = useMemo(() => savingsGoals.reduce((acc, g) => acc + g.savedAmount, 0), [savingsGoals]);
 
     return (
         <main id="savings-page" className="p-4 pb-24 animate-fade-in max-w-3xl mx-auto">
-            <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+            
+            <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                 <div>
-                    <h1 className="text-3xl font-bold text-primary-navy">Kebun & Kandang Tabungan</h1>
-                    <p className="text-secondary-gray text-sm">Rawat tanaman atau peliharaanmu dengan menabung rutin.</p>
+                    <h1 className="text-2xl font-black text-primary-navy tracking-tight">Kebun & Kandang Uang</h1>
+                    <p className="text-secondary-gray text-sm mt-1">Rawat aset digitalmu dengan menabung rutin.</p>
                 </div>
-                <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-100 flex items-center gap-3">
-                    <div className="bg-green-100 p-2 rounded-full">
-                        <BuildingLibraryIcon className="w-5 h-5 text-green-600" />
+                <div className="bg-green-50 px-5 py-3 rounded-xl border border-green-100 flex items-center gap-4">
+                    <div className="bg-green-100 p-3 rounded-full">
+                        <BuildingLibraryIcon className="w-6 h-6 text-green-700" />
                     </div>
                     <div>
-                        <p className="text-xs text-secondary-gray">Total Disimpan</p>
-                        <p className="font-bold text-primary-navy">{formatCurrency(totalSaved)}</p>
+                        <p className="text-xs text-green-800 font-bold uppercase tracking-wider">Total Disimpan</p>
+                        <p className="text-2xl font-black text-green-700">{formatCurrency(totalSaved)}</p>
                     </div>
                 </div>
             </div>
 
             {savingsGoals.length === 0 ? (
-                <div className="text-center py-16 bg-white rounded-xl shadow-md border-2 border-dashed border-gray-200 space-y-4">
-                    <div className="w-24 h-24 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <BuildingLibraryIcon className="w-10 h-10 text-green-600 opacity-80" />
+                <div className="text-center py-20 bg-white rounded-3xl shadow-lg border-2 border-dashed border-gray-200 space-y-6">
+                    <div className="w-32 h-32 bg-gradient-to-br from-green-50 to-teal-50 rounded-full flex items-center justify-center mx-auto shadow-inner">
+                        <SparklesIcon className="w-16 h-16 text-teal-600 opacity-80 animate-pulse" />
                     </div>
-                    <h3 className="text-xl font-bold text-primary-navy">Belum Ada Koleksi</h3>
-                    <p className="text-secondary-gray max-w-xs mx-auto">Mulai tanam benih atau tetaskan telur impianmu sekarang!</p>
-                    <button onClick={onOpenAddGoalModal} className="mt-4 bg-accent-teal text-white font-bold py-3 px-6 rounded-full hover:bg-accent-teal-dark transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-1">
-                        + Buat Celengan Baru
+                    <div>
+                        <h3 className="text-2xl font-bold text-primary-navy">Masih Kosong, Nih!</h3>
+                        <p className="text-secondary-gray max-w-xs mx-auto mt-2 leading-relaxed">
+                            Mulai petualangan finansialmu. Tanam benih pohon uang atau tetaskan telur naga emas sekarang.
+                        </p>
+                    </div>
+                    <button 
+                        onClick={onOpenAddGoalModal} 
+                        className="inline-flex items-center gap-2 bg-primary-navy text-white font-bold py-4 px-8 rounded-full hover:bg-primary-navy-dark transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1"
+                    >
+                        <PlusCircleIcon className="w-5 h-5" />
+                        Buat Celengan Baru
                     </button>
                 </div>
             ) : (
@@ -589,19 +591,19 @@ const Savings: React.FC<SavingsProps> = ({ state, onOpenAddGoalModal, onOpenAddS
                                 onWithdrawSavings={() => onOpenSavingsGoal(goal.id)}
                                 onViewDetails={() => onOpenDetailModal(goal.id)}
                                 onDelete={() => onOpenDetailModal(goal.id)}
-                                onUseGoal={() => onOpenSavingsGoal(goal.id)} // Reuse modal flow or create specific handler if passed
+                                onUseGoal={() => onOpenSavingsGoal(goal.id)} 
                             />
                         ))}
                          
-                         {/* Add New Card (Visual Placeholder) */}
                         <button 
                             onClick={onOpenAddGoalModal}
-                            className="min-h-[320px] rounded-xl border-2 border-dashed border-gray-300 hover:border-accent-teal hover:bg-teal-50 transition-all duration-300 flex flex-col items-center justify-center text-secondary-gray hover:text-accent-teal group"
+                            className="min-h-[350px] rounded-2xl border-3 border-dashed border-gray-300 hover:border-accent-teal hover:bg-teal-50/50 transition-all duration-300 flex flex-col items-center justify-center text-gray-400 hover:text-accent-teal group"
                         >
-                            <div className="w-16 h-16 rounded-full bg-gray-100 group-hover:bg-white flex items-center justify-center mb-3 transition-colors shadow-sm">
+                            <div className="w-20 h-20 rounded-full bg-white group-hover:scale-110 flex items-center justify-center mb-4 transition-all shadow-sm border border-gray-200">
                                 <PlusCircleIcon className="w-8 h-8" />
                             </div>
-                            <span className="font-bold">Tambah Baru</span>
+                            <span className="font-bold text-lg">Tambah Baru</span>
+                            <span className="text-xs font-medium mt-1 opacity-70">Mulai target lain</span>
                         </button>
                     </div>
                 </div>

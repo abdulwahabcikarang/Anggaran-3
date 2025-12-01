@@ -53,7 +53,8 @@ export interface SavingsGoal {
   history: SavingTransaction[];
   createdAt: number;
   isCompleted: boolean;
-  visualType?: 'plant' | 'pet'; // NEW: Determines if it grows a plant or evolves a pet
+  visualType?: 'plant' | 'pet'; // Determines if it grows a plant or evolves a pet
+  skinId?: string; // NEW: Determines specific visual skin (e.g., 'swan', 'anthurium')
 }
 
 export interface WishlistItem {
@@ -115,9 +116,11 @@ export interface ShopItem {
     name: string;
     description: string;
     price: number;
-    type: 'theme' | 'title' | 'frame' | 'persona' | 'banner' | 'egg' | 'seed' | 'special';
+    type: 'theme' | 'title' | 'frame' | 'persona' | 'banner' | 'egg' | 'seed' | 'special' | 'savings_skin';
+    category?: string; // NEW: Sub-category for organization (e.g., 'standard', 'special', 'gradient' for themes)
     value: string; // CSS class, ID, or config value
     icon: string;
+    rarity?: 'rare' | 'legendary' | 'mythical'; // NEW: Rarity tier for savings skins
 }
 
 // NEW: Interface untuk Tema Kustom
@@ -141,6 +144,32 @@ export interface CustomTheme {
     };
 }
 
+export interface ShoppingItem {
+    id: number;
+    name: string;
+    estimate: number;
+    isChecked: boolean;
+}
+
+export interface DebtRecord {
+    amount: number;
+    timestamp: number;
+    note?: string;
+}
+
+export interface DebtItem {
+    id: number;
+    type: 'borrowed' | 'lent'; // borrowed = Saya Hutang, lent = Orang Hutang ke Saya (Piutang)
+    person: string;
+    amount: number; // Total awal
+    paid: number; // Total sudah dibayar
+    dueDate?: string; // YYYY-MM-DD
+    description?: string;
+    history: DebtRecord[];
+    isPaidOff: boolean;
+    createdAt: number;
+}
+
 export interface AppState {
   userProfile: UserProfile;
   budgets: Budget[];
@@ -151,6 +180,8 @@ export interface AppState {
   savingsGoals: SavingsGoal[];
   wishlist: WishlistItem[]; 
   subscriptions: Subscription[]; 
+  shoppingList: ShoppingItem[]; 
+  debts: DebtItem[]; 
   unlockedAchievements: { [id: string]: number }; 
   achievementData?: {
     monthlyStreak?: number;
@@ -162,12 +193,18 @@ export interface AppState {
     lastStreakCheck?: string; 
   };
   assets: Asset[];
-  // NEW: Shop State
   spentPoints: number; // Total points spent in shop
   inventory: string[]; // List of purchased item IDs
   activeTheme: string; // Current active theme ID
-  bonusPoints?: number; // Points added manually (e.g. for trials)
-  customThemes: CustomTheme[]; // NEW: List of user-generated themes
+  bonusPoints?: number; // Points added manually (e.g. for trials) - COUNTS FOR LEVEL AND SPEND
+  customThemes: CustomTheme[]; 
+  redeemedCodes: string[]; 
+  redeemedMustika: number; // Mustika from codes/pets - COUNTS FOR SPEND ONLY
+  
+  // NEW: Daily Bonus System
+  collectedSkins: string[]; // IDs of skins from completed savings (e.g. 'dragon', 'swan')
+  lastDailyBonusClaim: string | null; // YYYY-MM-DD
+  accumulatedXP: number; // XP from plants - COUNTS FOR LEVEL ONLY
 }
 
 export interface ScannedItem {

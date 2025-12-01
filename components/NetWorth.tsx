@@ -33,13 +33,13 @@ const CustomTooltip = ({ active, payload }: any) => {
 };
 
 // --- LIVE PRICE SIMULATION ENGINE ---
-// Base prices (Mock data)
+// Base prices (Updated based on user request Dec 2025)
 const BASE_PRICES: Record<string, number> = {
-    'BTC': 950000000,
-    'ETH': 45000000,
-    'SOL': 2300000,
-    'ANTAM': 1350000, // Per gram
-    'UBS': 1335000, // Per gram
+    'BTC': 1650000000, // Bitcoin
+    'ETH': 62000000,   // Ethereum
+    'SOL': 3800000,    // Solana
+    'ANTAM': 2413000,  // Updated: Based on actual market (~2.4 Jt)
+    'UBS': 2355000,    // Updated: Slightly below Antam
 };
 
 const NetWorth: React.FC<NetWorthProps> = ({ state, currentCashAsset, onAddAsset, onEditAsset, onDeleteAsset }) => {

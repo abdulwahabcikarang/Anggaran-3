@@ -7,6 +7,7 @@ interface MissionsProps {
     state: AppState;
     achievementData?: AppState['achievementData'];
     totalPoints: number;
+    spendablePoints: number; // NEW PROP for the badge display
 }
 
 // --- HELPER COMPONENTS ---
@@ -103,7 +104,7 @@ function usePrevious(value: number) {
   return ref.current;
 }
 
-const Missions: React.FC<MissionsProps> = ({ state, achievementData, totalPoints }) => {
+const Missions: React.FC<MissionsProps> = ({ state, achievementData, totalPoints, spendablePoints }) => {
     const mustikaBadgeRef = useRef<HTMLDivElement>(null);
 
     // --- QUEST LOGIC (Calculated here for display) ---
@@ -201,37 +202,30 @@ const Missions: React.FC<MissionsProps> = ({ state, achievementData, totalPoints
 
         const dailyCompletedCount = dailyQuests.filter(q => q.completed).length;
         const dailyBonusUnlocked = dailyCompletedCount >= 3;
-        const dailyBonusPoints = dailyBonusUnlocked ? 50 : 0;
-        const currentDailyPoints = dailyQuests.reduce((sum, q) => q.completed ? sum + q.points : sum, 0);
-
+        
         const weeklyCompletedCount = weeklyQuests.filter(q => q.completed).length;
         const weeklyBonusUnlocked = weeklyCompletedCount >= 5;
-        const weeklyBonusPoints = weeklyBonusUnlocked ? 150 : 0;
-        const currentWeeklyPoints = weeklyQuests.reduce((sum, q) => q.completed ? sum + q.points : sum, 0);
-
+        
         return {
             daily: dailyQuests,
             dailyProgress: dailyCompletedCount,
             dailyBonusUnlocked,
-            dailyTotalPoints: currentDailyPoints + dailyBonusPoints,
             weekly: weeklyQuests,
             weeklyProgress: weeklyCompletedCount,
             weeklyBonusUnlocked,
-            weeklyTotalPoints: currentWeeklyPoints + weeklyBonusPoints
         };
 
     }, [state, achievementData]);
 
-    const grandTotalPoints = totalPoints + questStatus.dailyTotalPoints + questStatus.weeklyTotalPoints;
-    
-    const prevPoints = usePrevious(grandTotalPoints);
+    const grandTotalPoints = totalPoints; // Use totalPoints passed from parent which includes quest points already
+    const prevPoints = usePrevious(spendablePoints); // Trigger animation on balance change
     const [particleTrigger, setParticleTrigger] = useState(0);
 
     useEffect(() => {
-        if (grandTotalPoints > prevPoints && prevPoints !== 0) {
+        if (spendablePoints > prevPoints && prevPoints !== 0) {
             setParticleTrigger(Date.now());
         }
-    }, [grandTotalPoints, prevPoints]);
+    }, [spendablePoints, prevPoints]);
 
     const levelInfo = (() => {
         const rankTitles = [
@@ -280,7 +274,8 @@ const Missions: React.FC<MissionsProps> = ({ state, achievementData, totalPoints
                                 <div className="bg-white/20 rounded-full p-1">
                                     <SparklesIcon className="w-4 h-4 text-yellow-300 animate-pulse" />
                                 </div>
-                                <span className="font-bold text-white text-base">{grandTotalPoints}</span>
+                                {/* SHOW SPENDABLE POINTS HERE INSTEAD OF XP */}
+                                <span className="font-bold text-white text-base">{spendablePoints}</span>
                             </div>
                             <span className="text-[10px] text-secondary-gray font-bold mt-1">TOTAL MUSTIKA</span>
                         </div>

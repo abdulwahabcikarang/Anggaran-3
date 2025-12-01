@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { ArrowUturnLeftIcon, ShoppingCartIcon, ClockIcon, PlusCircleIcon, TrashIcon, CheckCircleIcon, SparklesIcon, CalculatorIcon, ReceiptPercentIcon } from './Icons';
-import { Budget } from '../types';
+import { Budget, ShoppingItem } from '../types';
 import { GoogleGenAI, Type } from '@google/genai';
 import { getApiKey, formatNumberInput, getRawNumber, formatCurrency } from '../utils';
 import { Modal } from './AppUI';
@@ -10,17 +10,20 @@ interface ShoppingListProps {
     onBack: () => void;
     budgets: Budget[];
     onAddTransaction: (desc: string, amount: number, budgetId: number | 'daily') => void;
+    // New Props for persistence
+    items: ShoppingItem[];
+    onAddItem: (item: ShoppingItem) => void;
+    onToggleItem: (id: number) => void;
+    onDeleteItem: (id: number) => void;
+    onUpdateEstimate: (id: number, val: number) => void;
+    onClearAll: () => void;
+    onClearChecked: () => void;
 }
 
-interface ShoppingItem {
-    id: number;
-    name: string;
-    estimate: number;
-    isChecked: boolean;
-}
-
-const ShoppingList: React.FC<ShoppingListProps> = ({ onBack, budgets, onAddTransaction }) => {
-    const [items, setItems] = useState<ShoppingItem[]>([]);
+const ShoppingList: React.FC<ShoppingListProps> = ({ 
+    onBack, budgets, onAddTransaction, 
+    items, onAddItem, onToggleItem, onDeleteItem, onUpdateEstimate, onClearAll, onClearChecked 
+}) => {
     const [newItemName, setNewItemName] = useState('');
     const [targetBudgetId, setTargetBudgetId] = useState<number | 'daily'>('daily');
     const [isAIProcessing, setIsAIProcessing] = useState(false);
@@ -40,21 +43,8 @@ const ShoppingList: React.FC<ShoppingListProps> = ({ onBack, budgets, onAddTrans
             estimate: 0,
             isChecked: false
         };
-        setItems(prev => [...prev, newItem]);
+        onAddItem(newItem);
         setNewItemName('');
-    };
-
-    const handleDeleteItem = (id: number) => {
-        setItems(prev => prev.filter(item => item.id !== id));
-    };
-
-    const handleToggleItem = (id: number) => {
-        setItems(prev => prev.map(item => item.id === id ? { ...item, isChecked: !item.isChecked } : item));
-    };
-
-    const handleUpdateEstimate = (id: number, value: string) => {
-        const rawValue = getRawNumber(value);
-        setItems(prev => prev.map(item => item.id === id ? { ...item, estimate: rawValue } : item));
     };
 
     // --- AI FEATURES ---
@@ -74,14 +64,16 @@ const ShoppingList: React.FC<ShoppingListProps> = ({ onBack, budgets, onAddTrans
             });
 
             const parsedItems: string[] = JSON.parse(response.text || "[]");
-            const newItems: ShoppingItem[] = parsedItems.map(name => ({
-                id: Date.now() + Math.random(),
-                name: name,
-                estimate: 0,
-                isChecked: false
-            }));
+            
+            parsedItems.forEach(name => {
+                onAddItem({
+                    id: Date.now() + Math.random(),
+                    name: name,
+                    estimate: 0,
+                    isChecked: false
+                });
+            });
 
-            setItems(prev => [...prev, ...newItems]);
             setSmartInputText('');
             setShowSmartInput(false);
         } catch (error) {
@@ -115,12 +107,12 @@ const ShoppingList: React.FC<ShoppingListProps> = ({ onBack, budgets, onAddTrans
 
             const estimates: Record<string, number> = JSON.parse(response.text || "{}");
             
-            setItems(prev => prev.map(item => {
-                if (item.estimate === 0 && estimates[item.name]) {
-                    return { ...item, estimate: estimates[item.name] };
+            // Apply estimates using the handler for each item
+            itemsToEstimate.forEach(item => {
+                if (estimates[item.name]) {
+                    onUpdateEstimate(item.id, estimates[item.name]);
                 }
-                return item;
-            }));
+            });
 
         } catch (error) {
             console.error("AI Estimate Error:", error);
@@ -156,14 +148,15 @@ const ShoppingList: React.FC<ShoppingListProps> = ({ onBack, budgets, onAddTrans
         // Save Transaction
         onAddTransaction(description, amount, targetBudgetId);
         
-        // Remove checked items from list
-        setItems(prev => prev.filter(i => !i.isChecked));
+        // Clear only checked items
+        onClearChecked();
+        
         setShowCheckout(false);
         setFinalTotal('');
     };
 
     return (
-        <main className="min-h-screen flex flex-col bg-gray-50 animate-fade-in pb-24">
+        <main className="min-h-screen flex flex-col bg-transparent animate-fade-in pb-24">
             {/* Header */}
             <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-gray-200 px-4 py-4 flex flex-col gap-3 shadow-sm">
                 <div className="flex items-center justify-between">
@@ -202,6 +195,17 @@ const ShoppingList: React.FC<ShoppingListProps> = ({ onBack, budgets, onAddTrans
 
             {/* List Area */}
             <div className="flex-1 p-4 space-y-3 overflow-y-auto">
+                {items.length > 0 && (
+                    <div className="flex justify-end mb-2">
+                        <button 
+                            onClick={onClearAll} 
+                            className="text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded flex items-center gap-1 transition-colors"
+                        >
+                            <TrashIcon className="w-3 h-3" /> Hapus Semua List
+                        </button>
+                    </div>
+                )}
+
                 {items.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16 text-center opacity-60">
                         <ShoppingCartIcon className="w-16 h-16 text-gray-300 mb-4" />
@@ -212,7 +216,7 @@ const ShoppingList: React.FC<ShoppingListProps> = ({ onBack, budgets, onAddTrans
                     items.map(item => (
                         <div key={item.id} className={`flex items-center gap-3 p-3 bg-white rounded-xl shadow-sm border transition-all ${item.isChecked ? 'border-green-200 bg-green-50/30' : 'border-gray-100'}`}>
                             <button 
-                                onClick={() => handleToggleItem(item.id)}
+                                onClick={() => onToggleItem(item.id)}
                                 className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${item.isChecked ? 'bg-green-500 border-green-500' : 'border-gray-300'}`}
                             >
                                 {item.isChecked && <CheckCircleIcon className="w-4 h-4 text-white" />}
@@ -228,13 +232,13 @@ const ShoppingList: React.FC<ShoppingListProps> = ({ onBack, budgets, onAddTrans
                                         className="text-xs font-medium text-primary-navy bg-transparent border-b border-gray-200 focus:border-primary-navy outline-none w-20 px-0 py-0"
                                         placeholder="0"
                                         value={formatNumberInput(item.estimate)}
-                                        onChange={(e) => handleUpdateEstimate(item.id, e.target.value)}
+                                        onChange={(e) => onUpdateEstimate(item.id, getRawNumber(e.target.value))}
                                         disabled={item.isChecked}
                                     />
                                 </div>
                             </div>
 
-                            <button onClick={() => handleDeleteItem(item.id)} className="p-2 text-gray-300 hover:text-red-500 transition-colors">
+                            <button onClick={() => onDeleteItem(item.id)} className="p-2 text-gray-300 hover:text-red-500 transition-colors">
                                 <TrashIcon className="w-4 h-4" />
                             </button>
                         </div>
