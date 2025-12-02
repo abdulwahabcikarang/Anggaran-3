@@ -1461,23 +1461,75 @@ const App: React.FC = () => {
     const handleGetAIAdvice = async () => {
         setActiveModal('aiAdvice'); setIsFetchingAdvice(true); setAiAdvice(''); setAdviceError(null);
         try {
-            const budgetDetails = state.budgets.map(b => { const used = b.history.reduce((sum, h) => sum + h.amount, 0); return `* ${b.name}: Terpakai ${formatCurrency(used)} dari kuota ${formatCurrency(b.totalBudget)}`; }).join('\n');
-            const prompt = `${getSystemInstruction(state.userProfile.activePersona)} Berikut adalah ringkasan data keuangan pengguna untuk bulan ini dalam Rupiah (IDR):\n* Total Pemasukan: ${formatCurrency(monthlyIncome)}\n* Total Pengeluaran: ${formatCurrency(totalUsedOverall)}\n* Sisa Dana Bulan Ini: ${formatCurrency(totalRemaining)}\nRincian Pengeluaran berdasarkan Pos Anggaran:\n${budgetDetails || "Tidak ada pos anggaran yang dibuat."}\nTotal Pengeluaran Harian (di luar pos anggaran): ${formatCurrency(totalDailySpent)}\nSisa Dana yang Tidak Terikat Anggaran: ${formatCurrency(remainingUnallocated)}\nBerdasarkan data ini, berikan analisis singkat dan beberapa saran praktis untuk mengelola keuangan dengan lebih baik. Berikan jawaban dalam format poin-poin (bullet points) menggunakan markdown.`;
+            // HELPER: Filter current month
+            const now = new Date();
+            const currentMonth = now.getMonth();
+            const currentYear = now.getFullYear();
+            const isTxInCurrentMonth = (ts: number) => {
+                const d = new Date(ts);
+                return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+            };
+
+            const budgetDetails = state.budgets.map(b => { 
+                const used = b.history
+                    .filter(h => isTxInCurrentMonth(h.timestamp))
+                    .reduce((sum, h) => sum + h.amount, 0); 
+                return `* ${b.name}: Terpakai ${formatCurrency(used)} dari kuota ${formatCurrency(b.totalBudget)}`; 
+            }).join('\n');
+
+            const prompt = `${getSystemInstruction(state.userProfile.activePersona)} Berikut adalah ringkasan data keuangan pengguna untuk bulan ini dalam Rupiah (IDR):\n* Total Pemasukan: ${formatCurrency(monthlyIncome)}\n* Total Pengeluaran: ${formatCurrency(totalUsedOverall)}\n* Sisa Dana Bulan Ini: ${formatCurrency(totalRemaining)}\nRincian Pengeluaran berdasarkan Pos Anggaran (Bulan Ini):\n${budgetDetails || "Tidak ada pos anggaran yang dibuat."}\nTotal Pengeluaran Harian (di luar pos anggaran): ${formatCurrency(totalDailySpent)}\nSisa Dana yang Tidak Terikat Anggaran: ${formatCurrency(remainingUnallocated)}\nBerdasarkan data ini, berikan analisis singkat dan beberapa saran praktis untuk mengelola keuangan dengan lebih baik. Berikan jawaban dalam format poin-poin (bullet points) menggunakan markdown.`;
             const apiKey = getApiKey(); const ai = new GoogleGenAI({ apiKey }); const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt }); setAiAdvice(response.text || "AI tidak memberikan respon.");
         } catch (error) { console.error("Error getting AI advice:", error); setAdviceError("Gagal mendapatkan saran dari AI. Silakan coba lagi nanti."); } finally { setIsFetchingAdvice(false); }
     };
     const handleFetchDashboardInsight = useCallback(async () => {
         setIsFetchingDashboardInsight(true);
         try {
-            const now = new Date(); const daysPassed = Math.max(1, now.getDate()); const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(); const daysRemaining = lastDayOfMonth - daysPassed;
-            const currentMonthIncome = state.fundHistory.filter(t => t.type === 'add').reduce((sum, t) => sum + t.amount, 0);
-            const totalSpent = state.dailyExpenses.reduce((sum, e) => sum + e.amount, 0) + state.fundHistory.filter(t => t.type === 'remove').reduce((sum, t) => sum + t.amount, 0) + state.budgets.reduce((sum, b) => sum + b.history.reduce((s, h) => s + h.amount, 0), 0);
+            const now = new Date(); 
+            const currentMonth = now.getMonth();
+            const currentYear = now.getFullYear();
+            const isTxInCurrentMonth = (ts: number) => {
+                const d = new Date(ts);
+                return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+            };
+
+            const daysPassed = Math.max(1, now.getDate()); 
+            const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(); 
+            const daysRemaining = lastDayOfMonth - daysPassed;
+            
+            // Recalculate strictly for this month inside this scope
+            const currentMonthIncome = state.fundHistory
+                .filter(t => t.type === 'add' && isTxInCurrentMonth(t.timestamp))
+                .reduce((sum, t) => sum + t.amount, 0);
+            
+            const dailySpentThisMonth = state.dailyExpenses
+                .filter(t => isTxInCurrentMonth(t.timestamp))
+                .reduce((sum, e) => sum + e.amount, 0);
+
+            const generalExpenseThisMonth = state.fundHistory
+                .filter(t => t.type === 'remove' && isTxInCurrentMonth(t.timestamp))
+                .reduce((sum, t) => sum + t.amount, 0);
+
+            const budgetSpentThisMonth = state.budgets.reduce((sum, b) => 
+                sum + b.history
+                    .filter(h => isTxInCurrentMonth(h.timestamp))
+                    .reduce((s, h) => s + h.amount, 0), 0);
+
+            const totalSpent = dailySpentThisMonth + generalExpenseThisMonth + budgetSpentThisMonth;
             const currentBalance = currentMonthIncome - totalSpent;
+            
             const avgDailySpend = totalSpent / daysPassed;
             const projectedAdditionalSpend = avgDailySpend * daysRemaining;
             const projectedEndMonthBalance = currentBalance - projectedAdditionalSpend;
-            const budgetDetails = state.budgets.map(b => { const used = b.history.reduce((sum, h) => sum + h.amount, 0); if (used > 0) return `* ${b.name}: Terpakai ${formatCurrency(used)} dari ${formatCurrency(b.totalBudget)}`; return null; }).filter(Boolean).join('\n');
-            const prompt = `${getSystemInstruction(state.userProfile.activePersona)} ANALISIS KEUANGAN BULANAN & PREDIKSI: PERIODE: 1 ${now.toLocaleDateString('id-ID', {month: 'long'})} s.d. Hari Ini (${now.getDate()}). DATA SAAT INI: - Total Pemasukan: ${formatCurrency(currentMonthIncome)} - Total Pengeluaran (Semua): ${formatCurrency(totalSpent)} - Sisa Uang Riil Saat Ini: ${formatCurrency(currentBalance)} DETAIL PENGELUARAN: ${budgetDetails || "Belum ada data detail pos anggaran."} PROYEKSI AKHIR BULAN (Estimasi): - Rata-rata pengeluaran per hari: ${formatCurrency(avgDailySpend)} - Estimasi sisa uang di akhir bulan: ${formatCurrency(projectedEndMonthBalance)} (Jika pola belanja sama) TUGASMU: Berikan wawasan dalam format poin-poin Markdown yang menarik: 1. **Gambaran Pengeluaran**: Ceritakan singkat kemana uang paling banyak mengalir berdasarkan data. 2. **Pendapatku**: Berikan opinimu tentang cara user mengelola uang bulan ini (apakah boros, hemat, atau bahaya). Gunakan gaya bahasamu yang khas! 3. **Terawangan Masa Depan**: Prediksi apakah akhir bulan akan aman (surplus) atau bahaya (minus) jika user terus begini. 4. **Saran**: Satu aksi spesifik yang harus dilakukan sekarang.`;
+            
+            const budgetDetails = state.budgets.map(b => { 
+                const used = b.history
+                    .filter(h => isTxInCurrentMonth(h.timestamp))
+                    .reduce((sum, h) => sum + h.amount, 0); 
+                if (used > 0) return `* ${b.name}: Terpakai ${formatCurrency(used)} dari ${formatCurrency(b.totalBudget)}`; 
+                return null; 
+            }).filter(Boolean).join('\n');
+
+            const prompt = `${getSystemInstruction(state.userProfile.activePersona)} ANALISIS KEUANGAN BULANAN & PREDIKSI: PERIODE: 1 ${now.toLocaleDateString('id-ID', {month: 'long'})} s.d. Hari Ini (${now.getDate()}). DATA SAAT INI (BULAN BERJALAN): - Total Pemasukan: ${formatCurrency(currentMonthIncome)} - Total Pengeluaran (Semua): ${formatCurrency(totalSpent)} - Sisa Uang Riil Saat Ini: ${formatCurrency(currentBalance)} DETAIL PENGELUARAN: ${budgetDetails || "Belum ada data detail pos anggaran."} PROYEKSI AKHIR BULAN (Estimasi): - Rata-rata pengeluaran per hari: ${formatCurrency(avgDailySpend)} - Estimasi sisa uang di akhir bulan: ${formatCurrency(projectedEndMonthBalance)} (Jika pola belanja sama) TUGASMU: Berikan wawasan dalam format poin-poin Markdown yang menarik: 1. **Gambaran Pengeluaran**: Ceritakan singkat kemana uang paling banyak mengalir berdasarkan data bulan ini. 2. **Pendapatku**: Berikan opinimu tentang cara user mengelola uang bulan ini (apakah boros, hemat, atau bahaya). Gunakan gaya bahasamu yang khas! 3. **Terawangan Masa Depan**: Prediksi apakah akhir bulan akan aman (surplus) atau bahaya (minus) jika user terus begini. 4. **Saran**: Satu aksi spesifik yang harus dilakukan sekarang.`;
             const apiKey = getApiKey(); const ai = new GoogleGenAI({ apiKey }); const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt }); setAiDashboardInsight(response.text || "Belum ada data yang cukup untuk prediksi.");
         } catch (error) { console.error("Error fetching dashboard insight:", error); setAiDashboardInsight("Lagi ga bisa nerawang nih, cek koneksi dulu ya."); } finally { setIsFetchingDashboardInsight(false); }
     }, [state]);
@@ -1486,8 +1538,27 @@ const App: React.FC = () => {
         catch (error) { console.error("Chart analysis error:", error); return "Waduh, gagal baca grafik nih. Coba lagi nanti ya!"; }
     };
     const getFinancialContextForAI = useCallback(() => {
-        const budgetDetails = state.budgets.map(b => { const used = b.history.reduce((sum, h) => sum + h.amount, 0); return `* Pos Anggaran "${b.name}": Kuota ${formatCurrency(b.totalBudget)}, Terpakai ${formatCurrency(used)}, Sisa ${formatCurrency(b.totalBudget - used)}`; }).join('\n');
-        return `Tugas Anda adalah menjawab pertanyaan pengguna HANYA berdasarkan data keuangan yang saya berikan di bawah ini. Jangan membuat informasi atau memberikan saran di luar data. Jawab dalam Bahasa Indonesia. Berikut adalah ringkasan data keuangan pengguna untuk bulan ini (dalam IDR): **Ringkasan Umum:** * Total Pemasukan: ${formatCurrency(monthlyIncome)}, * Total Pengeluaran Keseluruhan: ${formatCurrency(totalUsedOverall)}, * Sisa Dana (Pemasukan - Pengeluaran): ${formatCurrency(totalRemaining)}, * Total Dana yang Dialokasikan ke Pos Anggaran: ${formatCurrency(totalAllocated)}, * Dana Tersedia Untuk Pengeluaran Harian/Umum (di luar pos): ${formatCurrency(currentAvailableFunds)}. **Rincian Pos Anggaran:** ${budgetDetails || "Tidak ada pos anggaran yang dibuat."}. **Rincian 10 Transaksi Terakhir:** ${allTransactions.slice(0, 10).map(t => `* ${new Date(t.timestamp).toLocaleDateString('id-ID')}: ${t.desc} (${t.type === 'add' ? '+' : '-'} ${formatCurrency(t.amount)}) - Kategori: ${t.category || (t.type === 'add' ? 'Pemasukan' : 'Umum')}`).join(', ')}. Data sudah lengkap. Anda siap menjawab pertanyaan pengguna.`;
+        const now = new Date(); 
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+        const isTxInCurrentMonth = (ts: number) => {
+            const d = new Date(ts);
+            return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+        };
+
+        const budgetDetails = state.budgets.map(b => { 
+            const used = b.history
+                .filter(h => isTxInCurrentMonth(h.timestamp))
+                .reduce((sum, h) => sum + h.amount, 0); 
+            return `* Pos Anggaran "${b.name}": Kuota ${formatCurrency(b.totalBudget)}, Terpakai ${formatCurrency(used)}, Sisa ${formatCurrency(b.totalBudget - used)}`; 
+        }).join('\n');
+
+        const recentTransactions = allTransactions
+            .filter(t => isTxInCurrentMonth(t.timestamp))
+            .slice(0, 10)
+            .map(t => `* ${new Date(t.timestamp).toLocaleDateString('id-ID')}: ${t.desc} (${t.type === 'add' ? '+' : '-'} ${formatCurrency(t.amount)}) - Kategori: ${t.category || (t.type === 'add' ? 'Pemasukan' : 'Umum')}`).join(', ');
+
+        return `Tugas Anda adalah menjawab pertanyaan pengguna HANYA berdasarkan data keuangan yang saya berikan di bawah ini. Jangan membuat informasi atau memberikan saran di luar data. Jawab dalam Bahasa Indonesia. Berikut adalah ringkasan data keuangan pengguna untuk bulan ini (${now.toLocaleDateString('id-ID', {month: 'long'})}) dalam IDR: **Ringkasan Umum:** * Total Pemasukan Bulan Ini: ${formatCurrency(monthlyIncome)}, * Total Pengeluaran Keseluruhan Bulan Ini: ${formatCurrency(totalUsedOverall)}, * Sisa Dana Bulan Ini (Pemasukan - Pengeluaran): ${formatCurrency(totalRemaining)}, * Total Dana yang Dialokasikan ke Pos Anggaran: ${formatCurrency(totalAllocated)}, * Dana Tersedia Untuk Pengeluaran Harian/Umum (di luar pos): ${formatCurrency(currentAvailableFunds)}. **Rincian Pos Anggaran (Bulan Ini):** ${budgetDetails || "Tidak ada pos anggaran yang dibuat."}. **Rincian Transaksi Terakhir (Bulan Ini):** ${recentTransactions}. Data sudah lengkap. Anda siap menjawab pertanyaan pengguna.`;
     }, [state, monthlyIncome, totalUsedOverall, totalRemaining, totalAllocated, currentAvailableFunds, allTransactions]);
     const handleOpenAIChat = useCallback(async () => {
         setActiveModal('aiChat'); setAiChatHistory([]); setAiChatError(null); setIsAiChatLoading(true);
