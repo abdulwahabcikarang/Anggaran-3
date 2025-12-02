@@ -1,7 +1,7 @@
 
 import type { AppState } from './types';
 
-export const APP_VERSION = '3.17.0'; // Bump version
+export const APP_VERSION = '3.18.0'; // Bump version
 export const BACKUP_PREFIX = 'budgetAppBackup_';
 export const MAX_BACKUPS = 4;
 
@@ -37,7 +37,10 @@ export const INITIAL_STATE: AppState = {
     redeemedMustika: 0,
     collectedSkins: [],
     lastDailyBonusClaim: null,
-    accumulatedXP: 0
+    accumulatedXP: 0,
+    activeTrendChartTheme: 'trend_default',
+    activeBudgetChartTheme: 'budget_default',
+    levelRewardsClaimed: []
 };
 
 export const PERSONA_INSTRUCTIONS: Record<string, string> = {
@@ -73,6 +76,49 @@ export const VALID_REDEEM_CODES: Record<string, number> = {
     'LMNBVCXZ': 10000, 'QAZWSXED': 10000, 'RFVTGBYH': 10000, 'NUJMIKOL': 10000, 'PZAQWXSZ': 10000,
     // Special
     'NAMINAMI': 900000
+};
+
+export const CHART_THEMES: Record<string, any> = {
+    'trend_default': { stroke: '#00f2ff', fill: '#00f2ff', gradientFrom: '#00f2ff', gradientTo: '#00f2ff', bg: '#fff' },
+    'trend_neon': { stroke: '#d946ef', fill: '#d946ef', gradientFrom: '#d946ef', gradientTo: '#8b5cf6', bg: '#111827' },
+    'trend_sunset': { stroke: '#f97316', fill: '#f97316', gradientFrom: '#f97316', gradientTo: '#facc15', bg: '#fff7ed' },
+    'trend_matrix': { stroke: '#22c55e', fill: '#22c55e', gradientFrom: '#22c55e', gradientTo: '#000000', bg: '#000000', grid: '#14532d' },
+    'trend_ocean': { stroke: '#0ea5e9', fill: '#0ea5e9', gradientFrom: '#0ea5e9', gradientTo: '#3b82f6', bg: '#f0f9ff' },
+    
+    // --- SPECIAL TREND THEMES ---
+    'trend_glitch': { 
+        stroke: '#00ff41', 
+        fill: 'url(#glitchPattern)', 
+        gradientFrom: '#008F11', 
+        gradientTo: '#000000', 
+        bg: '#050505', 
+        grid: '#003b00',
+        specialClass: 'glitch-chart'
+    },
+    'trend_magma': { 
+        stroke: '#fbbf24', 
+        fill: 'url(#magmaFlow)', 
+        gradientFrom: '#ef4444', 
+        gradientTo: '#7f1d1d', 
+        bg: '#1a0500', 
+        grid: '#450a0a',
+        specialClass: 'magma-chart'
+    },
+    
+    'budget_default': { bar1: '#3498DB', bar2: '#E67E22', bg: '#fff' },
+    'budget_glass': { bar1: 'rgba(59, 130, 246, 0.5)', bar2: 'rgba(249, 115, 22, 0.5)', bg: 'rgba(255, 255, 255, 0.2)' },
+    'budget_rainbow': { bar1: '#ef4444', bar2: '#3b82f6', bg: '#fff' },
+    'budget_holo': { bar1: '#06b6d4', bar2: '#ec4899', bg: '#000' },
+    'budget_pastel': { bar1: '#fca5a5', bar2: '#93c5fd', bg: '#fff' },
+    
+    // --- SPECIAL BUDGET THEMES ---
+    'budget_gold': { 
+        bar1: 'url(#gold3DBar)', 
+        bar2: 'url(#gold3DBar2)', 
+        bg: '#1c1917', 
+        grid: '#451a03',
+        specialClass: 'gold-chart'
+    } 
 };
 
 export const THEMES: Record<string, Record<string, string>> = {
@@ -272,5 +318,47 @@ export const THEMES: Record<string, Record<string, string>> = {
         '--color-gray-100': '226 232 240',
         '--color-gray-200': '203 213 225',
         '--app-background': 'rgb(248 250 252)',
+    },
+    'theme_cyberpunk_battery': {
+        '--color-primary-navy': '56 189 248',
+        '--color-primary-navy-dark': '14 165 233',
+        '--color-accent-teal': '34 211 238',
+        '--color-accent-teal-dark': '6 182 212',
+        '--color-light-bg': '15 23 42',
+        '--color-dark-text': '241 245 249',
+        '--color-secondary-gray': '148 163 184',
+        '--color-white': '2 6 23',
+        '--color-gray-50': '30 41 59',
+        '--color-gray-100': '51 65 85',
+        '--color-gray-200': '71 85 105',
+        '--app-background': 'transparent',
+    },
+    'theme_thermal_heat': {
+        '--color-primary-navy': '44 62 80',
+        '--color-primary-navy-dark': '31 43 56',
+        '--color-accent-teal': '26 188 156',
+        '--color-accent-teal-dark': '22 160 133',
+        '--color-light-bg': '255 255 255',
+        '--color-dark-text': '52 73 94',
+        '--color-secondary-gray': '127 140 141',
+        '--color-white': '255 255 255',
+        '--color-gray-50': '255 255 255',
+        '--color-gray-100': '241 245 249',
+        '--color-gray-200': '226 232 240',
+        '--app-background': 'transparent',
+    },
+    'theme_dynamic_time': {
+        '--color-primary-navy': '30 58 138',
+        '--color-primary-navy-dark': '23 37 84',
+        '--color-accent-teal': '6 182 212',
+        '--color-accent-teal-dark': '8 145 178',
+        '--color-light-bg': '255 255 255',
+        '--color-dark-text': '15 23 42',
+        '--color-secondary-gray': '71 85 105',
+        '--color-white': '255 255 255',
+        '--color-gray-50': '248 250 252',
+        '--color-gray-100': '241 245 249',
+        '--color-gray-200': '226 232 240',
+        '--app-background': 'transparent',
     }
 };

@@ -1,16 +1,16 @@
-
 import React, { useState, useMemo } from 'react';
 import type { AppState, ShopItem } from '../types';
 import { SHOP_ITEMS } from './Shop';
-import { PaintBrushIcon, UserIcon, StarIconFilled, HeartIcon, CheckCircleIcon, ArrowUturnLeftIcon, PhotoIcon, ShieldCheckIcon, SparklesIcon, LockClosedIcon } from './Icons';
+import { PaintBrushIcon, UserIcon, StarIconFilled, HeartIcon, CheckCircleIcon, ArrowUturnLeftIcon, PhotoIcon, ShieldCheckIcon, SparklesIcon, LockClosedIcon, TrashIcon } from './Icons';
 
 interface CustomAppProps {
     state: AppState;
     onBack: () => void;
     onEquip: (item: ShopItem) => void;
+    onDeleteCustomTheme: (themeId: string) => void; // New prop
 }
 
-const CustomApp: React.FC<CustomAppProps> = ({ state, onBack, onEquip }) => {
+const CustomApp: React.FC<CustomAppProps> = ({ state, onBack, onEquip, onDeleteCustomTheme }) => {
     const [activeTab, setActiveTab] = useState<'theme' | 'identity' | 'persona'>('theme');
 
     // Gabungkan item toko yang sudah dibeli dengan item default dan custom themes
@@ -29,6 +29,7 @@ const CustomApp: React.FC<CustomAppProps> = ({ state, onBack, onEquip }) => {
             description: 'Tema Kustom Buatanmu',
             price: 0,
             type: 'theme',
+            category: 'custom', // Mark as custom for filtering/ui
             value: ct.id,
             icon: 'PaintBrushIcon'
         }));
@@ -152,11 +153,25 @@ const CustomApp: React.FC<CustomAppProps> = ({ state, onBack, onEquip }) => {
                                 </div>
 
                                 {/* Action Indicator */}
-                                <div className="ml-2">
+                                <div className="ml-2 flex flex-col gap-2 items-center">
                                     {active ? (
                                         <CheckCircleIcon className="w-6 h-6 text-accent-teal" />
                                     ) : (
                                         <div className="w-6 h-6 rounded-full border-2 border-gray-200 group-hover:border-primary-navy"></div>
+                                    )}
+                                    
+                                    {/* Delete Button for Custom Themes */}
+                                    {item.category === 'custom' && (
+                                        <button 
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onDeleteCustomTheme(item.id);
+                                            }}
+                                            className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors z-20"
+                                            title="Hapus Tema"
+                                        >
+                                            <TrashIcon className="w-4 h-4" />
+                                        </button>
                                     )}
                                 </div>
                                 

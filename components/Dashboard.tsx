@@ -22,6 +22,12 @@ interface DashboardProps {
   onGoToProfile: () => void;
 }
 
+const isCurrentMonth = (timestamp: number) => {
+    const d = new Date(timestamp);
+    const now = new Date();
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+};
+
 const formatCurrency = (amount: number) => {
     if (amount >= 100000000000) { // If > 11 digits (100 Billion)
         return amount.toExponential(2).replace('+', '');
@@ -272,7 +278,11 @@ const BudgetItem: React.FC<{
     onDropOnItem: (e: React.DragEvent<HTMLDivElement>) => void;
     onDragLeaveItem: () => void;
 }> = ({ budget, onUse, onEdit, isExpanded, onToggleExpand, isDragging, onDragStart, showDropIndicator, onDragOverItem, onDropOnItem, onDragLeaveItem }) => {
-    const usedAmount = budget.history.reduce((sum, item) => sum + item.amount, 0);
+    // Filter transactions to only current month for progress bar
+    const usedAmount = budget.history
+        .filter(item => isCurrentMonth(item.timestamp))
+        .reduce((sum, item) => sum + item.amount, 0);
+        
     const remaining = budget.totalBudget - usedAmount;
     const percentageUsed = budget.totalBudget > 0 ? (usedAmount / budget.totalBudget) * 100 : 0;
 
@@ -324,18 +334,21 @@ const BudgetItem: React.FC<{
                     <button onClick={onUse} className="w-full bg-accent-teal text-white font-bold py-2 px-4 rounded-lg hover:bg-accent-teal-dark transition-colors mb-3">
                         Gunakan Dana
                     </button>
-                    <h4 className="font-semibold text-sm text-secondary-gray mb-2">Riwayat Transaksi</h4>
-                    {budget.history.length > 0 ? (
+                    <h4 className="font-semibold text-sm text-secondary-gray mb-2">Riwayat Transaksi (Bulan Ini)</h4>
+                    {budget.history.filter(h => isCurrentMonth(h.timestamp)).length > 0 ? (
                         <ul className="space-y-2 text-sm max-h-40 overflow-y-auto pr-2">
-                            {[...budget.history].reverse().map((item: Transaction) => (
+                            {[...budget.history].filter(h => isCurrentMonth(h.timestamp)).reverse().map((item: Transaction) => (
                                 <li key={item.timestamp} className="flex justify-between items-center">
                                     <span className="truncate pr-2 text-dark-text">{item.desc}</span>
-                                    <span className="font-semibold text-danger-red flex-shrink-0">-{formatCurrency(item.amount)}</span>
+                                    <div className="flex flex-col items-end">
+                                        <span className="font-semibold text-danger-red flex-shrink-0">-{formatCurrency(item.amount)}</span>
+                                        <span className="text-[10px] text-gray-400">{new Date(item.timestamp).toLocaleDateString()}</span>
+                                    </div>
                                 </li>
                             ))}
                         </ul>
                     ) : (
-                        <p className="text-sm text-secondary-gray text-center py-2">Belum ada transaksi.</p>
+                        <p className="text-sm text-secondary-gray text-center py-2">Belum ada transaksi bulan ini.</p>
                     )}
                     <button onClick={onEdit} className="mt-4 w-full bg-gray-200 text-dark-text font-bold py-2 px-4 rounded-lg hover:bg-gray-300 text-sm">
                         Edit / Arsipkan
@@ -363,10 +376,22 @@ const Dashboard: React.FC<DashboardProps> = (props) => {
     const fixedBudgets = activeBudgets.filter(b => !b.isTemporary).sort((a,b) => a.order - b.order);
     const temporaryBudgets = activeBudgets.filter(b => b.isTemporary).sort((a,b) => a.order - b.order);
     
-    const monthlyIncome = state.fundHistory.filter(t => t.type === 'add').reduce((sum, t) => sum + t.amount, 0);
-    const monthlyGeneralExpense = state.fundHistory.filter(t => t.type === 'remove').reduce((sum, t) => sum + t.amount, 0);
-    const totalUsedFromPosts = state.budgets.reduce((sum, b) => sum + b.history.reduce((s, h) => s + h.amount, 0), 0);
-    const totalDailySpent = state.dailyExpenses.reduce((sum, e) => sum + e.amount, 0);
+    // Calculate Monthly Stats (Filtered by Current Month)
+    const monthlyIncome = state.fundHistory
+        .filter(t => t.type === 'add' && isCurrentMonth(t.timestamp))
+        .reduce((sum, t) => sum + t.amount, 0);
+        
+    const monthlyGeneralExpense = state.fundHistory
+        .filter(t => t.type === 'remove' && isCurrentMonth(t.timestamp))
+        .reduce((sum, t) => sum + t.amount, 0);
+        
+    const totalUsedFromPosts = state.budgets.reduce((sum, b) => 
+        sum + b.history.filter(h => isCurrentMonth(h.timestamp)).reduce((s, h) => s + h.amount, 0), 0);
+        
+    const totalDailySpent = state.dailyExpenses
+        .filter(e => isCurrentMonth(e.timestamp))
+        .reduce((sum, e) => sum + e.amount, 0);
+        
     const totalUsedOverall = monthlyGeneralExpense + totalUsedFromPosts + totalDailySpent;
     const totalRemaining = monthlyIncome - totalUsedOverall;
 

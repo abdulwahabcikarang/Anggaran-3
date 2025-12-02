@@ -101,3 +101,39 @@ export function createBlob(data: Float32Array): GenAIBlob {
     mimeType: 'audio/pcm;rate=16000',
   };
 }
+
+// --- Encryption Utilities ---
+const SECRET_SALT = "ANGGARAN_SECURE_KEY_X9"; 
+
+export const encryptData = (data: any): string => {
+    try {
+        const jsonStr = JSON.stringify(data);
+        // Encode to URI component to handle Unicode/Emoji correctly
+        const uriEncoded = encodeURIComponent(jsonStr);
+        
+        let result = '';
+        for (let i = 0; i < uriEncoded.length; i++) {
+            result += String.fromCharCode(uriEncoded.charCodeAt(i) ^ SECRET_SALT.charCodeAt(i % SECRET_SALT.length));
+        }
+        return btoa(result);
+    } catch (e) {
+        console.error("Encryption failed", e);
+        throw new Error("Gagal mengenkripsi data");
+    }
+};
+
+export const decryptData = (cipherText: string): any => {
+    try {
+        const decoded = atob(cipherText);
+        let result = '';
+        for (let i = 0; i < decoded.length; i++) {
+            result += String.fromCharCode(decoded.charCodeAt(i) ^ SECRET_SALT.charCodeAt(i % SECRET_SALT.length));
+        }
+        // Decode back from URI component
+        const jsonStr = decodeURIComponent(result);
+        return JSON.parse(jsonStr);
+    } catch (e) {
+        console.error("Decryption failed", e);
+        throw new Error("File data rusak atau tidak valid.");
+    }
+};

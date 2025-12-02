@@ -6,6 +6,7 @@ import {
 } from 'recharts';
 import type { AppState, Budget, GlobalTransaction } from '../types';
 import { LightbulbIcon, SparklesIcon, LockClosedIcon, ShieldCheckIcon, BuildingLibraryIcon, BanknotesIcon, Squares2x2Icon, ExclamationTriangleIcon } from './Icons';
+import { CHART_THEMES } from '../constants';
 
 interface VisualizationsProps {
     state: AppState;
@@ -327,6 +328,29 @@ const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack, onAnalyz
     const [allocationExplanation, setAllocationExplanation] = useState('');
     const [isAllocationLoading, setIsAllocationLoading] = useState(false);
 
+    // --- CHART SKINS LOGIC ---
+    const trendThemeId = state.activeTrendChartTheme || 'trend_default';
+    const trendTheme = CHART_THEMES[trendThemeId] || CHART_THEMES['trend_default'];
+
+    const budgetThemeId = state.activeBudgetChartTheme || 'budget_default';
+    const budgetTheme = CHART_THEMES[budgetThemeId] || CHART_THEMES['budget_default'];
+
+    const getHexLuminance = (hex: string) => {
+        const c = hex.substring(1);
+        const rgb = parseInt(c, 16);
+        const r = (rgb >> 16) & 0xff;
+        const g = (rgb >>  8) & 0xff;
+        const b = (rgb >>  0) & 0xff;
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+
+    const getTickColor = (bgHex: string) => {
+        return getHexLuminance(bgHex) < 100 ? '#e5e7eb' : '#94a3b8'; // Light text for dark bg, dark text for light bg
+    };
+
+    const trendTickColor = getTickColor(trendTheme.bg);
+    const budgetTickColor = getTickColor(budgetTheme.bg);
+
 
     const allExpenses = useMemo((): GlobalTransaction[] => {
         let expenses: GlobalTransaction[] = [];
@@ -555,6 +579,30 @@ const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack, onAnalyz
 
     return (
         <main className="p-4 pb-24 animate-fade-in max-w-4xl mx-auto space-y-6">
+            <style>{`
+                .magma-chart path.recharts-area-area {
+                    animation: magmaPulse 4s infinite alternate ease-in-out;
+                }
+                @keyframes magmaPulse {
+                    0% { filter: drop-shadow(0 0 2px #f59e0b); }
+                    100% { filter: drop-shadow(0 0 8px #ef4444); }
+                }
+                .glitch-chart {
+                    position: relative;
+                }
+                .glitch-chart::before {
+                    content: "";
+                    position: absolute;
+                    top: 0; left: 0; right: 0; bottom: 0;
+                    background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+                    background-size: 100% 2px, 3px 100%;
+                    pointer-events: none;
+                    z-index: 10;
+                }
+                .gold-chart .recharts-bar-rectangle path {
+                    filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.5));
+                }
+            `}</style>
             
             <header className="mb-8">
                 <h1 className="text-3xl font-bold text-primary-navy text-center mb-6">Visualisasi Pengeluaran</h1>
@@ -576,17 +624,17 @@ const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack, onAnalyz
                 totalIncome={healthData.totalIncome}
             />
 
-            {/* TREND AREA CHART (NEON GLOW) */}
-            <section className="bg-white rounded-xl p-6 shadow-md">
-                <h2 className="text-xl font-bold text-primary-navy text-center mb-4">Tren Pengeluaran</h2>
-                <div className="w-full h-80">
+            {/* TREND AREA CHART */}
+            <section className={`rounded-xl p-6 shadow-md transition-colors duration-500 ${trendTheme.specialClass || ''}`} style={{ backgroundColor: trendTheme.bg }}>
+                <h2 className="text-xl font-bold text-center mb-4" style={{ color: trendTickColor === '#e5e7eb' ? '#fff' : '#2C3E50' }}>Tren Pengeluaran</h2>
+                <div className="w-full h-80 relative">
                     {trendData.length > 0 ? (
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={trendData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                                 <defs>
                                     <linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#00f2ff" stopOpacity={0.3}/>
-                                        <stop offset="95%" stopColor="#00f2ff" stopOpacity={0}/>
+                                        <stop offset="5%" stopColor={trendTheme.gradientFrom} stopOpacity={0.5}/>
+                                        <stop offset="95%" stopColor={trendTheme.gradientTo} stopOpacity={0}/>
                                     </linearGradient>
                                     <filter id="neonGlow" height="300%" width="300%" x="-75%" y="-75%">
                                         <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
@@ -595,32 +643,59 @@ const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack, onAnalyz
                                             <feMergeNode in="SourceGraphic"/>
                                         </feMerge>
                                     </filter>
+                                    
+                                    {/* SPECIAL CHART DEFS */}
+                                    {/* Magma Flow - Animated Gradient using SVG animate inside stop is valid in some contexts but Recharts rerenders might reset it. Using CSS anim on path instead for flow effect on stroke/fill is harder. Simple gradient for now. */}
+                                    <linearGradient id="magmaFlow" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#fbbf24" stopOpacity={0.9} />
+                                        <stop offset="50%" stopColor="#ef4444" stopOpacity={0.6} />
+                                        <stop offset="100%" stopColor="#7f1d1d" stopOpacity={0.2} />
+                                    </linearGradient>
+
+                                    {/* Glitch Pattern */}
+                                    <pattern id="glitchPattern" patternUnits="userSpaceOnUse" width="4" height="4">
+                                        <path d="M-1,1 l2,-2 M0,4 l4,-4 M3,5 l2,-2" stroke="#003b00" strokeWidth="1" />
+                                    </pattern>
+                                    
+                                    {/* Gold 3D Vertical Bar */}
+                                    <linearGradient id="gold3DBar" x1="0" y1="0" x2="1" y2="0">
+                                        <stop offset="0%" stopColor="#bf953f" />
+                                        <stop offset="25%" stopColor="#fcf6ba" />
+                                        <stop offset="50%" stopColor="#b38728" />
+                                        <stop offset="75%" stopColor="#fbf5b7" /> 
+                                        <stop offset="100%" stopColor="#aa771c" />
+                                    </linearGradient>
+                                    <linearGradient id="gold3DBar2" x1="0" y1="0" x2="1" y2="0">
+                                        <stop offset="0%" stopColor="#aa771c" />
+                                        <stop offset="50%" stopColor="#d4af37" />
+                                        <stop offset="100%" stopColor="#aa771c" />
+                                    </linearGradient>
                                 </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                                <CartesianGrid strokeDasharray="3 3" stroke={trendTheme.grid || (trendTickColor === '#e5e7eb' ? '#374151' : '#f0f0f0')} vertical={false} />
                                 <XAxis 
                                     dataKey="day" 
-                                    tick={{fontSize: 11, fill: '#94a3b8'}} 
+                                    tick={{fontSize: 11, fill: trendTickColor}} 
                                     axisLine={false}
                                     tickLine={false}
                                     dy={10}
                                 />
                                 <YAxis 
                                     tickFormatter={formatShortCurrency} 
-                                    tick={{fontSize: 11, fill: '#94a3b8'}} 
+                                    tick={{fontSize: 11, fill: trendTickColor}} 
                                     axisLine={false}
                                     tickLine={false}
                                 />
                                 <Tooltip 
                                     content={<CustomTooltip />} 
-                                    cursor={{ stroke: '#00f2ff', strokeWidth: 1, strokeDasharray: '5 5' }}
+                                    cursor={{ stroke: trendTheme.stroke, strokeWidth: 1, strokeDasharray: '5 5' }}
                                 />
                                 <Area 
                                     type="monotone" 
                                     dataKey="total" 
-                                    stroke="#00f2ff" 
+                                    stroke={trendTheme.stroke} 
                                     strokeWidth={3}
-                                    fill="url(#colorTrend)" 
-                                    filter="url(#neonGlow)"
+                                    fill={trendThemeId === 'trend_glitch' ? 'url(#glitchPattern)' : trendThemeId === 'trend_magma' ? 'url(#magmaFlow)' : "url(#colorTrend)"} 
+                                    filter={trendThemeId.includes('neon') ? "url(#neonGlow)" : undefined}
                                     animationDuration={1500}
                                 />
                             </AreaChart>
@@ -642,18 +717,18 @@ const Visualizations: React.FC<VisualizationsProps> = ({ state, onBack, onAnalyz
 
             {/* BUDGET COMPARISON (Only for This Month) */}
             {filterRange === 'thisMonth' && budgetComparisonData.length > 0 && (
-                <section className="bg-white rounded-xl p-6 shadow-md">
-                    <h2 className="text-xl font-bold text-primary-navy text-center mb-4">Perbandingan Anggaran</h2>
+                <section className={`rounded-xl p-6 shadow-md transition-colors duration-500 ${budgetTheme.specialClass || ''}`} style={{ backgroundColor: budgetTheme.bg }}>
+                    <h2 className="text-xl font-bold text-center mb-4" style={{ color: budgetTickColor === '#e5e7eb' ? '#fff' : '#2C3E50' }}>Perbandingan Anggaran</h2>
                     <div className="w-full h-80">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={budgetComparisonData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="name" tick={{fontSize: 12}} />
-                                <YAxis tickFormatter={formatShortCurrency} tick={{fontSize: 12}} />
+                                <CartesianGrid strokeDasharray="3 3" stroke={budgetTickColor === '#e5e7eb' ? '#374151' : '#e5e7eb'} />
+                                <XAxis dataKey="name" tick={{fontSize: 12, fill: budgetTickColor}} />
+                                <YAxis tickFormatter={formatShortCurrency} tick={{fontSize: 12, fill: budgetTickColor}} />
                                 <Tooltip content={<CustomTooltip />} />
-                                <Legend />
-                                <Bar dataKey="Dianggarkan" fill="#3498DB" radius={[4, 4, 0, 0]} />
-                                <Bar dataKey="Terpakai" fill="#E67E22" radius={[4, 4, 0, 0]} />
+                                <Legend wrapperStyle={{ color: budgetTickColor }} />
+                                <Bar dataKey="Dianggarkan" fill={budgetTheme.bar1} radius={[4, 4, 0, 0]} />
+                                <Bar dataKey="Terpakai" fill={budgetTheme.bar2} radius={[4, 4, 0, 0]} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>

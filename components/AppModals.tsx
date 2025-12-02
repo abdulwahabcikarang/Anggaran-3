@@ -9,7 +9,6 @@ import { SKIN_ASSETS } from '../assets';
 import { SHOP_ITEMS } from './Shop';
 
 export const ScanResultModalContent: React.FC<{ isLoading: boolean, error: string | null, items: ScannedItem[], budgets: Budget[], onItemsChange: (items: ScannedItem[]) => void, onSave: () => void }> = ({ isLoading, error, items, budgets, onItemsChange, onSave }) => {
-    // ... (No change)
     if (isLoading) return <div className="text-center p-8"><ArrowPathIcon className="w-8 h-8 animate-spin mx-auto" /><p>Memproses...</p></div>;
     if (error) return <div className="text-red-500 text-center p-4">{error}</div>;
     return (
@@ -28,8 +27,6 @@ export const ScanResultModalContent: React.FC<{ isLoading: boolean, error: strin
         </div>
     );
 };
-
-// ... (DebtManagerModalContent, AddBudgetModalContent, InputModalContent, AssetModalContent, BatchInputModalContent, AddSavingsGoalModalContent, AddSavingsModalContent, WithdrawSavingsModalContent, SavingsDetailModalContent, FundsManagementModalContent, HistoryModalContent, InfoModalContent, EditAssetModalContent, SettingsModalContent, ArchivedBudgetsModalContent, BackupRestoreModalContent, VoiceAssistantModalContent, SmartInputModalContent, AIAdviceModalContent, AIChatModalContent, AddWishlistModalContent, RedeemModalContent - Unchanged, just ensuring correct export structure)
 
 export const DebtManagerModalContent: React.FC<{ 
     debts: DebtItem[]; 
@@ -76,23 +73,50 @@ export const InputModalContent: React.FC<{
     mode: 'use-daily' | 'use-post' | 'edit-post';
     budget?: Budget;
     allBudgets: Budget[];
-    onSubmit: (data: { description: string, amount: number, targetId?: 'daily' | number, icon?: string, color?: string }) => void;
+    onSubmit: (data: { description: string, amount: number, targetId?: 'daily' | number, icon?: string, color?: string, date?: string }) => void;
     onArchive?: () => void;
     prefillData: { desc: string, amount: string } | null;
     onPrefillConsumed: () => void;
-}> = ({ mode, budget, allBudgets, onSubmit, onArchive, prefillData, onPrefillConsumed }) => {
+    allowBackdate?: boolean; 
+}> = ({ mode, budget, allBudgets, onSubmit, onArchive, prefillData, onPrefillConsumed, allowBackdate = false }) => {
     const [desc, setDesc] = useState(prefillData?.desc || '');
     const [amount, setAmount] = useState(prefillData?.amount || '');
     const [targetId, setTargetId] = useState<'daily' | number>(mode === 'use-post' && budget ? budget.id : 'daily');
     const [icon, setIcon] = useState(budget?.icon || availableIcons[0]);
     const [color, setColor] = useState(budget?.color || availableColors[0]);
+    const [date, setDate] = useState(new Date().toLocaleDateString('fr-CA'));
 
     useEffect(() => { if (prefillData) { setDesc(prefillData.desc); setAmount(prefillData.amount); onPrefillConsumed(); } }, [prefillData, onPrefillConsumed]);
-    const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); const rawAmount = getRawNumber(amount.toString()); if (mode === 'edit-post') { onSubmit({ description: desc, amount: rawAmount, icon, color }); } else { onSubmit({ description: desc, amount: rawAmount, targetId }); } };
+    const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); const rawAmount = getRawNumber(amount.toString()); if (mode === 'edit-post') { onSubmit({ description: desc, amount: rawAmount, icon, color }); } else { onSubmit({ description: desc, amount: rawAmount, targetId, date: allowBackdate ? date : undefined }); } };
 
-    return ( <form onSubmit={handleSubmit} className="space-y-4">{mode === 'edit-post' ? (<><div><label className="block text-sm font-medium text-gray-700">Nama Pos</label><input value={desc} onChange={e => setDesc(e.target.value)} className="mt-1 w-full border p-2 rounded" required /></div><div><label className="block text-sm font-medium text-gray-700">Total Anggaran</label><input type="text" inputMode="numeric" value={amount} onChange={e => setAmount(formatNumberInput(e.target.value))} className="mt-1 w-full border p-2 rounded" required /></div><div className="grid grid-cols-2 gap-2"><div><label className="block text-sm font-medium text-gray-700">Ikon</label><div className="h-24 overflow-y-scroll border rounded p-2 grid grid-cols-4 gap-1">{availableIcons.map(ic => <div key={ic} onClick={() => setIcon(ic)} className={`p-1 cursor-pointer ${icon === ic ? 'bg-blue-100 rounded' : ''}`}><BudgetIcon icon={ic} className="w-6 h-6"/></div>)}</div></div><div><label className="block text-sm font-medium text-gray-700">Warna</label><div className="h-24 overflow-y-scroll border rounded p-2 grid grid-cols-4 gap-1">{availableColors.map(c => <div key={c} onClick={() => setColor(c)} className={`w-6 h-6 rounded-full cursor-pointer border ${color === c ? 'ring-2 ring-black' : ''}`} style={{backgroundColor: c}}/>)}</div></div></div>{onArchive && (<button type="button" onClick={onArchive} className="w-full py-2 bg-gray-200 rounded text-gray-700 font-bold">Arsipkan Pos Ini</button>)}</>) : (<><div><label className="block text-sm font-medium text-gray-700">Untuk Keperluan Apa?</label><input value={desc} onChange={e => setDesc(e.target.value)} className="mt-1 w-full border p-2 rounded" required placeholder="Contoh: Makan Siang" /></div><div><label className="block text-sm font-medium text-gray-700">Berapa Rupiah?</label><input type="text" inputMode="numeric" value={amount} onChange={e => setAmount(formatNumberInput(e.target.value))} className="mt-1 w-full border p-2 rounded" required placeholder="0" /></div>{mode === 'use-daily' && (<div><label className="block text-sm font-medium text-gray-700">Ambil Dana Dari:</label><select value={targetId} onChange={e => setTargetId(e.target.value === 'daily' ? 'daily' : Number(e.target.value))} className="mt-1 w-full border p-2 rounded bg-white"><option value="daily">Dana Harian (Tersedia)</option>{allBudgets.map(b => (<option key={b.id} value={b.id}>{b.name}</option>))}</select></div>)}</>)}<button type="submit" className="w-full py-2 bg-primary-navy text-white rounded font-bold">Simpan Transaksi</button></form> );
+    return ( <form onSubmit={handleSubmit} className="space-y-4">{mode === 'edit-post' ? (<><div><label className="block text-sm font-medium text-gray-700">Nama Pos</label><input value={desc} onChange={e => setDesc(e.target.value)} className="mt-1 w-full border p-2 rounded" required /></div><div><label className="block text-sm font-medium text-gray-700">Total Anggaran</label><input type="text" inputMode="numeric" value={amount} onChange={e => setAmount(formatNumberInput(e.target.value))} className="mt-1 w-full border p-2 rounded" required /></div><div className="grid grid-cols-2 gap-2"><div><label className="block text-sm font-medium text-gray-700">Ikon</label><div className="h-24 overflow-y-scroll border rounded p-2 grid grid-cols-4 gap-1">{availableIcons.map(ic => <div key={ic} onClick={() => setIcon(ic)} className={`p-1 cursor-pointer ${icon === ic ? 'bg-blue-100 rounded' : ''}`}><BudgetIcon icon={ic} className="w-6 h-6"/></div>)}</div></div><div><label className="block text-sm font-medium text-gray-700">Warna</label><div className="h-24 overflow-y-scroll border rounded p-2 grid grid-cols-4 gap-1">{availableColors.map(c => <div key={c} onClick={() => setColor(c)} className={`w-6 h-6 rounded-full cursor-pointer border ${color === c ? 'ring-2 ring-black' : ''}`} style={{backgroundColor: c}}/>)}</div></div></div>{onArchive && (<button type="button" onClick={onArchive} className="w-full py-2 bg-gray-200 rounded text-gray-700 font-bold">Arsipkan Pos Ini</button>)}</>) : (<><div><label className="block text-sm font-medium text-gray-700">Untuk Keperluan Apa?</label><input value={desc} onChange={e => setDesc(e.target.value)} className="mt-1 w-full border p-2 rounded" required placeholder="Contoh: Makan Siang" /></div><div><label className="block text-sm font-medium text-gray-700">Berapa Rupiah?</label><input type="text" inputMode="numeric" value={amount} onChange={e => setAmount(formatNumberInput(e.target.value))} className="mt-1 w-full border p-2 rounded" required placeholder="0" /></div>{allowBackdate && (<div><label className="block text-sm font-medium text-gray-700">Tanggal Transaksi</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className="mt-1 w-full border p-2 rounded" required /></div>)}{mode === 'use-daily' && (<div><label className="block text-sm font-medium text-gray-700">Ambil Dana Dari:</label><select value={targetId} onChange={e => setTargetId(e.target.value === 'daily' ? 'daily' : Number(e.target.value))} className="mt-1 w-full border p-2 rounded bg-white"><option value="daily">Dana Harian (Tersedia)</option>{allBudgets.map(b => (<option key={b.id} value={b.id}>{b.name}</option>))}</select></div>)}</>)}<button type="submit" className="w-full py-2 bg-primary-navy text-white rounded font-bold">Simpan Transaksi</button></form> );
 };
 
+export const InfoModalContent: React.FC<{ monthlyIncome: number, totalAllocated: number, unallocatedFunds: number, generalAndDailyExpenses: number, remainingUnallocated: number, onBackdate: () => void }> = (props) => (
+    <div className="space-y-4 text-sm">
+        <div className="space-y-2">
+            <div className="flex justify-between"><span>Total Pemasukan:</span><span className="font-bold">{formatCurrency(props.monthlyIncome)}</span></div>
+            <div className="flex justify-between"><span>Dialokasikan ke Pos:</span><span className="font-bold">-{formatCurrency(props.totalAllocated)}</span></div>
+            <div className="border-t my-1"></div>
+            <div className="flex justify-between"><span>Dana Tidak Terikat:</span><span className="font-bold">{formatCurrency(props.unallocatedFunds)}</span></div>
+            <div className="flex justify-between text-red-600"><span>Pengeluaran (Harian+Umum):</span><span>-{formatCurrency(props.generalAndDailyExpenses)}</span></div>
+            <div className="border-t my-1"></div>
+            <div className="flex justify-between text-lg font-bold text-primary-navy"><span>Sisa Dana Tersedia:</span><span>{formatCurrency(props.remainingUnallocated)}</span></div>
+        </div>
+        
+        <div className="pt-2 border-t border-gray-100">
+            <button 
+                onClick={props.onBackdate}
+                className="w-full py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg transition-colors flex items-center justify-center gap-2 border border-indigo-200"
+            >
+                <ClockIcon className="w-4 h-4" />
+                Catat Transaksi Mundur
+            </button>
+        </div>
+    </div>
+);
+
+// ... rest of the file contents (AssetModalContent, BatchInputModalContent, AddSavingsGoalModalContent, etc. remain unchanged)
 export const AssetModalContent: React.FC<{ assetToEdit?: Asset; onSubmit: (id: number | null, name: string, quantity: number, price: number, type: 'custom' | 'gold' | 'crypto', symbol?: string) => void; }> = ({ assetToEdit, onSubmit }) => {
     const [type, setType] = useState<'custom' | 'gold' | 'crypto'>(assetToEdit?.type || 'custom');
     const [name, setName] = useState(assetToEdit?.name || '');
@@ -115,7 +139,7 @@ export const BatchInputModalContent: React.FC<{ budgets: Budget[]; onSave: (item
 
 export const AddSavingsGoalModalContent: React.FC<{ 
     onSubmit: (name: string, isInfinite: boolean, targetAmount?: number, visualType?: 'plant' | 'pet', skinId?: string) => void;
-    inventory: string[]; // Pass user inventory
+    inventory: string[]; 
 }> = ({ onSubmit, inventory }) => {
     const [name, setName] = useState('');
     const [target, setTarget] = useState('');
@@ -132,13 +156,11 @@ export const AddSavingsGoalModalContent: React.FC<{
     };
 
     const hasSkin = (reqId: string | null) => {
-        if (!reqId) return true; // Default items
+        if (!reqId) return true; 
         return inventory.includes(reqId);
     };
 
-    // --- SKIN CONFIGURATION ---
     const SKIN_OPTIONS = [
-        // PLANTS
         { id: 'default', type: 'plant', name: 'Tanaman (Default)', icon: BuildingLibraryIcon, req: null, color: 'text-green-600' },
         { id: 'anthurium', type: 'plant', name: 'Anthurium', icon: SparklesIcon, req: 'skin_plant_anthurium', color: 'text-red-500' },
         { id: 'monstera', type: 'plant', name: 'Monstera', icon: ShieldCheckIcon, req: 'skin_plant_monstera', color: 'text-green-800' },
@@ -147,8 +169,6 @@ export const AddSavingsGoalModalContent: React.FC<{
         { id: 'higanbana', type: 'plant', name: 'Higanbana', icon: StarIconFilled, req: 'skin_plant_higanbana', color: 'text-red-700' },
         { id: 'wijaya', type: 'plant', name: 'Wijayakusuma', icon: HeartIcon, req: 'skin_plant_wijaya', color: 'text-purple-600' },
         { id: 'kadupul', type: 'plant', name: 'Kadupul', icon: SparklesIcon, req: 'skin_plant_kadupul', color: 'text-gray-400' },
-        
-        // PETS
         { id: 'default', type: 'pet', name: 'Pet (Default)', icon: HeartIcon, req: null, color: 'text-orange-500' },
         { id: 'swan', type: 'pet', name: 'Angsa (Swan)', icon: SparklesIcon, req: 'skin_pet_swan', color: 'text-yellow-500' },
         { id: 'dragon', type: 'pet', name: 'Naga Emas', icon: FireIcon, req: 'skin_pet_dragon', color: 'text-red-600' },
@@ -263,10 +283,6 @@ export const HistoryModalContent: React.FC<{ transactions: any[], type: string, 
     <ul className="space-y-2">{transactions.length === 0 ? <p className="text-center text-gray-500">Belum ada riwayat.</p> : transactions.map((t) => (<li key={t.timestamp} className="flex justify-between items-center p-2 border-b"><div className="text-sm"><p className="font-bold">{t.desc}</p><p className="text-xs text-gray-500">{new Date(t.timestamp).toLocaleDateString()}</p></div><div className="flex items-center gap-2"><span className={`font-bold ${t.type === 'add' ? 'text-green-600' : 'text-red-600'}`}>{t.type === 'add' ? '+' : '-'}{formatCurrency(t.amount)}</span><button onClick={() => onDelete(t.timestamp, type, budgetId)} className="text-red-400"><TrashIcon className="w-4 h-4"/></button></div></li>))}</ul>
 );
 
-export const InfoModalContent: React.FC<{ monthlyIncome: number, totalAllocated: number, unallocatedFunds: number, generalAndDailyExpenses: number, remainingUnallocated: number }> = (props) => (
-    <div className="space-y-2 text-sm"><div className="flex justify-between"><span>Total Pemasukan:</span><span className="font-bold">{formatCurrency(props.monthlyIncome)}</span></div><div className="flex justify-between"><span>Dialokasikan ke Pos:</span><span className="font-bold">-{formatCurrency(props.totalAllocated)}</span></div><div className="border-t my-1"></div><div className="flex justify-between"><span>Dana Tidak Terikat:</span><span className="font-bold">{formatCurrency(props.unallocatedFunds)}</span></div><div className="flex justify-between text-red-600"><span>Pengeluaran (Harian+Umum):</span><span>-{formatCurrency(props.generalAndDailyExpenses)}</span></div><div className="border-t my-1"></div><div className="flex justify-between text-lg font-bold text-primary-navy"><span>Sisa Dana Tersedia:</span><span>{formatCurrency(props.remainingUnallocated)}</span></div></div>
-);
-
 export const EditAssetModalContent: React.FC<{ currentAsset: number, onSubmit: (val: number) => void }> = ({ currentAsset, onSubmit }) => {
     const [val, setVal] = useState(formatNumberInput(currentAsset));
     return ( <div className="space-y-4"><p className="text-sm">Saldo saat ini: {formatCurrency(currentAsset)}</p><input type="text" inputMode="numeric" value={val} onChange={e => setVal(formatNumberInput(e.target.value))} className="w-full border p-2 rounded" placeholder="Masukkan Saldo Sebenarnya" /><button onClick={() => onSubmit(getRawNumber(val))} className="w-full py-2 bg-accent-teal text-white font-bold rounded">Simpan Koreksi</button></div> );
@@ -296,7 +312,6 @@ export const BackupRestoreModalContent: React.FC<{ backups: { key: string, times
 );
 
 export const VoiceAssistantModalContent: React.FC<{ budgets: Budget[], activePersona?: string, onFinish: (items: ScannedItem[]) => void, onClose: () => void }> = ({ budgets, activePersona, onFinish, onClose }) => {
-    // ... (No change)
     const [isConnected, setIsConnected] = useState(false);
     const [status, setStatus] = useState("Siap terhubung...");
     const [collectedItems, setCollectedItems] = useState<ScannedItem[]>([]);
@@ -539,31 +554,23 @@ export const RedeemModalContent: React.FC<{ onClose: () => void, onRedeem: (code
     );
 };
 
-// --- DAILY BONUS CONTENT ---
 export const DailyBonusModalContent: React.FC<{
     collectedSkins: string[];
     lastClaimDate: string | null;
     onClaim: (mustika: number, xp: number) => void;
 }> = ({ collectedSkins, lastClaimDate, onClaim }) => {
-    
-    // 1. Calculate Rewards based on Skin Rarity and Type
     let totalMustika = 0;
     let totalXP = 0;
 
     const skinRewards = collectedSkins.map(skinId => {
-        // Find Shop Item Data for Rarity
         const shopItem = SHOP_ITEMS.find(item => item.value === skinId && item.type === 'savings_skin');
-        
         let rarity = shopItem?.rarity || 'common';
-        let baseReward = 5; // Default
+        let baseReward = 5; 
 
         if (rarity === 'rare') baseReward = 8;
         else if (rarity === 'legendary') baseReward = 13;
         else if (rarity === 'mythical') baseReward = 20;
 
-        // Determine Type (Pet vs Plant)
-        // Heuristic: Check asset ID or shop ID prefixes if standard naming used, or fallback
-        // The prompt says: "pet menghasilkan mustika, dan tanaman menghasilkan xp"
         const isPet = skinId.includes('pet') || skinId === 'default' || ['swan', 'dragon', 'robot', 'turtle', 'jellyfish', 'fox'].includes(skinId);
         
         if (isPet) {
@@ -594,7 +601,7 @@ export const DailyBonusModalContent: React.FC<{
                 <div className="flex-1 overflow-y-auto grid grid-cols-3 gap-3 p-1">
                     {skinRewards.map((item, idx) => {
                         const assets = SKIN_ASSETS[item.id] || SKIN_ASSETS['default'];
-                        const image = assets.stage4; // Show max stage
+                        const image = assets.stage4; 
                         
                         let borderColor = 'border-gray-200';
                         let glow = '';
@@ -626,7 +633,6 @@ export const DailyBonusModalContent: React.FC<{
                             <span className="flex items-center gap-1 font-bold text-green-600"><StarIconFilled className="w-4 h-4"/> +{totalXP}</span>
                         </div>
                     </div>
-                    {/* Status Badge */}
                     {!canClaim && collectedSkins.length > 0 && (
                         <span className="bg-gray-100 text-gray-500 px-3 py-1 rounded-full text-xs font-bold">
                             Sudah Diklaim

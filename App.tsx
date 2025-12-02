@@ -19,7 +19,7 @@ import ShoppingList from './components/ShoppingList';
 import { allAchievements } from './data/achievements';
 import { availableIcons, availableColors } from './components/Icons';
 import { APP_VERSION, BACKUP_PREFIX, MAX_BACKUPS, THEMES, INITIAL_STATE, VALID_REDEEM_CODES } from './constants';
-import { formatCurrency, formatNumberInput, getRawNumber, fileToBase64, getApiKey, getSystemInstruction } from './utils';
+import { formatCurrency, formatNumberInput, getRawNumber, fileToBase64, getApiKey, getSystemInstruction, encryptData, decryptData } from './utils';
 import { Modal, ConfirmModal, DailyBackupToast, NotificationToast, AchievementUnlockedToast, BottomNavBar, MainMenu } from './components/AppUI';
 import { 
     InputModalContent, AssetModalContent, BatchInputModalContent, AddBudgetModalContent, 
@@ -459,24 +459,61 @@ const App: React.FC = () => {
     const [newlyUnlockedAchievement, setNewlyUnlockedAchievement] = useState<Achievement | null>(null);
     const importFileInputRef = useRef<HTMLInputElement>(null);
     const scanFileInputRef = useRef<HTMLInputElement>(null);
+    const [deviceBatteryLevel, setDeviceBatteryLevel] = useState(100);
+    const [isBackdateMode, setIsBackdateMode] = useState(false); 
+    
+    // --- BATTERY LISTENER ---
+    useEffect(() => {
+        if ('getBattery' in navigator) {
+             // @ts-ignore
+             navigator.getBattery().then((battery) => {
+                 setDeviceBatteryLevel(battery.level * 100);
+                 // @ts-ignore
+                 battery.addEventListener('levelchange', () => {
+                     setDeviceBatteryLevel(battery.level * 100);
+                 });
+             });
+        }
+    }, []);
 
     // --- FINANCIAL HEALTH CALCULATION FOR THEME ---
     const { monthlyIncome, totalRemaining, totalDailySpent } = useMemo(() => {
-        const monthlyIncome = state.fundHistory.filter(t => t.type === 'add').reduce((sum, t) => sum + t.amount, 0);
-        const totalDailySpent = state.dailyExpenses.reduce((sum, e) => sum + e.amount, 0);
-        const totalUsedOverall = totalDailySpent + 
-                                 state.fundHistory.filter(t => t.type === 'remove').reduce((sum, t) => sum + t.amount, 0) +
-                                 state.budgets.reduce((sum, b) => sum + b.history.reduce((s, h) => s + h.amount, 0), 0);
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+
+        const isCurrentMonth = (ts: number) => {
+            const d = new Date(ts);
+            return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+        };
+
+        const monthlyIncome = state.fundHistory
+            .filter(t => t.type === 'add' && isCurrentMonth(t.timestamp))
+            .reduce((sum, t) => sum + t.amount, 0);
+
+        const totalDailySpent = state.dailyExpenses
+            .filter(t => isCurrentMonth(t.timestamp))
+            .reduce((sum, e) => sum + e.amount, 0);
+
+        const monthlyGeneralExpense = state.fundHistory
+            .filter(t => t.type === 'remove' && isCurrentMonth(t.timestamp))
+            .reduce((sum, t) => sum + t.amount, 0);
+
+        const totalUsedFromPosts = state.budgets.reduce((sum, b) => 
+            sum + b.history
+                .filter(h => isCurrentMonth(h.timestamp))
+                .reduce((s, h) => s + h.amount, 0), 0);
+
+        const totalUsedOverall = totalDailySpent + monthlyGeneralExpense + totalUsedFromPosts;
         const totalRemaining = monthlyIncome - totalUsedOverall;
+
         return { monthlyIncome, totalRemaining, totalDailySpent };
     }, [state.fundHistory, state.budgets, state.dailyExpenses]);
 
-    const financialHealthPercentage = monthlyIncome > 0 ? (totalRemaining / monthlyIncome) * 100 : 0;
+    const financialHealthPercentage = monthlyIncome > 0 ? (totalRemaining / monthlyIncome) * 100 : 100;
     
     // Calculate remaining daily budget proxy for Thermal Theme
-    const remainingDays = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate() - new Date().getDate() + 1;
-    // Simple estimation for daily limit logic
-    const dailyBudgetLimitEstimate = monthlyIncome > 0 ? (monthlyIncome * 0.5) / 30 : 50000; // Assume 50% of income is for daily or fallback 50k
+    const dailyBudgetLimitEstimate = monthlyIncome > 0 ? (monthlyIncome * 0.5) / 30 : 50000; 
     
     let thermalStatus: 'frozen' | 'warm' | 'hot' = 'frozen';
     if (totalDailySpent === 0) thermalStatus = 'frozen';
@@ -561,7 +598,6 @@ const App: React.FC = () => {
         if (themeId === 'theme_thermal_heat') {
             root.style.setProperty('--app-background', 'transparent');
             if (thermalStatus === 'hot') {
-                // Dark red theme for HOT
                 root.style.setProperty('--color-primary-navy', '252 165 165'); // Red-300
                 root.style.setProperty('--color-dark-text', '254 242 242'); // Red-50
                 root.style.setProperty('--color-secondary-gray', '252 165 165');
@@ -571,7 +607,6 @@ const App: React.FC = () => {
                 root.style.setProperty('--color-gray-100', '127 29 29');
                 root.style.setProperty('--color-gray-200', '153 27 27');
             } else if (thermalStatus === 'frozen') {
-                // Dark blue theme for FROZEN (Night/Cold)
                 root.style.setProperty('--color-primary-navy', '186 230 253'); // Sky-200
                 root.style.setProperty('--color-dark-text', '240 249 255'); // Sky-50
                 root.style.setProperty('--color-secondary-gray', '148 163 184'); // Slate-400
@@ -581,7 +616,6 @@ const App: React.FC = () => {
                 root.style.setProperty('--color-gray-100', '30 58 138');
                 root.style.setProperty('--color-gray-200', '59 130 246');
             } else {
-                // Light/Standard theme for WARM
                 root.style.setProperty('--color-primary-navy', '44 62 80');
                 root.style.setProperty('--color-dark-text', '52 73 94');
                 root.style.setProperty('--color-secondary-gray', '100 116 139');
@@ -613,12 +647,15 @@ const App: React.FC = () => {
         setState(prevState => {
             const newState = updater(prevState);
             const newAchievementData = { ...newState.achievementData };
+            
+            // Recalculate stats for achievement tracking
             const newMonthlyIncome = newState.fundHistory.filter(t => t.type === 'add').reduce((sum, t) => sum + t.amount, 0);
             const newTotalUsedFromPosts = newState.budgets.reduce((sum, b) => sum + b.history.reduce((s, h) => s + h.amount, 0), 0);
             const newTotalDailySpent = newState.dailyExpenses.reduce((sum, e) => sum + e.amount, 0);
             const newMonthlyGeneralExpense = newState.fundHistory.filter(t => t.type === 'remove').reduce((sum, t) => sum + t.amount, 0);
             const newTotalUsedOverall = newMonthlyGeneralExpense + newTotalUsedFromPosts + newTotalDailySpent;
             const newTotalRemaining = newMonthlyIncome - newTotalUsedOverall;
+            
             const newTotalAllocated = newState.budgets.reduce((sum, b) => sum + b.totalBudget, 0);
             const newUnallocatedFunds = newMonthlyIncome - newTotalAllocated;
             const newCurrentAvailableFundsTheoretical = newUnallocatedFunds - newMonthlyGeneralExpense - newTotalDailySpent;
@@ -626,9 +663,11 @@ const App: React.FC = () => {
             const remainingDays = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate() - new Date().getDate() + 1;
             const dailyBudgetMax = remainingDays > 0 ? newCurrentAvailableFunds / remainingDays : newCurrentAvailableFunds;
             const dailyBudgetRemaining = dailyBudgetMax;
+            
             if (newTotalRemaining < 0) newAchievementData.monthlyStreak = 0;
             if (dailyBudgetRemaining < 0) newAchievementData.dailyStreak = 0;
             newState.achievementData = newAchievementData;
+            
             const newlyUnlocked: Achievement[] = [];
             const updatedUnlocked = { ...newState.unlockedAchievements };
             for (const achievement of allAchievements) {
@@ -647,6 +686,17 @@ const App: React.FC = () => {
             return newState;
         });
     }, []);
+
+    const handleDeleteCustomTheme = (themeId: string) => {
+        openConfirm("Hapus tema kustom ini? Data tidak bisa dikembalikan.", () => {
+            updateState(prev => {
+                const newThemes = prev.customThemes?.filter(t => t.id !== themeId) || [];
+                const newActive = prev.activeTheme === themeId ? 'theme_default' : prev.activeTheme;
+                return { ...prev, customThemes: newThemes, activeTheme: newActive };
+            });
+            setActiveModal(null);
+        });
+    };
 
     const listInternalBackups = useCallback(() => {
         const backupList: { key: string; timestamp: number }[] = [];
@@ -686,10 +736,10 @@ const App: React.FC = () => {
                 parsed.customThemes = parsed.customThemes || [];
                 parsed.redeemedCodes = parsed.redeemedCodes || [];
                 parsed.redeemedMustika = parsed.redeemedMustika || 0;
-                // Init new Daily Bonus fields
                 parsed.collectedSkins = parsed.collectedSkins || [];
                 parsed.lastDailyBonusClaim = parsed.lastDailyBonusClaim || null;
                 parsed.accumulatedXP = parsed.accumulatedXP || 0;
+                parsed.levelRewardsClaimed = parsed.levelRewardsClaimed || []; // Init level rewards array
                 
                 loadedState = { ...INITIAL_STATE, ...parsed };
             } catch (error) { console.error("Failed to parse state", error); }
@@ -733,6 +783,60 @@ const App: React.FC = () => {
 
     useEffect(() => { try { localStorage.setItem(`budgetAppState_v${APP_VERSION}`, JSON.stringify(state)); } catch (e) { console.error("Failed to save state", e); } }, [state]);
 
+    // --- LEVEL UP REWARD SYSTEM ---
+    const calculateUserLevel = (totalPoints: number) => { 
+        const levelNumber = Math.floor(Math.sqrt(totalPoints / 50)) + 1; 
+        return { levelNumber }; 
+    };
+
+    const unlockedAchIds = Object.keys(state.unlockedAchievements); 
+    const achievementPoints = allAchievements.filter(ach => unlockedAchIds.includes(ach.id)).reduce((sum, ach) => sum + (ach.points || 0), 0); 
+    
+    // Helper to calc quest points
+    const calculateQuestPoints = (st: AppState) => {
+        const todayStr = new Date().toLocaleDateString('fr-CA'); const now = Date.now(); const oneDay = 24 * 60 * 60 * 1000; const isToday = (ts: number) => new Date(ts).toLocaleDateString('fr-CA') === todayStr; const isThisWeek = (ts: number) => (now - ts) < (7 * oneDay);
+        const dailyQuests = [ { completed: true, points: 5 }, { completed: st.dailyExpenses.some(t => isToday(t.timestamp)) || st.fundHistory.some(t => isToday(t.timestamp)) || st.budgets.some(b => b.history.some(h => isToday(h.timestamp))), points: 10 }, { completed: st.dailyExpenses.filter(t => isToday(t.timestamp)).reduce((sum, t) => sum + t.amount, 0) < 50000, points: 15 }, { completed: st.savingsGoals.some(g => g.history.some(h => isToday(h.timestamp))), points: 20 }, { completed: st.wishlist.length > 0, points: 10 } ];
+        const dailyCount = dailyQuests.filter(q => q.completed).length; const dailyPoints = dailyQuests.reduce((sum, q) => q.completed ? sum + q.points : sum, 0) + (dailyCount >= 3 ? 50 : 0);
+        const uniqueTransactionDays = new Set(); st.dailyExpenses.forEach(t => { if(isThisWeek(t.timestamp)) uniqueTransactionDays.add(new Date(t.timestamp).toDateString()) }); st.fundHistory.forEach(t => { if(isThisWeek(t.timestamp)) uniqueTransactionDays.add(new Date(t.timestamp).toDateString()) }); st.budgets.forEach(b => b.history.forEach(t => { if(isThisWeek(t.timestamp)) uniqueTransactionDays.add(new Date(t.timestamp).toDateString()) }));
+        const savingsCount = st.savingsGoals.reduce((count, g) => count + g.history.filter(h => isThisWeek(h.timestamp)).length, 0); const activeBudgetsCount = st.budgets.filter(b => b.history.some(h => isThisWeek(h.timestamp))).length; const addedWishlist = st.wishlist.some(w => isThisWeek(w.createdAt)); const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1); const monthlyIncomeQ = st.fundHistory.filter(t => t.type === 'add' && t.timestamp >= startOfMonth.getTime()).reduce((sum, t) => sum + t.amount, 0); const weeklyExpense = st.dailyExpenses.filter(t => isThisWeek(t.timestamp)).reduce((s, t) => s + t.amount, 0) + st.fundHistory.filter(t => t.type === 'remove' && isThisWeek(t.timestamp)).reduce((s, t) => s + t.amount, 0) + st.budgets.reduce((s, b) => s + b.history.filter(h => isThisWeek(h.timestamp)).reduce((bs, h) => bs + h.amount, 0), 0);
+        const weeklyQuests = [ { completed: uniqueTransactionDays.size >= 4, points: 30 }, { completed: savingsCount >= 3, points: 40 }, { completed: addedWishlist, points: 20 }, { completed: activeBudgetsCount >= 4, points: 25 }, { completed: monthlyIncomeQ > 0 && weeklyExpense < (monthlyIncomeQ * 0.25), points: 50 } ];
+        const weeklyCount = weeklyQuests.filter(q => q.completed).length; const weeklyPoints = weeklyQuests.reduce((sum, q) => q.completed ? sum + q.points : sum, 0) + (weeklyCount >= 5 ? 150 : 0);
+        return dailyPoints + weeklyPoints;
+    };
+
+    const questPoints = calculateQuestPoints(state); 
+    const grandTotalPoints = achievementPoints + questPoints + (state.bonusPoints || 0) + (state.accumulatedXP || 0); // For Level
+    const availableShopPoints = grandTotalPoints + (state.redeemedMustika || 0) - (state.spentPoints || 0); // For Shopping
+
+    // AUTO CLAIM LEVEL UP REWARDS
+    useEffect(() => {
+        const { levelNumber } = calculateUserLevel(grandTotalPoints);
+        const claimed = state.levelRewardsClaimed || [];
+        const maxClaimed = claimed.length > 0 ? Math.max(...claimed) : 1;
+        
+        if (levelNumber > maxClaimed) {
+            const newClaimed = [...claimed];
+            let rewardTotal = 0;
+            // Iterate from next level up to current level
+            for (let l = maxClaimed + 1; l <= levelNumber; l++) {
+                newClaimed.push(l);
+                rewardTotal += 200; // 200 Mustika per level up
+            }
+            
+            if (rewardTotal > 0) {
+                // Update State
+                setState(prev => ({
+                    ...prev,
+                    redeemedMustika: (prev.redeemedMustika || 0) + rewardTotal,
+                    levelRewardsClaimed: newClaimed
+                }));
+                // Show notification
+                setNotifications(prev => [...prev, `Naik ke Level ${levelNumber}! Hadiah +${rewardTotal} Mustika!`]);
+            }
+        }
+    }, [grandTotalPoints, state.levelRewardsClaimed]);
+
+    // ... [REST OF USE EFFECTS: Backup, etc.] ...
     useEffect(() => {
         if (backupCreatedToday.current) return;
         const hasData = state.budgets.length > 0 || state.dailyExpenses.length > 0 || state.fundHistory.length > 0;
@@ -744,13 +848,21 @@ const App: React.FC = () => {
             const lastExportDate = new Date(lastExportDateStr); lastExportDate.setHours(0, 0, 0, 0);
             const timeDiff = today.getTime() - lastExportDate.getTime();
             const daysDiff = timeDiff / (1000 * 3600 * 24);
-            if (daysDiff < 4) shouldCreateBackup = false;
+            if (daysDiff < 7) shouldCreateBackup = false; // Changed from 4 to 7 days
         }
         if (shouldCreateBackup) {
             try {
                 const todayStrForFilename = new Date().toLocaleDateString('fr-CA');
-                const dataStr = JSON.stringify(state, null, 2);
-                const dataBlob = new Blob([dataStr], { type: "application/json" });
+                // Use new secure format for auto backup
+                const encrypted = encryptData(state);
+                const fileContent = JSON.stringify({
+                    app: "Anggaran",
+                    version: APP_VERSION,
+                    secure: true,
+                    payload: encrypted
+                }, null, 2);
+                
+                const dataBlob = new Blob([fileContent], { type: "application/json" });
                 const url = URL.createObjectURL(dataBlob);
                 const filename = `cadangan_anggaran_${todayStrForFilename}.json`;
                 setDailyBackup({ url, filename });
@@ -772,18 +884,43 @@ const App: React.FC = () => {
     const currentAsset = useMemo(() => allTransactions.reduce((sum, t) => t.type === 'add' ? sum + t.amount : sum - t.amount, 0), [allTransactions]);
 
     const { totalUsedOverall, totalAllocated, unallocatedFunds, generalAndDailyExpenses, remainingUnallocated, currentAvailableFunds } = useMemo(() => {
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+        const isCurrentMonth = (ts: number) => {
+            const d = new Date(ts);
+            return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+        };
+
+        const monthlyIncome = state.fundHistory
+            .filter(t => t.type === 'add' && isCurrentMonth(t.timestamp))
+            .reduce((sum, t) => sum + t.amount, 0);
+
         const totalAllocated = state.budgets.reduce((sum, b) => sum + b.totalBudget, 0);
-        const totalUsedFromPosts = state.budgets.reduce((sum, b) => sum + b.history.reduce((s, h) => s + h.amount, 0), 0);
-        const totalDailySpent = state.dailyExpenses.reduce((sum, e) => sum + e.amount, 0);
-        const monthlyGeneralExpense = state.fundHistory.filter(t => t.type === 'remove').reduce((sum, t) => sum + t.amount, 0);
+        
+        const totalUsedFromPosts = state.budgets.reduce((sum, b) => 
+            sum + b.history.filter(h => isCurrentMonth(h.timestamp)).reduce((s, h) => s + h.amount, 0), 0);
+        
+        const totalDailySpent = state.dailyExpenses
+            .filter(t => isCurrentMonth(t.timestamp))
+            .reduce((sum, e) => sum + e.amount, 0);
+        
+        const monthlyGeneralExpense = state.fundHistory
+            .filter(t => t.type === 'remove' && isCurrentMonth(t.timestamp))
+            .reduce((sum, t) => sum + t.amount, 0);
+        
         const totalUsedOverall = monthlyGeneralExpense + totalUsedFromPosts + totalDailySpent;
         const unallocatedFunds = monthlyIncome - totalAllocated;
         const generalAndDailyExpenses = monthlyGeneralExpense + totalDailySpent;
+        
+        const totalRemaining = monthlyIncome - totalUsedOverall;
+
         const currentAvailableFundsTheoretical = unallocatedFunds - generalAndDailyExpenses;
         const currentAvailableFunds = Math.min(currentAvailableFundsTheoretical, totalRemaining);
         const remainingUnallocated = currentAvailableFunds; 
+        
         return { totalUsedOverall, totalAllocated, unallocatedFunds, generalAndDailyExpenses, remainingUnallocated, currentAvailableFunds };
-    }, [state.fundHistory, state.budgets, state.dailyExpenses, monthlyIncome, totalRemaining]);
+    }, [state.fundHistory, state.budgets, state.dailyExpenses]);
     
     // --- DEBT HANDLERS ---
     const handleAddDebt = (item: Omit<DebtItem, 'id' | 'paid' | 'history' | 'isPaidOff' | 'createdAt'>, syncWallet: boolean) => {
@@ -932,27 +1069,38 @@ const App: React.FC = () => {
             return { ...prev, budgets: reorderedBudgets };
         });
     };
-    const handleAddTransaction = (desc: string, amount: number, targetId: 'daily' | number) => {
-        const newTransaction: Transaction = { desc, amount, timestamp: Date.now() };
+    const handleAddTransaction = (desc: string, amount: number, targetId: 'daily' | number, customDate?: string) => {
+        const timestamp = customDate ? new Date(customDate).getTime() : Date.now();
+        const txDate = new Date(timestamp);
+        const newTransaction: Transaction = { desc, amount, timestamp };
+        
         if (targetId === 'daily' || targetId === 0) { // Handle 0 as daily too
              updateState(prev => ({ ...prev, dailyExpenses: [...prev.dailyExpenses, newTransaction] })); 
              setActiveModal(null); 
         } else { 
             const budget = state.budgets.find(b => b.id === targetId);
             if (!budget) return;
-            const usedAmount = budget.history.reduce((sum, item) => sum + item.amount, 0);
+            
+            // FIX: Filter usage by current month/year of the transaction date
+            const usedAmount = budget.history
+                .filter(item => {
+                    const itemDate = new Date(item.timestamp);
+                    return itemDate.getMonth() === txDate.getMonth() && itemDate.getFullYear() === txDate.getFullYear();
+                })
+                .reduce((sum, item) => sum + item.amount, 0);
+
             const remainingQuota = Math.max(0, budget.totalBudget - usedAmount);
             if (amount > remainingQuota) {
                 const overageAmount = amount - remainingQuota;
                 const confirmOverage = () => {
                     updateState(prev => {
-                        const newBudgets = prev.budgets.map(b => { if (b.id === targetId && remainingQuota > 0) return { ...b, history: [...b.history, { desc, amount: remainingQuota, timestamp: Date.now() }] }; return b; });
-                        const newDailyExpenses = [...prev.dailyExpenses, { desc: `[Overage] ${desc}`, amount: overageAmount, timestamp: Date.now(), sourceCategory: budget.name }];
+                        const newBudgets = prev.budgets.map(b => { if (b.id === targetId && remainingQuota > 0) return { ...b, history: [...b.history, { desc, amount: remainingQuota, timestamp }] }; return b; });
+                        const newDailyExpenses = [...prev.dailyExpenses, { desc: `[Overage] ${desc}`, amount: overageAmount, timestamp, sourceCategory: budget.name }];
                         return { ...prev, budgets: newBudgets, dailyExpenses: newDailyExpenses };
                     });
                     setActiveModal(null);
                 }
-                setConfirmModalContent({ message: <>Pengeluaran melebihi kuota. Sebesar <strong>{formatCurrency(overageAmount)}</strong> akan diambil dari Dana Tersedia. Lanjutkan?</>, onConfirm: confirmOverage });
+                setConfirmModalContent({ message: <>Pengeluaran melebihi kuota bulan ini. Sebesar <strong>{formatCurrency(overageAmount)}</strong> akan diambil dari Dana Tersedia. Lanjutkan?</>, onConfirm: confirmOverage });
                 setActiveModal('confirm');
                 return;
             } else {
@@ -968,12 +1116,22 @@ const App: React.FC = () => {
             items.forEach(item => {
                 if (item.budgetId === 'none' || item.amount <= 0 || !item.desc.trim()) return;
                 const timestamp = Date.now();
+                const txDate = new Date(timestamp);
+
                 if (item.budgetId === 'daily') newDailyExpenses.push({ desc: item.desc, amount: item.amount, timestamp: timestamp });
                 else {
                     const budgetIndex = newBudgets.findIndex(b => b.id === item.budgetId);
                     if (budgetIndex !== -1) {
                         const budget = newBudgets[budgetIndex];
-                        const currentUsed = budget.history.reduce((sum, h) => sum + h.amount, 0);
+                        
+                        // FIX: Filter usage by current month
+                        const currentUsed = budget.history
+                            .filter(h => {
+                                const hDate = new Date(h.timestamp);
+                                return hDate.getMonth() === txDate.getMonth() && hDate.getFullYear() === txDate.getFullYear();
+                            })
+                            .reduce((sum, h) => sum + h.amount, 0);
+
                         const remainingQuota = Math.max(0, budget.totalBudget - currentUsed);
                         if (item.amount > remainingQuota) {
                             const overageAmount = item.amount - remainingQuota;
@@ -1060,7 +1218,7 @@ const App: React.FC = () => {
         const item = state.wishlist.find(i => i.id === id); if (!item) return;
         setPrefillData({ desc: item.name, amount: formatNumberInput(item.price) });
         updateState(prev => ({ ...prev, wishlist: prev.wishlist.map(i => i.id === id ? { ...i, status: 'purchased' } : i) }));
-        setInputModalMode('use-daily'); setActiveModal('input');
+        setInputModalMode('use-daily'); setIsBackdateMode(false); setActiveModal('input');
     };
     const handleCancelWishlist = (id: number) => { updateState(prev => ({ ...prev, wishlist: prev.wishlist.map(i => i.id === id ? { ...i, status: 'cancelled' } : i) })); };
     const handleDeleteWishlist = (id: number) => { updateState(prev => ({ ...prev, wishlist: prev.wishlist.filter(i => i.id !== id) })); };
@@ -1086,7 +1244,7 @@ const App: React.FC = () => {
     const handleAddSubscription = (subData: Omit<Subscription, 'id'>) => { const newSub: Subscription = { ...subData, id: Date.now() }; updateState(prev => ({ ...prev, subscriptions: [...(prev.subscriptions || []), newSub] })); };
     const handleEditSubscription = (subData: Subscription) => { updateState(prev => ({ ...prev, subscriptions: prev.subscriptions.map(s => s.id === subData.id ? subData : s) })); };
     const handleDeleteSubscription = (id: number) => { openConfirm("Hapus langganan ini?", () => { updateState(prev => ({ ...prev, subscriptions: prev.subscriptions.filter(s => s.id !== id) })); }); };
-    const handleInitiatePaySubscription = (subId: number) => { const sub = state.subscriptions.find(s => s.id === subId); if (!sub) return; setSubscriptionToPayId(subId); setPrefillData({ desc: sub.name, amount: formatNumberInput(sub.price) }); setInputModalMode('use-daily'); setActiveModal('input'); };
+    const handleInitiatePaySubscription = (subId: number) => { const sub = state.subscriptions.find(s => s.id === subId); if (!sub) return; setSubscriptionToPayId(subId); setPrefillData({ desc: sub.name, amount: formatNumberInput(sub.price) }); setInputModalMode('use-daily'); setIsBackdateMode(false); setActiveModal('input'); };
     const handleUpdateSubscriptionDate = (subId: number) => {
         updateState(prev => ({
             ...prev,
@@ -1223,27 +1381,60 @@ const App: React.FC = () => {
         });
     };
     const handleUpdateProfile = (name: string, avatar: string) => { updateState(prev => ({ ...prev, userProfile: { ...prev.userProfile, name, avatar } })); };
+    
+    // --- EXPORT WITH ENCRYPTION ---
     const handleExportData = () => {
-        const dataStr = JSON.stringify(state, null, 2);
-        const dataBlob = new Blob([dataStr], {type: "application/json"});
+        // Use new encryption format
+        const encrypted = encryptData(state);
+        // Wrap in object to identify it as secure file
+        const fileContent = JSON.stringify({
+            app: "Anggaran",
+            version: APP_VERSION,
+            secure: true,
+            payload: encrypted
+        }, null, 2);
+        
+        const dataBlob = new Blob([fileContent], {type: "application/json"});
         const url = URL.createObjectURL(dataBlob);
         const link = document.createElement('a'); link.download = `data_anggaran_${new Date().toISOString().slice(0, 10)}.json`; link.href = url; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);
         const now = new Date().toISOString(); localStorage.setItem('lastExportDate', now); setLastExportDate(now); setActiveModal(null);
     };
+    
     const handleTriggerImport = () => { openConfirm(<><strong>PERINGATAN!</strong><br />Mengimpor data akan menghapus semua data saat ini. Lanjutkan?</>, () => importFileInputRef.current?.click()); };
+    
+    // --- IMPORT WITH DECRYPTION SUPPORT ---
     const handleImportData = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0]; if (!file) return;
         const reader = new FileReader();
         reader.onload = (e) => {
             try {
-                const importedState = JSON.parse(e.target.result as string);
-                if (typeof importedState.budgets !== 'object' || typeof importedState.archives !== 'object') throw new Error("Format file tidak valid.");
+                const text = e.target.result as string;
+                let importedState;
+                
+                try {
+                    const json = JSON.parse(text);
+                    if (json.secure && json.payload) {
+                        // Decrypt secure file
+                        importedState = decryptData(json.payload);
+                    } else {
+                        // Legacy support for plain JSON (backward compatibility)
+                        importedState = json;
+                    }
+                } catch(err) {
+                    throw new Error("Format file tidak valid.");
+                }
+
+                if (typeof importedState.budgets !== 'object' || typeof importedState.archives !== 'object') throw new Error("Struktur data tidak valid.");
+                
+                // Merge with initial state to ensure new fields exist
                 setState({ ...INITIAL_STATE, ...importedState });
                 const now = new Date().toISOString(); localStorage.setItem('lastImportDate', now); setLastImportDate(now); setCurrentPage('dashboard');
-            } catch (err) { openConfirm("Gagal memuat file. Pastikan file cadangan tidak rusak dan berformat .json yang benar.", () => {}); } finally { if(importFileInputRef.current) importFileInputRef.current.value = ''; }
+                setNotifications(prev => [...prev, "Data berhasil dipulihkan!"]);
+            } catch (err) { openConfirm("Gagal memuat file. Pastikan file cadangan valid dan tidak rusak.", () => {}); } finally { if(importFileInputRef.current) importFileInputRef.current.value = ''; }
         };
         reader.readAsText(file);
     };
+    
     const handleManualBackup = () => {
         const newBackupKey = `${BACKUP_PREFIX}${Date.now()}`;
         try { localStorage.setItem(newBackupKey, JSON.stringify(state)); const allBackups = listInternalBackups(); if (allBackups.length > MAX_BACKUPS) { const oldestBackup = allBackups[allBackups.length - 1]; localStorage.removeItem(oldestBackup.key); } setInternalBackups(listInternalBackups()); setActiveModal('backupRestore'); } 
@@ -1313,27 +1504,12 @@ const App: React.FC = () => {
         catch (error) { console.error("Error with AI Search:", error); setAiSearchError("Gagal melakukan pencarian AI. Coba lagi."); } finally { setIsSearchingWithAI(false); }
     };
     const handleClearAiSearch = () => { setAiSearchResults(null); setAiSearchError(null); };
-    const calculateQuestPoints = (state: AppState) => {
-        const todayStr = new Date().toLocaleDateString('fr-CA'); const now = Date.now(); const oneDay = 24 * 60 * 60 * 1000; const isToday = (ts: number) => new Date(ts).toLocaleDateString('fr-CA') === todayStr; const isThisWeek = (ts: number) => (now - ts) < (7 * oneDay);
-        const dailyQuests = [ { completed: true, points: 5 }, { completed: state.dailyExpenses.some(t => isToday(t.timestamp)) || state.fundHistory.some(t => isToday(t.timestamp)) || state.budgets.some(b => b.history.some(h => isToday(h.timestamp))), points: 10 }, { completed: state.dailyExpenses.filter(t => isToday(t.timestamp)).reduce((sum, t) => sum + t.amount, 0) < 50000, points: 15 }, { completed: state.savingsGoals.some(g => g.history.some(h => isToday(h.timestamp))), points: 20 }, { completed: state.wishlist.length > 0, points: 10 } ];
-        const dailyCount = dailyQuests.filter(q => q.completed).length; const dailyPoints = dailyQuests.reduce((sum, q) => q.completed ? sum + q.points : sum, 0) + (dailyCount >= 3 ? 50 : 0);
-        const uniqueTransactionDays = new Set(); state.dailyExpenses.forEach(t => { if(isThisWeek(t.timestamp)) uniqueTransactionDays.add(new Date(t.timestamp).toDateString()) }); state.fundHistory.forEach(t => { if(isThisWeek(t.timestamp)) uniqueTransactionDays.add(new Date(t.timestamp).toDateString()) }); state.budgets.forEach(b => b.history.forEach(t => { if(isThisWeek(t.timestamp)) uniqueTransactionDays.add(new Date(t.timestamp).toDateString()) }));
-        const savingsCount = state.savingsGoals.reduce((count, g) => count + g.history.filter(h => isThisWeek(h.timestamp)).length, 0); const activeBudgetsCount = state.budgets.filter(b => b.history.some(h => isThisWeek(h.timestamp))).length; const addedWishlist = state.wishlist.some(w => isThisWeek(w.createdAt)); const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1); const monthlyIncomeQ = state.fundHistory.filter(t => t.type === 'add' && t.timestamp >= startOfMonth.getTime()).reduce((sum, t) => sum + t.amount, 0); const weeklyExpense = state.dailyExpenses.filter(t => isThisWeek(t.timestamp)).reduce((s, t) => s + t.amount, 0) + state.fundHistory.filter(t => t.type === 'remove' && isThisWeek(t.timestamp)).reduce((s, t) => s + t.amount, 0) + state.budgets.reduce((s, b) => s + b.history.filter(h => isThisWeek(h.timestamp)).reduce((bs, h) => bs + h.amount, 0), 0);
-        const weeklyQuests = [ { completed: uniqueTransactionDays.size >= 4, points: 30 }, { completed: savingsCount >= 3, points: 40 }, { completed: addedWishlist, points: 20 }, { completed: activeBudgetsCount >= 4, points: 25 }, { completed: monthlyIncomeQ > 0 && weeklyExpense < (monthlyIncomeQ * 0.25), points: 50 } ];
-        const weeklyCount = weeklyQuests.filter(q => q.completed).length; const weeklyPoints = weeklyQuests.reduce((sum, q) => q.completed ? sum + q.points : sum, 0) + (weeklyCount >= 5 ? 150 : 0);
-        return dailyPoints + weeklyPoints;
-    };
-    const calculateUserLevel = (totalPoints: number) => { const rankTitles = [ "Pemula Finansial", "Pelajar Hemat", "Perencana Cerdas", "Pengelola Aset", "Juragan Strategi", "Investor Ulung", "Master Anggaran", "Sultan Muda", "Taipan Global", "Legenda Abadi" ]; const levelNumber = Math.floor(Math.sqrt(totalPoints / 50)) + 1; const rankIndex = Math.min(rankTitles.length - 1, Math.floor((levelNumber - 1) / 5)); const currentTitle = rankTitles[rankIndex]; const currentStart = 50 * Math.pow(levelNumber - 1, 2); const nextTarget = 50 * Math.pow(levelNumber, 2); return { level: currentTitle, levelNumber: levelNumber, currentLevelPoints: currentStart, nextLevelPoints: nextTarget }; };
-    const unlockedAchIds = Object.keys(state.unlockedAchievements); const achievementPoints = allAchievements.filter(ach => unlockedAchIds.includes(ach.id)).reduce((sum, ach) => sum + (ach.points || 0), 0); const questPoints = calculateQuestPoints(state); 
-    // Redeemed Mustika adds to Purchasing Power BUT NOT Level XP
-    // Accumulated XP from daily bonus adds to LEVEL XP
-    const grandTotalPoints = achievementPoints + questPoints + (state.bonusPoints || 0) + (state.accumulatedXP || 0); // For Level
-    const availableShopPoints = grandTotalPoints + (state.redeemedMustika || 0) - (state.spentPoints || 0); // For Shopping
     
+    // Calculate User Level
     const levelInfo = calculateUserLevel(grandTotalPoints);
     const handlePurchase = (item: ShopItem) => { if (availableShopPoints < item.price) { openConfirm(<>Mustika tidak cukup! Kamu butuh <strong>{item.price - availableShopPoints}</strong> Mustika lagi.</>, () => {}); return; } updateState(prev => { const newSpent = (prev.spentPoints || 0) + item.price; const newInventory = [...(prev.inventory || []), item.id]; return { ...prev, spentPoints: newSpent, inventory: newInventory }; }); setNotifications(prev => [...prev, `Berhasil membeli ${item.name}!`]); };
     const handleSpendPoints = (amount: number) => { updateState(prev => ({ ...prev, spentPoints: (prev.spentPoints || 0) + amount })); };
-    const handleEquip = (item: ShopItem) => { updateState(prev => { let newProfile = { ...prev.userProfile }; let newActiveTheme = prev.activeTheme; if (item.type === 'theme' || item.type === 'special') { newActiveTheme = item.value; } else if (item.type === 'title') { newProfile.customTitle = item.value; } else if (item.type === 'frame') { newProfile.frameId = item.value; } else if (item.type === 'persona') { newProfile.activePersona = item.value; } else if (item.type === 'banner') { newProfile.activeBanner = item.value; } return { ...prev, userProfile: newProfile, activeTheme: newActiveTheme }; }); };
+    const handleEquip = (item: ShopItem) => { updateState(prev => { let newProfile = { ...prev.userProfile }; let newActiveTheme = prev.activeTheme; let newTrendChartTheme = prev.activeTrendChartTheme; let newBudgetChartTheme = prev.activeBudgetChartTheme; if (item.type === 'theme' || item.type === 'special') { newActiveTheme = item.value; } else if (item.type === 'chart_skin') { if (item.category === 'trend') newTrendChartTheme = item.value; if (item.category === 'budget') newBudgetChartTheme = item.value; } else if (item.type === 'title') { newProfile.customTitle = item.value; } else if (item.type === 'frame') { newProfile.frameId = item.value; } else if (item.type === 'persona') { newProfile.activePersona = item.value; } else if (item.type === 'banner') { newProfile.activeBanner = item.value; } return { ...prev, userProfile: newProfile, activeTheme: newActiveTheme, activeTrendChartTheme: newTrendChartTheme, activeBudgetChartTheme: newBudgetChartTheme }; }); };
     const handleAddCustomTheme = (theme: CustomTheme, price: number) => { if (availableShopPoints < price) { openConfirm(<>Mustika tidak cukup untuk membuat tema kustom.</>, () => {}); return; } updateState(prev => { const newSpent = (prev.spentPoints || 0) + price; const newThemes = [...(prev.customThemes || []), theme]; return { ...prev, spentPoints: newSpent, customThemes: newThemes, activeTheme: theme.id }; }); setNotifications(prev => [...prev, `Tema Kustom "${theme.name}" berhasil dibuat dan diterapkan!`]); };
     
     // --- REDEEM CODE HANDLER ---
@@ -1395,15 +1571,15 @@ const App: React.FC = () => {
         case 'reports': return <Reports state={state} onBack={() => setCurrentPage('dashboard')} onEditAsset={() => setActiveModal('editAsset')} onDeleteTransaction={(timestamp, source, sourceId, desc, amount) => openConfirm('Yakin ingin menghapus transaksi ini secara PERMANEN dari seluruh data?', () => handleDeleteGlobalTransaction(timestamp, source, sourceId, desc, amount))} onEditTransaction={handleEditGlobalTransaction} aiSearchResults={aiSearchResults} isSearchingWithAI={isSearchingWithAI} aiSearchError={aiSearchError} onAiSearch={handleAiSearch} onClearAiSearch={handleClearAiSearch} />; 
         case 'visualizations': return <Visualizations state={state} onBack={() => setCurrentPage('dashboard')} onAnalyzeChart={handleAnalyzeChartData} activePersona={state.userProfile.activePersona} />; 
         case 'savings': return <Savings state={state} onOpenAddGoalModal={() => setActiveModal('addSavingsGoal')} onOpenAddSavingsModal={(goalId) => { setCurrentSavingsGoalId(goalId); setActiveModal('addSavings'); }} onOpenDetailModal={(goalId) => { setCurrentSavingsGoalId(goalId); setActiveModal('savingsDetail'); }} onOpenSavingsGoal={handleOpenSavingsGoal} />; 
-        case 'achievements': return <Achievements state={state} allAchievements={allAchievements} unlockedAchievements={state.unlockedAchievements} achievementData={state.achievementData} totalPoints={achievementPoints} userLevel={levelInfo} />; 
+        case 'achievements': return <Achievements state={state} allAchievements={allAchievements} unlockedAchievements={state.unlockedAchievements} achievementData={state.achievementData} totalPoints={achievementPoints} userLevel={{...levelInfo, level: `Level ${levelInfo.levelNumber}`, currentLevelPoints: 0, nextLevelPoints: null}} />; 
         case 'missions': return <Missions state={state} achievementData={state.achievementData} totalPoints={grandTotalPoints} spendablePoints={availableShopPoints} />;
         case 'personalBest': return <PersonalBest state={state} />; 
         case 'netWorth': return <NetWorth state={state} currentCashAsset={currentAsset} onAddAsset={() => openAssetModal(null)} onEditAsset={(assetId) => openAssetModal(assetId)} onDeleteAsset={handleDeleteAsset} />; 
         case 'wishlist': return <Wishlist wishlist={state.wishlist || []} onAddWishlist={() => setActiveModal('addWishlist')} onFulfillWishlist={handleFulfillWishlist} onCancelWishlist={handleCancelWishlist} onDeleteWishlist={handleDeleteWishlist} onConvertToBudget={handleConvertWishlistToBudget} onConvertToSavings={handleConvertWishlistToSavings} onDelayToNextMonth={handleDelayWishlist} />; 
         case 'subscriptions': return <Subscriptions state={state} onAddSubscription={handleAddSubscription} onDeleteSubscription={handleDeleteSubscription} onEditSubscription={handleEditSubscription} />; 
-        case 'profile': return <Profile state={state} onUpdateProfile={handleUpdateProfile} onBack={() => setCurrentPage('dashboard')} totalPoints={grandTotalPoints} totalBadges={unlockedAchIds.length} userLevel={levelInfo} />; 
+        case 'profile': return <Profile state={state} onUpdateProfile={handleUpdateProfile} onBack={() => setCurrentPage('dashboard')} totalPoints={grandTotalPoints} totalBadges={unlockedAchIds.length} userLevel={{...levelInfo, level: `Level ${levelInfo.levelNumber}`, currentLevelPoints: 0, nextLevelPoints: null}} />; 
         case 'shop': return <Shop state={state} availablePoints={availableShopPoints} onBack={() => setCurrentPage('dashboard')} onPurchase={handlePurchase} onEquip={handleEquip} onAddCustomTheme={handleAddCustomTheme} onSpendPoints={handleSpendPoints} />; 
-        case 'customApp': return <CustomApp state={state} onBack={() => setCurrentPage('dashboard')} onEquip={handleEquip} />; 
+        case 'customApp': return <CustomApp state={state} onBack={() => setCurrentPage('dashboard')} onEquip={handleEquip} onDeleteCustomTheme={handleDeleteCustomTheme} />; 
         case 'shoppingList': return <ShoppingList 
                 onBack={() => setCurrentPage('dashboard')} 
                 budgets={state.budgets.filter(b => !b.isArchived)} 
@@ -1421,11 +1597,12 @@ const App: React.FC = () => {
     const budgetForInputModal = state.budgets.find(b => b.id === currentBudgetId);
     const savingsGoalForModal = state.savingsGoals.find(g => g.id === currentSavingsGoalId);
     const assetForModal = state.assets.find(a => a.id === currentAssetId);
-    const handleInputSubmit = (data: { description: string, amount: number, targetId?: 'daily' | number, icon?: string, color?: string }) => { if (subscriptionToPayId && data.targetId !== undefined) { handleAddTransaction(data.description, data.amount, data.targetId); handleUpdateSubscriptionDate(subscriptionToPayId); setSubscriptionToPayId(null); return; } if (inputModalMode === 'edit-post' && data.icon && data.color) { handleEditBudget(data.description, data.amount, data.icon, data.color); } else if (data.targetId !== undefined) { handleAddTransaction(data.description, data.amount, data.targetId); } };
+    const handleInputSubmit = (data: { description: string, amount: number, targetId?: 'daily' | number, icon?: string, color?: string, date?: string }) => { if (subscriptionToPayId && data.targetId !== undefined) { handleAddTransaction(data.description, data.amount, data.targetId, data.date); handleUpdateSubscriptionDate(subscriptionToPayId); setSubscriptionToPayId(null); return; } if (inputModalMode === 'edit-post' && data.icon && data.color) { handleEditBudget(data.description, data.amount, data.icon, data.color); } else if (data.targetId !== undefined) { handleAddTransaction(data.description, data.amount, data.targetId, data.date); } };
     const handleCloseBackupToast = () => { if (dailyBackup) { URL.revokeObjectURL(dailyBackup.url); } setDailyBackup(null); };
-    const openUseDailyBudget = () => { setInputModalMode('use-daily'); setActiveModal('input'); };
-    const openUseBudget = (budgetId: number) => { setInputModalMode('use-post'); setCurrentBudgetId(budgetId); setActiveModal('input'); };
-    const openEditBudget = (budgetId: number) => { setInputModalMode('edit-post'); setCurrentBudgetId(budgetId); setActiveModal('input'); };
+    const openUseDailyBudget = () => { setInputModalMode('use-daily'); setIsBackdateMode(false); setActiveModal('input'); };
+    const openUseBudget = (budgetId: number) => { setInputModalMode('use-post'); setCurrentBudgetId(budgetId); setIsBackdateMode(false); setActiveModal('input'); };
+    const openEditBudget = (budgetId: number) => { setInputModalMode('edit-post'); setCurrentBudgetId(budgetId); setIsBackdateMode(false); setActiveModal('input'); };
+    const handleOpenBackdate = () => { setInputModalMode('use-daily'); setIsBackdateMode(true); setActiveModal('input'); };
     const openFundHistory = () => { setHistoryModalContent({ title: 'Riwayat Dana Bulan Ini', transactions: state.fundHistory.slice().reverse(), type: 'fund', budgetId: undefined }); setActiveModal('history'); };
     const openDailyHistory = () => { setHistoryModalContent({ title: 'Riwayat Pengeluaran Harian', transactions: state.dailyExpenses.slice().reverse(), type: 'daily', budgetId: undefined, }); setActiveModal('history'); };
     const openConfirm = (message: React.ReactNode, onConfirm: () => void) => { setConfirmModalContent({ message, onConfirm }); setActiveModal('confirm'); };
@@ -1444,7 +1621,7 @@ const App: React.FC = () => {
             )}
             {/* RENDER CYBERPUNK BACKGROUND IF ACTIVE */}
             {state.activeTheme === 'theme_cyberpunk_battery' && (
-                <CyberpunkBatteryBackground percentage={financialHealthPercentage} />
+                <CyberpunkBatteryBackground percentage={deviceBatteryLevel} />
             )}
             {/* RENDER THERMAL BACKGROUND IF ACTIVE */}
             {state.activeTheme === 'theme_thermal_heat' && (
@@ -1458,19 +1635,18 @@ const App: React.FC = () => {
             {dailyBackup && <DailyBackupToast backup={dailyBackup} onClose={handleCloseBackupToast} />}
             {renderPage()}
             <BottomNavBar currentPage={currentPage} onNavigate={setCurrentPage} onOpenMenu={() => setActiveModal('menu')} />
-            <Modal isOpen={activeModal === 'input'} onClose={() => {setActiveModal(null); setSubscriptionToPayId(null);}} title={inputModalMode === 'edit-post' ? 'Edit Pos Anggaran' : subscriptionToPayId ? 'Bayar Tagihan' : 'Gunakan Uang'} originCoords={lastClickPos.current}><InputModalContent mode={inputModalMode} budget={budgetForInputModal} allBudgets={state.budgets.filter(b => !b.isArchived)} onSubmit={handleInputSubmit} onArchive={handleArchiveBudget} prefillData={prefillData} onPrefillConsumed={() => setPrefillData(null)} /></Modal>
+            <Modal isOpen={activeModal === 'input'} onClose={() => {setActiveModal(null); setSubscriptionToPayId(null);}} title={inputModalMode === 'edit-post' ? 'Edit Pos Anggaran' : subscriptionToPayId ? 'Bayar Tagihan' : (isBackdateMode ? 'Catat Transaksi Mundur' : 'Gunakan Uang')} originCoords={lastClickPos.current}><InputModalContent mode={inputModalMode} budget={budgetForInputModal} allBudgets={state.budgets.filter(b => !b.isArchived)} onSubmit={handleInputSubmit} onArchive={handleArchiveBudget} prefillData={prefillData} onPrefillConsumed={() => setPrefillData(null)} allowBackdate={isBackdateMode} /></Modal>
             <Modal isOpen={activeModal === 'asset'} onClose={() => setActiveModal(null)} title={currentAssetId ? 'Edit Aset' : 'Tambah Aset Baru'} originCoords={lastClickPos.current}><AssetModalContent assetToEdit={assetForModal} onSubmit={(id, name, quantity, price, type, symbol) => { if(id) handleEditAssetItem(id, name, quantity, price, type, symbol); else handleAddAsset(name, quantity, price, type, symbol); }} /></Modal>
             <Modal isOpen={activeModal === 'addWishlist'} onClose={() => setActiveModal(null)} title="Tambah Keinginan" originCoords={lastClickPos.current}><AddWishlistModalContent onSubmit={handleAddWishlist} /></Modal>
             <Modal isOpen={activeModal === 'batchInput'} onClose={() => setActiveModal(null)} title="Catat Banyak Pengeluaran" size="lg" originCoords={lastClickPos.current}><BatchInputModalContent budgets={state.budgets.filter(b => !b.isArchived)} onSave={handleSaveScannedItems} /></Modal>
             <Modal isOpen={activeModal === 'addBudget'} onClose={() => setActiveModal(null)} title="Buat Pos Anggaran Baru" originCoords={lastClickPos.current}><AddBudgetModalContent onSubmit={handleAddBudget} /></Modal>
-            {/* Updated AddSavingsGoalModalContent call with inventory */}
             <Modal isOpen={activeModal === 'addSavingsGoal'} onClose={() => setActiveModal(null)} title="Buat Celengan Baru" originCoords={lastClickPos.current}><AddSavingsGoalModalContent onSubmit={handleAddSavingsGoal} inventory={state.inventory} /></Modal>
             <Modal isOpen={activeModal === 'addSavings'} onClose={() => setActiveModal(null)} title={`Tambah Tabungan: ${savingsGoalForModal?.name || ''}`} originCoords={lastClickPos.current}><AddSavingsModalContent goal={savingsGoalForModal} availableFunds={currentAvailableFunds} onSubmit={(amount) => currentSavingsGoalId && handleAddSavings(currentSavingsGoalId, amount)} /></Modal>
             <Modal isOpen={activeModal === 'withdrawSavings'} onClose={() => setActiveModal(null)} title={`Tarik Tabungan: ${savingsGoalForModal?.name || ''}`} originCoords={lastClickPos.current}><WithdrawSavingsModalContent goal={savingsGoalForModal} onSubmit={(amount) => currentSavingsGoalId && handleWithdrawSavings(currentSavingsGoalId, amount)} /></Modal>
             <Modal isOpen={activeModal === 'savingsDetail'} onClose={() => setActiveModal(null)} title={`Detail: ${savingsGoalForModal?.name || ''}`} originCoords={lastClickPos.current}><SavingsDetailModalContent goal={savingsGoalForModal} onDelete={() => currentSavingsGoalId && handleDeleteSavingsGoal(currentSavingsGoalId)} /></Modal>
             <Modal isOpen={activeModal === 'funds'} onClose={() => setActiveModal(null)} title="Kelola Dana Bulan Ini" originCoords={lastClickPos.current}><FundsManagementModalContent onSubmit={handleFundTransaction} onViewHistory={openFundHistory} initialTab={fundsModalTab} /></Modal>
             <Modal isOpen={activeModal === 'history'} onClose={() => setActiveModal(null)} title={historyModalContent.title} originCoords={lastClickPos.current}><HistoryModalContent transactions={historyModalContent.transactions} type={historyModalContent.type} budgetId={historyModalContent.budgetId} onDelete={(timestamp, type, budgetId) => openConfirm("Yakin menghapus transaksi ini? Dana akan dikembalikan.", () => handleDeleteTransaction(timestamp, type, budgetId))} /></Modal>
-            <Modal isOpen={activeModal === 'info'} onClose={() => setActiveModal(null)} title="Info Keuangan Bulan Ini" originCoords={lastClickPos.current}><InfoModalContent monthlyIncome={monthlyIncome} totalAllocated={totalAllocated} unallocatedFunds={unallocatedFunds} generalAndDailyExpenses={generalAndDailyExpenses} remainingUnallocated={remainingUnallocated} /></Modal>
+            <Modal isOpen={activeModal === 'info'} onClose={() => setActiveModal(null)} title="Info Keuangan Bulan Ini" originCoords={lastClickPos.current}><InfoModalContent monthlyIncome={monthlyIncome} totalAllocated={totalAllocated} unallocatedFunds={unallocatedFunds} generalAndDailyExpenses={generalAndDailyExpenses} remainingUnallocated={remainingUnallocated} onBackdate={handleOpenBackdate} /></Modal>
             <Modal isOpen={activeModal === 'editAsset'} onClose={() => setActiveModal(null)} title="Koreksi Saldo Aset" originCoords={lastClickPos.current}><EditAssetModalContent currentAsset={currentAsset} onSubmit={handleEditAsset} /></Modal>
             <Modal isOpen={activeModal === 'menu'} onClose={() => setActiveModal(null)} title="Menu & Opsi" originCoords={lastClickPos.current}><MainMenu onNavigate={(page) => { setCurrentPage(page); setActiveModal(null); }} onShowInfo={() => setActiveModal('info')} onManageFunds={() => setActiveModal('funds')} onScanReceipt={() => scanFileInputRef.current?.click()} onSmartInput={() => setActiveModal('smartInput')} onVoiceInput={() => setActiveModal('voiceAssistant')} onAskAI={handleOpenAIChat} onGetAIAdvice={handleGetAIAdvice} onOpenSettings={() => setActiveModal('settings')} onOpenDailyBonus={() => setActiveModal('dailyBonus')} onOpenDebt={() => setActiveModal('debt')} /></Modal>
             <Modal isOpen={activeModal === 'settings'} onClose={() => setActiveModal(null)} title="Pengaturan & Opsi" originCoords={lastClickPos.current}><SettingsModalContent onExport={() => { setActiveModal(null); handleExportData(); }} onImport={handleTriggerImport} onManageArchived={() => setActiveModal('archivedBudgets')} onManualBackup={handleManualBackup} onManageBackups={() => setActiveModal('backupRestore')} onResetMonthly={handleResetMonthlyData} onResetAll={handleResetAllData} onManualCloseBook={handleManualCloseBook} onRedeemCode={() => setActiveModal('redeem')} lastImportDate={lastImportDate} lastExportDate={lastExportDate} /></Modal>

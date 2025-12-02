@@ -25,6 +25,7 @@ export interface FundTransaction {
   desc: string;
   amount: number;
   timestamp: number;
+  note?: string;
 }
 
 export interface GlobalTransaction extends FundTransaction {
@@ -116,8 +117,8 @@ export interface ShopItem {
     name: string;
     description: string;
     price: number;
-    type: 'theme' | 'title' | 'frame' | 'persona' | 'banner' | 'egg' | 'seed' | 'special' | 'savings_skin';
-    category?: string; // NEW: Sub-category for organization (e.g., 'standard', 'special', 'gradient' for themes)
+    type: 'theme' | 'title' | 'frame' | 'persona' | 'banner' | 'egg' | 'seed' | 'special' | 'savings_skin' | 'chart_skin';
+    category?: string; // NEW: Sub-category for organization (e.g., 'standard', 'special', 'gradient' for themes, 'trend'/'budget' for charts)
     value: string; // CSS class, ID, or config value
     icon: string;
     rarity?: 'rare' | 'legendary' | 'mythical'; // NEW: Rarity tier for savings skins
@@ -205,6 +206,13 @@ export interface AppState {
   collectedSkins: string[]; // IDs of skins from completed savings (e.g. 'dragon', 'swan')
   lastDailyBonusClaim: string | null; // YYYY-MM-DD
   accumulatedXP: number; // XP from plants - COUNTS FOR LEVEL ONLY
+
+  // NEW: Chart Themes
+  activeTrendChartTheme?: string; 
+  activeBudgetChartTheme?: string;
+
+  // NEW: Level Reward System
+  levelRewardsClaimed: number[]; // List of level numbers where reward has been claimed
 }
 
 export interface ScannedItem {
@@ -212,3 +220,5 @@ export interface ScannedItem {
   amount: number;
   budgetId: number | 'daily' | 'none';
 }
+export type Page = 'dashboard' | 'reports' | 'visualizations' | 'savings' | 'achievements' | 'missions' | 'personalBest' | 'netWorth' | 'wishlist' | 'subscriptions' | 'profile' | 'shop' | 'customApp' | 'shoppingList';
+export type ModalType = 'input' | 'funds' | 'addBudget' | 'history' | 'info' | 'menu' | 'editAsset' | 'confirm' | 'scanResult' | 'aiAdvice' | 'smartInput' | 'aiChat' | 'voiceAssistant' | 'voiceResult' | 'addSavingsGoal' | 'addSavings' | 'withdrawSavings' | 'savingsDetail' | 'settings' | 'archivedBudgets' | 'backupRestore' | 'asset' | 'batchInput' | 'addWishlist' | 'redeem' | 'debt' | 'dailyBonus';
