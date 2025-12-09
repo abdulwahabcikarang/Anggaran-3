@@ -1382,7 +1382,7 @@ const App: React.FC = () => {
     };
     const handleUpdateProfile = (name: string, avatar: string) => { updateState(prev => ({ ...prev, userProfile: { ...prev.userProfile, name, avatar } })); };
     
-    // --- EXPORT WITH ENCRYPTION ---
+    // --- EXPORT WITH ENCRYPTION & ANDROID BRIDGE ---
     const handleExportData = () => {
         // Use new encryption format
         const encrypted = encryptData(state);
@@ -1394,10 +1394,34 @@ const App: React.FC = () => {
             payload: encrypted
         }, null, 2);
         
-        const dataBlob = new Blob([fileContent], {type: "application/json"});
-        const url = URL.createObjectURL(dataBlob);
-        const link = document.createElement('a'); link.download = `data_anggaran_${new Date().toISOString().slice(0, 10)}.json`; link.href = url; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);
-        const now = new Date().toISOString(); localStorage.setItem('lastExportDate', now); setLastExportDate(now); setActiveModal(null);
+        const filename = `data_anggaran_${new Date().toISOString().slice(0, 10)}.json`;
+        const blob = new Blob([fileContent], {type: "application/json"});
+
+        // CEK APAKAH DIBUKA DI APLIKASI ANDROID BUATAN KITA
+        if ((window as any).Android && (window as any).Android.processBlob) {
+            const reader = new FileReader();
+            reader.readAsDataURL(blob);
+            reader.onloadend = function() {
+                const base64data = reader.result as string;
+                // Kirim langsung ke Java Android
+                (window as any).Android.processBlob(base64data, "application/json", filename);
+            };
+        } else {
+            // --- LOGIKA LAMA (Untuk Chrome Biasa) ---
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a'); 
+            link.download = filename; 
+            link.href = url; 
+            document.body.appendChild(link); 
+            link.click(); 
+            document.body.removeChild(link); 
+            URL.revokeObjectURL(url);
+        }
+
+        const now = new Date().toISOString(); 
+        localStorage.setItem('lastExportDate', now); 
+        setLastExportDate(now); 
+        setActiveModal(null);
     };
     
     const handleTriggerImport = () => { openConfirm(<><strong>PERINGATAN!</strong><br />Mengimpor data akan menghapus semua data saat ini. Lanjutkan?</>, () => importFileInputRef.current?.click()); };

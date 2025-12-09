@@ -75,6 +75,29 @@ export const DailyBackupToast: React.FC<{
     backup: { url: string; filename: string };
     onClose: () => void;
 }> = ({ backup, onClose }) => {
+    
+    const handleDownload = async (e: React.MouseEvent<HTMLAnchorElement>) => {
+        // CEK APAKAH DIBUKA DI APLIKASI ANDROID BUATAN KITA
+        if ((window as any).Android && (window as any).Android.processBlob) {
+            e.preventDefault(); // Mencegah download biasa
+            try {
+                // Konversi Blob URL kembali ke Blob -> Base64
+                const response = await fetch(backup.url);
+                const blob = await response.blob();
+                
+                const reader = new FileReader();
+                reader.readAsDataURL(blob);
+                reader.onloadend = function() {
+                    const base64data = reader.result as string;
+                    // Kirim langsung ke Java Android
+                    (window as any).Android.processBlob(base64data, "application/json", backup.filename);
+                };
+            } catch (err) {
+                console.error("Gagal memproses blob untuk Android", err);
+            }
+        }
+    };
+
     return (
         <div 
             className="fixed top-5 right-4 z-[100] bg-white/90 backdrop-blur-md border border-white/40 rounded-xl shadow-2xl p-4 flex items-center space-x-4 max-w-[calc(100vw-2rem)] md:max-w-md animate-fade-in-down"
@@ -87,6 +110,7 @@ export const DailyBackupToast: React.FC<{
                     <a 
                         href={backup.url}
                         download={backup.filename}
+                        onClick={handleDownload}
                         className="text-sm bg-accent-teal text-white font-semibold py-1 px-3 rounded-lg hover:bg-accent-teal-dark transition-colors"
                     >
                         Unduh Sekarang
