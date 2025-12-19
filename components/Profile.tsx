@@ -10,10 +10,12 @@ interface ProfileProps {
     totalPoints: number;
     totalBadges: number;
     userLevel: {
-        level: string;
-        levelNumber: number; // Explicitly use number
-        currentLevelPoints: number;
-        nextLevelPoints: number | null;
+        levelNumber: number;
+        levelTitle: string;
+        currentStartXP: number;
+        nextTargetXP: number;
+        xpInCurrentLevel: number;
+        xpRequiredForNext: number;
     };
 }
 
@@ -138,7 +140,7 @@ const Profile: React.FC<ProfileProps> = ({ state, onUpdateProfile, onBack, total
                             {state.userProfile.customTitle}
                         </div>
                     ) : (
-                        <p className="text-accent-teal font-semibold mt-1 text-sm uppercase tracking-wide">{userLevel.level}</p>
+                        <p className="text-accent-teal font-semibold mt-1 text-sm uppercase tracking-wide">{userLevel.levelTitle}</p>
                     )}
                 </div>
 
@@ -178,16 +180,14 @@ const Profile: React.FC<ProfileProps> = ({ state, onUpdateProfile, onBack, total
                         <div className="flex justify-between items-center">
                             <span className="text-sm text-secondary-gray">XP Menuju Level Berikutnya</span>
                             <span className="text-sm font-bold text-dark-text">
-                                {userLevel.nextLevelPoints ? userLevel.nextLevelPoints - totalPoints : 0} XP
+                                {userLevel.nextTargetXP - totalPoints} XP
                             </span>
                         </div>
                         <div className="w-full bg-gray-100 rounded-full h-2">
                             <div 
                                 className="bg-gradient-to-r from-blue-400 to-teal-400 h-2 rounded-full transition-all duration-1000"
                                 style={{ 
-                                    width: `${userLevel.nextLevelPoints 
-                                        ? ((totalPoints - (userLevel.currentLevelPoints || 0)) / (userLevel.nextLevelPoints - (userLevel.currentLevelPoints || 0))) * 100 
-                                        : 100}%` 
+                                    width: `${((totalPoints - userLevel.currentStartXP) / (userLevel.nextTargetXP - userLevel.currentStartXP)) * 100}%` 
                                 }}
                             ></div>
                         </div>

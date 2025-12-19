@@ -19,7 +19,7 @@ import ShoppingList from './components/ShoppingList';
 import { allAchievements } from './data/achievements';
 import { availableIcons, availableColors } from './components/Icons';
 import { APP_VERSION, BACKUP_PREFIX, MAX_BACKUPS, THEMES, INITIAL_STATE, VALID_REDEEM_CODES } from './constants';
-import { formatCurrency, formatNumberInput, getRawNumber, fileToBase64, getApiKey, getSystemInstruction, encryptData, decryptData } from './utils';
+import { formatCurrency, formatNumberInput, getRawNumber, fileToBase64, getApiKey, getSystemInstruction, encryptData, decryptData, calculateLevelInfo } from './utils';
 import { Modal, ConfirmModal, DailyBackupToast, NotificationToast, AchievementUnlockedToast, BottomNavBar, MainMenu } from './components/AppUI';
 import { 
     InputModalContent, AssetModalContent, BatchInputModalContent, AddBudgetModalContent, 
@@ -783,12 +783,6 @@ const App: React.FC = () => {
 
     useEffect(() => { try { localStorage.setItem(`budgetAppState_v${APP_VERSION}`, JSON.stringify(state)); } catch (e) { console.error("Failed to save state", e); } }, [state]);
 
-    // --- LEVEL UP REWARD SYSTEM ---
-    const calculateUserLevel = (totalPoints: number) => { 
-        const levelNumber = Math.floor(Math.sqrt(totalPoints / 50)) + 1; 
-        return { levelNumber }; 
-    };
-
     const unlockedAchIds = Object.keys(state.unlockedAchievements); 
     const achievementPoints = allAchievements.filter(ach => unlockedAchIds.includes(ach.id)).reduce((sum, ach) => sum + (ach.points || 0), 0); 
     
@@ -810,7 +804,7 @@ const App: React.FC = () => {
 
     // AUTO CLAIM LEVEL UP REWARDS
     useEffect(() => {
-        const { levelNumber } = calculateUserLevel(grandTotalPoints);
+        const { levelNumber } = calculateLevelInfo(grandTotalPoints);
         const claimed = state.levelRewardsClaimed || [];
         const maxClaimed = claimed.length > 0 ? Math.max(...claimed) : 1;
         
@@ -1600,8 +1594,9 @@ const App: React.FC = () => {
     };
     const handleClearAiSearch = () => { setAiSearchResults(null); setAiSearchError(null); };
     
-    // Calculate User Level
-    const levelInfo = calculateUserLevel(grandTotalPoints);
+    // Unified Level Info
+    const levelInfo = useMemo(() => calculateLevelInfo(grandTotalPoints), [grandTotalPoints]);
+    
     const handlePurchase = (item: ShopItem) => { if (availableShopPoints < item.price) { openConfirm(<>Mustika tidak cukup! Kamu butuh <strong>{item.price - availableShopPoints}</strong> Mustika lagi.</>, () => {}); return; } updateState(prev => { const newSpent = (prev.spentPoints || 0) + item.price; const newInventory = [...(prev.inventory || []), item.id]; return { ...prev, spentPoints: newSpent, inventory: newInventory }; }); setNotifications(prev => [...prev, `Berhasil membeli ${item.name}!`]); };
     const handleSpendPoints = (amount: number) => { updateState(prev => ({ ...prev, spentPoints: (prev.spentPoints || 0) + amount })); };
     const handleEquip = (item: ShopItem) => { updateState(prev => { let newProfile = { ...prev.userProfile }; let newActiveTheme = prev.activeTheme; let newTrendChartTheme = prev.activeTrendChartTheme; let newBudgetChartTheme = prev.activeBudgetChartTheme; if (item.type === 'theme' || item.type === 'special') { newActiveTheme = item.value; } else if (item.type === 'chart_skin') { if (item.category === 'trend') newTrendChartTheme = item.value; if (item.category === 'budget') newBudgetChartTheme = item.value; } else if (item.type === 'title') { newProfile.customTitle = item.value; } else if (item.type === 'frame') { newProfile.frameId = item.value; } else if (item.type === 'persona') { newProfile.activePersona = item.value; } else if (item.type === 'banner') { newProfile.activeBanner = item.value; } return { ...prev, userProfile: newProfile, activeTheme: newActiveTheme, activeTrendChartTheme: newTrendChartTheme, activeBudgetChartTheme: newBudgetChartTheme }; }); };
@@ -1666,13 +1661,13 @@ const App: React.FC = () => {
         case 'reports': return <Reports state={state} onBack={() => setCurrentPage('dashboard')} onEditAsset={() => setActiveModal('editAsset')} onDeleteTransaction={(timestamp, source, sourceId, desc, amount) => openConfirm('Yakin ingin menghapus transaksi ini secara PERMANEN dari seluruh data?', () => handleDeleteGlobalTransaction(timestamp, source, sourceId, desc, amount))} onEditTransaction={handleEditGlobalTransaction} aiSearchResults={aiSearchResults} isSearchingWithAI={isSearchingWithAI} aiSearchError={aiSearchError} onAiSearch={handleAiSearch} onClearAiSearch={handleClearAiSearch} />; 
         case 'visualizations': return <Visualizations state={state} onBack={() => setCurrentPage('dashboard')} onAnalyzeChart={handleAnalyzeChartData} activePersona={state.userProfile.activePersona} />; 
         case 'savings': return <Savings state={state} onOpenAddGoalModal={() => setActiveModal('addSavingsGoal')} onOpenAddSavingsModal={(goalId) => { setCurrentSavingsGoalId(goalId); setActiveModal('addSavings'); }} onOpenDetailModal={(goalId) => { setCurrentSavingsGoalId(goalId); setActiveModal('savingsDetail'); }} onOpenSavingsGoal={handleOpenSavingsGoal} />; 
-        case 'achievements': return <Achievements state={state} allAchievements={allAchievements} unlockedAchievements={state.unlockedAchievements} achievementData={state.achievementData} totalPoints={achievementPoints} userLevel={{...levelInfo, level: `Level ${levelInfo.levelNumber}`, currentLevelPoints: 0, nextLevelPoints: null}} />; 
+        case 'achievements': return <Achievements state={state} allAchievements={allAchievements} unlockedAchievements={state.unlockedAchievements} achievementData={state.achievementData} totalPoints={achievementPoints} userLevel={levelInfo} />; 
         case 'missions': return <Missions state={state} achievementData={state.achievementData} totalPoints={grandTotalPoints} spendablePoints={availableShopPoints} />;
         case 'personalBest': return <PersonalBest state={state} />; 
         case 'netWorth': return <NetWorth state={state} currentCashAsset={currentAsset} onAddAsset={() => openAssetModal(null)} onEditAsset={(assetId) => openAssetModal(assetId)} onDeleteAsset={handleDeleteAsset} />; 
         case 'wishlist': return <Wishlist wishlist={state.wishlist || []} onAddWishlist={() => setActiveModal('addWishlist')} onFulfillWishlist={handleFulfillWishlist} onCancelWishlist={handleCancelWishlist} onDeleteWishlist={handleDeleteWishlist} onConvertToBudget={handleConvertWishlistToBudget} onConvertToSavings={handleConvertWishlistToSavings} onDelayToNextMonth={handleDelayWishlist} />; 
         case 'subscriptions': return <Subscriptions state={state} onAddSubscription={handleAddSubscription} onDeleteSubscription={handleDeleteSubscription} onEditSubscription={handleEditSubscription} />; 
-        case 'profile': return <Profile state={state} onUpdateProfile={handleUpdateProfile} onBack={() => setCurrentPage('dashboard')} totalPoints={grandTotalPoints} totalBadges={unlockedAchIds.length} userLevel={{...levelInfo, level: `Level ${levelInfo.levelNumber}`, currentLevelPoints: 0, nextLevelPoints: null}} />; 
+        case 'profile': return <Profile state={state} onUpdateProfile={handleUpdateProfile} onBack={() => setCurrentPage('dashboard')} totalPoints={grandTotalPoints} totalBadges={unlockedAchIds.length} userLevel={levelInfo} />; 
         case 'shop': return <Shop state={state} availablePoints={availableShopPoints} onBack={() => setCurrentPage('dashboard')} onPurchase={handlePurchase} onEquip={handleEquip} onAddCustomTheme={handleAddCustomTheme} onSpendPoints={handleSpendPoints} />; 
         case 'customApp': return <CustomApp state={state} onBack={() => setCurrentPage('dashboard')} onEquip={handleEquip} onDeleteCustomTheme={handleDeleteCustomTheme} />; 
         case 'shoppingList': return <ShoppingList 

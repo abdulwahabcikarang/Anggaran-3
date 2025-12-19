@@ -6,7 +6,7 @@ export const formatCurrency = (amount: number) => {
     if (amount >= 100000000000) { // If > 11 digits (100 Billion)
         return amount.toExponential(2).replace('+', '');
     }
-    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount);
+    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
 };
 
 export const formatNumberInput = (value: string | number) => {
@@ -49,6 +49,30 @@ export const getApiKey = (): string => {
 export const getSystemInstruction = (personaId?: string): string => {
     const base = PERSONA_INSTRUCTIONS[personaId || 'default'] || PERSONA_INSTRUCTIONS['default'];
     return `${base} Jawablah selalu dalam Bahasa Indonesia.`;
+};
+
+// --- Level Utility ---
+export const calculateLevelInfo = (totalPoints: number) => {
+    const levelNumber = Math.floor(Math.sqrt(totalPoints / 50)) + 1;
+    const currentStartXP = 50 * Math.pow(levelNumber - 1, 2);
+    const nextTargetXP = 50 * Math.pow(levelNumber, 2);
+    
+    const rankTitles = [
+        "Pemula Finansial", "Pelajar Hemat", "Perencana Cerdas", "Pengelola Aset", 
+        "Juragan Strategi", "Investor Ulung", "Master Anggaran", "Sultan Muda", 
+        "Taipan Global", "Legenda Abadi"
+    ];
+    const rankIndex = Math.min(rankTitles.length - 1, Math.floor((levelNumber - 1) / 5));
+
+    return {
+        levelNumber,
+        levelTitle: rankTitles[rankIndex],
+        currentStartXP,
+        nextTargetXP,
+        xpInCurrentLevel: totalPoints - currentStartXP,
+        xpRequiredForNext: nextTargetXP - currentStartXP,
+        totalXP: totalPoints
+    };
 };
 
 // --- Audio Utility functions ---

@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import type { AppState } from '../types';
 import { FireIcon, SparklesIcon, CheckCircleIcon, StarIconFilled, TrophyIcon } from './Icons';
+import { calculateLevelInfo } from '../utils';
 
 interface MissionsProps {
     state: AppState;
@@ -217,7 +218,6 @@ const Missions: React.FC<MissionsProps> = ({ state, achievementData, totalPoints
 
     }, [state, achievementData]);
 
-    const grandTotalPoints = totalPoints; // Use totalPoints passed from parent which includes quest points already
     const prevPoints = usePrevious(spendablePoints); // Trigger animation on balance change
     const [particleTrigger, setParticleTrigger] = useState(0);
 
@@ -227,23 +227,10 @@ const Missions: React.FC<MissionsProps> = ({ state, achievementData, totalPoints
         }
     }, [spendablePoints, prevPoints]);
 
-    const levelInfo = (() => {
-        const rankTitles = [
-            "Pemula Finansial", "Pelajar Hemat", "Perencana Cerdas", "Pengelola Aset", 
-            "Juragan Strategi", "Investor Ulung", "Master Anggaran", "Sultan Muda", 
-            "Taipan Global", "Legenda Abadi"
-        ];
-        const levelNumber = Math.floor(Math.sqrt(grandTotalPoints / 50)) + 1;
-        const rankIndex = Math.min(rankTitles.length - 1, Math.floor((levelNumber - 1) / 5));
-        const currentTitle = rankTitles[rankIndex];
-        const currentStart = 50 * Math.pow(levelNumber - 1, 2);
-        const nextTarget = 50 * Math.pow(levelNumber, 2);
+    const levelInfo = useMemo(() => calculateLevelInfo(totalPoints), [totalPoints]);
 
-        return { level: currentTitle, levelNumber: levelNumber, currentStart: currentStart, nextTarget: nextTarget };
-    })();
-
-    const levelProgressCurrent = grandTotalPoints - levelInfo.currentStart;
-    const levelProgressTarget = levelInfo.nextTarget - levelInfo.currentStart;
+    const levelProgressCurrent = totalPoints - levelInfo.currentStartXP;
+    const levelProgressTarget = levelInfo.nextTargetXP - levelInfo.currentStartXP;
 
     return (
         <main className="p-4 pb-24 animate-fade-in max-w-3xl mx-auto">
@@ -264,7 +251,7 @@ const Missions: React.FC<MissionsProps> = ({ state, achievementData, totalPoints
                                     {levelInfo.levelNumber}
                                 </h2>
                                 <span className="text-sm font-bold text-accent-teal mt-1 bg-teal-50 px-2 py-0.5 rounded-lg inline-block w-max">
-                                    {levelInfo.level}
+                                    {levelInfo.levelTitle}
                                 </span>
                             </div>
                         </div>
@@ -274,7 +261,6 @@ const Missions: React.FC<MissionsProps> = ({ state, achievementData, totalPoints
                                 <div className="bg-white/20 rounded-full p-1">
                                     <SparklesIcon className="w-4 h-4 text-yellow-300 animate-pulse" />
                                 </div>
-                                {/* SHOW SPENDABLE POINTS HERE INSTEAD OF XP */}
                                 <span className="font-bold text-white text-base">{spendablePoints}</span>
                             </div>
                             <span className="text-[10px] text-secondary-gray font-bold mt-1">TOTAL MUSTIKA</span>
@@ -283,8 +269,8 @@ const Missions: React.FC<MissionsProps> = ({ state, achievementData, totalPoints
                     
                     <div className="mt-6">
                         <div className="flex justify-between text-xs font-bold text-secondary-gray mb-2">
-                            <span>{levelInfo.currentStart} XP</span>
-                            <span>{levelInfo.nextTarget} XP</span>
+                            <span>{levelInfo.currentStartXP} XP</span>
+                            <span>{levelInfo.nextTargetXP} XP</span>
                         </div>
                         <ProgressBar 
                             current={levelProgressCurrent} 
@@ -294,7 +280,7 @@ const Missions: React.FC<MissionsProps> = ({ state, achievementData, totalPoints
                         />
                         <div className="text-center mt-3">
                             <p className="text-[10px] font-bold text-secondary-gray uppercase tracking-wider">
-                                Kurang <span className="text-primary-navy text-sm">{levelInfo.nextTarget - grandTotalPoints} XP</span> lagi untuk naik level
+                                Kurang <span className="text-primary-navy text-sm">{levelInfo.nextTargetXP - totalPoints} XP</span> lagi untuk naik level
                             </p>
                         </div>
                     </div>
